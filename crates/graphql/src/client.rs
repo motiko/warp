@@ -46,6 +46,9 @@ pub enum GraphQLError {
     /// Not authorized to talk to the staging server.
     #[error("not authorized for staging")]
     StagingAccessBlocked,
+    /// This build has no server configured, so the request was never sent.
+    #[error("offline build: no server configured")]
+    Offline,
     /// The request was blocked by GCP Identity-Aware Proxy, indicating that
     /// the IAP bearer token is stale or missing.
     #[error("blocked by IAP challenge")]
@@ -60,7 +63,9 @@ impl ErrorExt for GraphQLError {
     fn is_actionable(&self) -> bool {
         match self {
             GraphQLError::RequestError(e) | GraphQLError::ResponseError(e) => e.is_actionable(),
-            GraphQLError::StagingAccessBlocked | GraphQLError::IapChallengeBlocked => false,
+            GraphQLError::StagingAccessBlocked
+            | GraphQLError::IapChallengeBlocked
+            | GraphQLError::Offline => false,
             GraphQLError::HttpError { status, .. } => {
                 !matches!(status.as_u16(), 408 | 429 | 500..=599)
             }
@@ -135,6 +140,10 @@ pub(crate) async fn send_graphql_request<Q>(
 where
     Q: QueryFragment + DeserializeOwned,
 {
+    if ChannelState::is_offline() {
+        return Err(GraphQLError::Offline);
+    }
+
     let Request {
         req,
         operation_name,

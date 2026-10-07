@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use warp_core::channel::ChannelState;
 use warp_core::user_preferences::GetUserPreferences as _;
 use warpui::{Entity, ModelContext, SingletonEntity};
 
@@ -71,7 +72,7 @@ impl ReferralThemeStatus {
         referrals_client: Arc<dyn ReferralsClient>,
         ctx: &mut ModelContext<Self>,
     ) {
-        if !AuthStateProvider::as_ref(ctx).get().is_logged_in() {
+        if ChannelState::is_offline() || !AuthStateProvider::as_ref(ctx).get().is_logged_in() {
             return;
         }
 

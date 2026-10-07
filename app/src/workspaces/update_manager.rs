@@ -4,6 +4,7 @@ use std::sync::mpsc::SyncSender;
 use anyhow::{Context, Result};
 use futures::channel::oneshot::{self, Receiver};
 use futures::stream::AbortHandle;
+use warp_core::channel::ChannelState;
 use warp_errors::{report_error, report_if_error};
 use warpui::r#async::Timer;
 use warpui::{
@@ -137,6 +138,9 @@ impl TeamUpdateManager {
     /// Starts a periodic poll for workspace metadata changes, if there isn't already
     /// an existing poll queued up.
     pub fn start_polling_for_workspace_metadata_updates(&mut self, ctx: &mut ModelContext<Self>) {
+        if ChannelState::is_offline() {
+            return;
+        }
         let is_online = NetworkStatus::as_ref(ctx).is_online();
         if !self.should_poll_for_workspace_metadata_updates && is_online {
             self.should_poll_for_workspace_metadata_updates = true;
@@ -156,7 +160,7 @@ impl TeamUpdateManager {
         ctx: &mut ModelContext<Self>,
     ) -> Receiver<Result<()>> {
         // Skip the refresh when logged out to avoid noisy auth errors.
-        if !AuthStateProvider::as_ref(ctx).get().is_logged_in() {
+        if ChannelState::is_offline() || !AuthStateProvider::as_ref(ctx).get().is_logged_in() {
             let (tx, rx) = oneshot::channel::<Result<()>>();
             let _ = tx.send(Ok(()));
             return rx;

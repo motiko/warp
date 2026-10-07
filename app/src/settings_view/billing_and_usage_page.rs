@@ -834,11 +834,10 @@ impl TypedActionView for BillingAndUsagePageView {
             .is_anonymous_or_logged_out()
             && action.blocked_for_anonymous_user()
         {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
+            AuthManager::handle(ctx).update(ctx, |auth_manager, _| {
                 auth_manager.attempt_login_gated_feature(
                     action.into(),
                     AuthViewVariant::RequireLoginCloseable,
-                    ctx,
                 )
             });
             return;
@@ -871,11 +870,10 @@ impl TypedActionView for BillingAndUsagePageView {
                 ctx.emit(BillingAndUsagePageEvent::SignupAnonymousUser);
             }
             BillingAndUsagePageAction::AttemptLoginGatedUpgrade => {
-                AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
+                AuthManager::handle(ctx).update(ctx, |auth_manager, _| {
                     auth_manager.attempt_login_gated_feature(
                         action.into(),
                         AuthViewVariant::RequireLoginCloseable,
-                        ctx,
                     )
                 });
             }

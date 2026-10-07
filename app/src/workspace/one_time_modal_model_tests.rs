@@ -11,6 +11,7 @@ use super::{
     FEATURE_INTROS, FeatureIntroId, FreeAiRemovalModalDecision, OneTimeModalModel,
     free_ai_removal_modal_decision, hoa_onboarding,
 };
+use crate::test_util::settings::enable_ai_for_tests;
 use crate::test_util::terminal::{
     add_window_with_id_and_terminal, add_window_with_terminal, initialize_app_for_terminal_view,
 };
@@ -473,6 +474,7 @@ fn test_free_ai_removal_modal_decision_matrix() {
 fn feature_intro_triggers_for_unseen_feature() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         let terminal = add_window_with_terminal(&mut app, None);
 
         terminal.update(&mut app, |_, ctx| {

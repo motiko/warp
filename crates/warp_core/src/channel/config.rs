@@ -54,12 +54,14 @@ pub struct WarpServerConfig {
 }
 
 impl WarpServerConfig {
-    pub fn production() -> Self {
+    /// A configuration with no server at all: every URL is empty and there is no auth key, so
+    /// the build has nothing to talk to.
+    pub fn offline() -> Self {
         Self {
-            server_root_url: "https://app.warp.dev".into(),
-            rtc_server_url: "wss://rtc.app.warp.dev/graphql/v2".into(),
-            session_sharing_server_url: Some("wss://sessions.app.warp.dev".into()),
-            firebase_auth_api_key: "AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs".into(),
+            server_root_url: "".into(),
+            rtc_server_url: "".into(),
+            session_sharing_server_url: None,
+            firebase_auth_api_key: "".into(),
             iap_config: None,
         }
     }
@@ -77,9 +79,10 @@ pub struct OzConfig {
 }
 
 impl OzConfig {
-    pub fn production() -> Self {
+    /// A configuration with no Oz dashboard to link to.
+    pub fn offline() -> Self {
         Self {
-            oz_root_url: "https://oz.warp.dev".into(),
+            oz_root_url: "".into(),
             workload_audience_url: None,
         }
     }

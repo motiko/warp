@@ -8,7 +8,6 @@ use onboarding::{OnboardingEvent, OnboardingIntention, WARP_DRIVE_FEATURES};
 use pathfinder_color::ColorU;
 use pathfinder_geometry::vector::vec2f;
 use ui_components::{Component as _, Options as _, button};
-use warp_core::features::FeatureFlag;
 use warp_core::safe_error;
 use warp_core::ui::Icon;
 use warp_core::ui::theme::color::internal_colors;
@@ -435,9 +434,6 @@ impl LoginSlideView {
                         Some(LoginFailureReason::FailedUserAuthentication);
                 }
             }
-            AuthManagerEvent::CreateAnonymousUserFailed => {
-                self.last_login_failure_reason = Some(LoginFailureReason::FailedUserAuthentication);
-            }
             AuthManagerEvent::MintCustomTokenFailed(_) => {
                 self.last_login_failure_reason = Some(LoginFailureReason::FailedMintCustomToken);
             }
@@ -493,15 +489,9 @@ impl LoginSlideView {
             },
             ctx
         );
-        if FeatureFlag::SkipFirebaseAnonymousUser.is_enabled() {
-            AuthManager::handle(ctx).update(ctx, |_, ctx| {
-                ctx.emit(AuthManagerEvent::SkippedLogin);
-            });
-        } else {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                auth_manager.create_anonymous_user(None, ctx);
-            });
-        }
+        AuthManager::handle(ctx).update(ctx, |_, ctx| {
+            ctx.emit(AuthManagerEvent::SkippedLogin);
+        });
         ctx.emit(LoginSlideEvent::LoginLaterConfirmed);
     }
 

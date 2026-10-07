@@ -112,6 +112,9 @@ impl BaseClient {
         path: &str,
         team_uid: Option<ServerId>,
     ) -> Result<http_client::Response> {
+        if ChannelState::is_offline() {
+            anyhow::bail!("offline build: no server configured");
+        }
         let auth_token = self
             .get_or_refresh_access_token()
             .await

@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use chrono::{DateTime, Utc};
 use futures::StreamExt as _;
 use futures::lock::Mutex as AsyncMutex;
 use instant::Duration;
 use parking_lot::{Mutex, RwLock};
+use warp_core::channel::ChannelState;
 use warp_graphql::client::RequestOptions;
 use warp_isolation_platform::{IsolationPlatformError, WorkloadToken, issue_workload_token};
 use warp_server_auth::auth_state::AuthState;
@@ -244,6 +245,9 @@ impl BaseClient {
     }
 
     pub async fn get_or_refresh_access_token(&self) -> Result<AuthToken> {
+        if ChannelState::is_offline() {
+            bail!("offline build: no server configured");
+        }
         self.auth_session.get_or_refresh_access_token().await
     }
 

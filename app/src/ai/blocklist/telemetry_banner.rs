@@ -13,7 +13,7 @@ use crate::ui_components::buttons::icon_button;
 use crate::ui_components::icons::Icon;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::UgcCollectionEnablementSetting;
-use crate::{Appearance, FeatureFlag, WorkspaceAction};
+use crate::{Appearance, ChannelState, FeatureFlag, WorkspaceAction};
 
 const TITLE_EXISTING_USERS: &str = "We've updated our telemetry policy.";
 const TITLE_NEW_USERS: &str = "Help improve Warp.";
@@ -193,6 +193,9 @@ impl Entity for TelemetryBanner {
 /// require this check, but an event that logs the input buffer for natural language detection
 /// _does_ need to check this.
 pub fn should_collect_ai_ugc_telemetry(app: &AppContext, is_telemetry_enabled: bool) -> bool {
+    if !ChannelState::is_telemetry_available() {
+        return false;
+    }
     match UserWorkspaces::as_ref(app).get_ugc_collection_enablement_setting() {
         UgcCollectionEnablementSetting::Disable => false,
         UgcCollectionEnablementSetting::Enable => true,

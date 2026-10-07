@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ai::api_keys::{ApiKeyManager, ChatGPTConnectFailure};
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use futures::future::Either;
 use settings::Setting as _;
 #[cfg(target_family = "wasm")]
@@ -13,9 +13,6 @@ use uuid::Uuid;
 use warp_core::channel::ChannelState;
 use warp_core::features::FeatureFlag;
 use warp_errors::{report_error, report_if_error};
-use warp_graphql::mutations::create_anonymous_user::{
-    AnonymousUserType, CreateAnonymousUserResult,
-};
 use warp_server_auth::API_KEY_PREFIX;
 use warp_server_auth::user::persistence::PersistedUser;
 use warpui::r#async::Timer;
@@ -34,10 +31,8 @@ use crate::ai::persisted_workspace::PersistedWorkspace;
 use crate::autoupdate::AutoupdateState;
 use crate::persistence::ModelEvent;
 use crate::server::cloud_objects::update_manager::UpdateManager;
-use crate::server::graphql::get_user_facing_error_message;
 use crate::server::server_api::auth::{
-    AnonymousUserCreationError, AuthClient, FetchUserResult, MintCustomTokenError,
-    UserAuthenticationError,
+    AuthClient, FetchUserResult, MintCustomTokenError, UserAuthenticationError,
 };
 use crate::server::server_api::{ServerApi, ServerApiProvider};
 use crate::server::telemetry::AnonymousUserSignupEntrypoint;
@@ -60,8 +55,6 @@ pub enum AuthManagerEvent {
     AuthComplete,
     /// Failed to authenticate a user, due to a particular `UserAuthenticationError`.
     AuthFailed(UserAuthenticationError),
-    /// Failed to create an anonymous user.
-    CreateAnonymousUserFailed,
     /// The user chose to skip login entirely (no Firebase user created).
     SkippedLogin,
     /// The user now needs to reauthenticate. If the user needs to reauth, an `AuthFailed`
@@ -665,81 +658,18 @@ impl AuthManager {
         }
     }
 
-    pub fn create_anonymous_user(
-        &self,
-        referral_code: Option<String>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let anonymous_user_type = AnonymousUserType::NativeClientAnonymousUserFeatureGated;
-
-        let auth_client = self.auth_client.clone();
-        let _ = ctx.spawn(
-            async move {
-                auth_client
-                    .create_anonymous_user(referral_code, anonymous_user_type)
-                    .await
-            },
-            Self::on_create_anonymous_user,
-        );
-    }
-
-    fn on_create_anonymous_user(
-        &mut self,
-        response: Result<CreateAnonymousUserResult>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let custom_token = match response {
-            Ok(response_data) => match response_data {
-                CreateAnonymousUserResult::CreateAnonymousUserOutput(output) => Ok(output.id_token),
-                CreateAnonymousUserResult::UserFacingError(user_facing_error) => {
-                    Err(AnonymousUserCreationError::UserFacingError(
-                        get_user_facing_error_message(user_facing_error),
-                    ))
-                }
-                CreateAnonymousUserResult::Unknown => Err(AnonymousUserCreationError::Unknown),
-            },
-            Err(_) => Err(AnonymousUserCreationError::CreationFailed),
-        };
-
-        match custom_token {
-            Ok(custom_token) => {
-                // Exchange the custom token for an ID token.
-                let auth_client = self.auth_client.clone();
-                let _ = ctx.spawn(
-                    async move {
-                        auth_client
-                            .fetch_user(
-                                LoginToken::Firebase(FirebaseToken::Custom(custom_token)),
-                                false, /* for_refresh */
-                            )
-                            .await
-                    },
-                    Self::on_user_fetched,
-                );
-            }
-
-            Err(err) => {
-                report_error!(
-                    anyhow!(err).context("Encountered an error trying to create anonymous users")
-                );
-                ctx.emit(AuthManagerEvent::CreateAnonymousUserFailed);
-            }
-        }
-    }
-
+    /// Login-gated features are not available in this build, so this never opens the login
+    /// modal; it only records the attempt locally.
     pub fn attempt_login_gated_feature(
         &self,
         feature: LoginGatedFeature,
         auth_view_variant: AuthViewVariant,
-        ctx: &mut ModelContext<Self>,
     ) {
         if self.auth_state.is_anonymous_or_logged_out() {
-            send_telemetry_from_ctx!(
-                TelemetryEvent::AnonymousUserAttemptLoginGatedFeature { feature },
-                ctx
+            log::info!(
+                "Login-gated feature {feature:?} ({auth_view_variant:?}) is not available in this build"
             );
-            ctx.emit(AuthManagerEvent::AttemptedLoginGatedFeature { auth_view_variant });
-        };
+        }
     }
 
     pub fn anonymous_user_hit_drive_object_limit(&self, ctx: &mut ModelContext<Self>) {

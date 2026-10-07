@@ -108,7 +108,7 @@ use crate::terminal::view::Event as TerminalViewEvent;
 use crate::terminal::view::inline_banner::ByoLlmAuthBannerSessionState;
 use crate::terminal::writeable_pty::command_history::update_command_history;
 use crate::test_util::assert_eventually;
-use crate::test_util::settings::initialize_settings_for_tests;
+use crate::test_util::settings::{enable_ai_for_tests, initialize_settings_for_tests};
 use crate::themes::theme::AnsiColorIdentifier;
 use crate::warp_managed_paths_watcher::WarpManagedPathsWatcher;
 use crate::workspace::{ActiveSession, OneTimeModalModel, ToastStack, WorkspaceRegistry};
@@ -262,11 +262,13 @@ fn renders_fixed_prompt_chip_command_without_interpolation() {
 
 pub fn initialize_app(app: &mut App) {
     initialize_settings_for_tests(app);
+    enable_ai_for_tests(app);
 
-    // NLD is now opt-in by default (`ai_autodetection_enabled_internal` defaults to false).
-    // These tests exercise the natural-language-detection-on code paths (buffer-driven slash
-    // command detection, auto-detection input mode), so explicitly re-enable it here to preserve
-    // the pre-opt-in test behavior. The opt-in default itself is covered by
+    // AI and NLD are both opt-in by default (`is_any_ai_enabled` and
+    // `ai_autodetection_enabled_internal` default to false). These tests exercise the
+    // natural-language-detection-on code paths (buffer-driven slash command detection,
+    // auto-detection input mode), so explicitly re-enable them here to preserve the pre-opt-in
+    // test behavior. The opt-in defaults themselves are covered by
     // `ai_autodetection_defaults_to_opt_in` in `settings/ai_tests.rs`.
     crate::settings::AISettings::handle(app).update(app, |settings, ctx| {
         settings

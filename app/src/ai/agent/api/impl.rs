@@ -180,6 +180,7 @@ async fn convert_multi_agent_client_error(
     error: warp_multi_agent_client::Error,
 ) -> Arc<AIApiError> {
     let error = match error {
+        warp_multi_agent_client::Error::Offline => AIApiError::Other(anyhow::Error::from(error)),
         warp_multi_agent_client::Error::Authentication(error)
         | warp_multi_agent_client::Error::AmbientHeaders(error) => AIApiError::Other(error),
         warp_multi_agent_client::Error::Base64Decode(error) => {

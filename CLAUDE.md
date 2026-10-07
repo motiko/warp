@@ -27,12 +27,12 @@ supplementary and must not contradict it.
 
 ## Channel binaries
 
-`app/` defines one binary per release channel in `app/src/bin/` (`stable`, `preview`, `dev`, `local`,
-`oss`, `integration`). Each `main` sets `ChannelState` from `warp_channel_config::load_config!` and calls
-`warp::run()`. `./script/run` builds `warp` (local channel) when the internal `warp-channel-config`
-generator is on `PATH`, otherwise `alefbet` (the OSS channel, built from `src/bin/oss.rs`);
-`./script/run-tui` does the same for `warp-tui` / `warp-tui-oss` and always enables the `standalone`
-cargo feature so bundled resources resolve next to the binary.
+`app/` defines two binaries in `app/src/bin/`: `alefbet` (`oss.rs`, the OSS channel) and
+`integration` (`integration.rs`, launched by the GUI integration test harness). Each `main` builds a
+`ChannelState` from an inline `ChannelConfig` (`WarpServerConfig::offline()` / `OzConfig::offline()`
+for `alefbet`, so the build has no server to talk to) and calls `warp::run()`. `./script/run` always
+builds `alefbet` / channel `oss`; `./script/run-tui` does the same for `warp-tui-oss` and always
+enables the `standalone` cargo feature so bundled resources resolve next to the binary.
 
 ## Architecture: how the pieces fit
 

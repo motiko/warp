@@ -90,6 +90,7 @@ use crate::terminal::view::shared_session::ConversationEndedTombstoneView;
 use crate::terminal::{
     CLIAgent, MockTerminalManager, TerminalManager, TerminalModel, should_right_click_paste,
 };
+use crate::test_util::settings::enable_ai_for_tests;
 use crate::test_util::terminal::{
     add_window_with_id_and_terminal, initialize_app_for_terminal_view,
 };
@@ -3394,6 +3395,7 @@ fn set_input_mode_agent_does_not_enter_local_agent_from_root_cloud_mode_pane() {
 fn cloud_mode_v1_agent_prefixed_query_spawns_cloud_agent() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         let _agent_mode = FeatureFlag::AgentMode.override_enabled(true);
         let _agent_view = FeatureFlag::AgentView.override_enabled(true);
         let _cloud_mode = FeatureFlag::CloudMode.override_enabled(true);
@@ -3438,6 +3440,7 @@ fn cloud_mode_v1_agent_prefixed_query_spawns_cloud_agent() {
 fn cloud_mode_v2_agent_prefixed_query_spawns_cloud_agent() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         let _agent_mode = FeatureFlag::AgentMode.override_enabled(true);
         let _agent_view = FeatureFlag::AgentView.override_enabled(true);
         let _cloud_mode = FeatureFlag::CloudMode.override_enabled(true);
@@ -3745,6 +3748,7 @@ fn shared_third_party_viewer_syncs_from_cli_agent_state_without_ambient_model() 
 fn cloud_mode_followup_input_uses_explicit_submit_event_even_when_view_pending() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         let _agent_view = FeatureFlag::AgentView.override_enabled(true);
         let _agent_mode = FeatureFlag::AgentMode.override_enabled(true);
         let _cloud_mode = FeatureFlag::CloudMode.override_enabled(true);
@@ -3984,6 +3988,7 @@ fn cloud_mode_failed_keeps_queued_query_above_tombstone_and_hides_input() {
 fn cmd_enter_from_terminal_without_selected_block_enters_agent_view() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         app.add_singleton_model(ImportedConfigModel::new);
         app.update(|ctx| {
             crate::terminal::init(ctx);
@@ -4042,6 +4047,7 @@ fn cmd_enter_from_terminal_without_selected_block_enters_agent_view() {
 fn cmd_enter_from_terminal_with_selected_block_enters_agent_view_with_context() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         app.add_singleton_model(ImportedConfigModel::new);
         app.update(|ctx| {
             crate::terminal::init(ctx);
@@ -4129,6 +4135,7 @@ fn cmd_enter_from_terminal_with_selected_block_enters_agent_view_with_context() 
 fn cmd_enter_from_active_non_empty_agent_view_requires_confirmation() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         app.add_singleton_model(ImportedConfigModel::new);
         app.update(|ctx| {
             crate::terminal::init(ctx);
@@ -7959,6 +7966,7 @@ fn inline_agent_view_persists_across_transfer_takeover_for_monitored_long_runnin
 fn use_agent_footer_renders_for_transfer_handoff_even_when_user_command_footer_setting_disabled() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         FeatureFlag::AgentView.set_enabled(true);
         AISettings::handle(&app).update(&mut app, |settings, ctx| {
             let _ = settings
@@ -8994,6 +9002,7 @@ fn submit_with_plugin_but_auto_toggle_off_respects_auto_dismiss() {
 fn status_blocked_auto_closes_rich_input() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         let _agent_view = FeatureFlag::AgentView.override_enabled(true);
         let _cli_rich = FeatureFlag::CLIAgentRichInput.override_enabled(true);
         // auto_toggle_rich_input defaults to true.
@@ -9072,6 +9081,7 @@ fn status_blocked_auto_closes_rich_input() {
 fn status_in_progress_auto_opens_rich_input_after_blocked() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         let _agent_view = FeatureFlag::AgentView.override_enabled(true);
         let _cli_rich = FeatureFlag::CLIAgentRichInput.override_enabled(true);
 

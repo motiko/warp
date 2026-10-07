@@ -2624,11 +2624,10 @@ impl PaneGroup {
             .get()
             .is_anonymous_or_logged_out()
         {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
+            AuthManager::handle(ctx).update(ctx, |auth_manager, _| {
                 auth_manager.attempt_login_gated_feature(
                     "Share Session",
                     AuthViewVariant::ShareRequirementCloseable,
-                    ctx,
                 )
             });
             return;

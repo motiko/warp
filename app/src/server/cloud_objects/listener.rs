@@ -5,6 +5,7 @@ use async_channel::Sender;
 pub use cloud_object_client::ObjectUpdateMessage;
 use futures_util::stream::AbortHandle;
 use instant::Instant;
+use warp_core::channel::ChannelState;
 use warp_errors::report_error;
 use warpui::r#async::Timer;
 use warpui::{Entity, ModelContext, ModelHandle, RequestState, SingletonEntity};
@@ -233,6 +234,9 @@ impl Listener {
     }
 
     fn start_listener(&mut self, ctx: &mut ModelContext<Self>) {
+        if ChannelState::is_offline() {
+            return;
+        }
         if !self.should_subscribe_to_updates {
             self.should_subscribe_to_updates = true;
             self.get_warp_drive_updates(ctx);

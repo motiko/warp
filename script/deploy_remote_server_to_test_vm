@@ -32,11 +32,9 @@ WARP_BIN="integration"
 # See crates/warp_core/src/channel/mod.rs, crates/remote_server/src/setup.rs,
 # and crates/integration/src/bin/integration.rs.
 #
-# We intentionally build app/src/bin/integration.rs instead of the normal
-# Local-channel app binary. The Local-channel release bundle requires
-# warp-channel-config to generate local_config.json at compile time, but this CI
-# path should not depend on private channel config. The Integration-channel
-# binary embeds a static non-secret config instead.
+# We intentionally build app/src/bin/integration.rs instead of the OSS app
+# binary: the Integration-channel binary embeds a static non-secret config that
+# honors server URL overrides, which the OSS channel ignores.
 REMOTE_DIR=".warp-dev/remote-server"
 
 # Dedicated remote-server test VM, configured similarly to the SSH integration

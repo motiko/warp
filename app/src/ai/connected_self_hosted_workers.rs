@@ -41,8 +41,7 @@ impl ConnectedSelfHostedWorkersModel {
             | AuthManagerEvent::NeedsReauth => {
                 me.clear_workers(ctx);
             }
-            AuthManagerEvent::CreateAnonymousUserFailed
-            | AuthManagerEvent::AttemptedLoginGatedFeature { .. }
+            AuthManagerEvent::AttemptedLoginGatedFeature { .. }
             | AuthManagerEvent::LoginOverrideDetected(_)
             | AuthManagerEvent::MintCustomTokenFailed(_)
             | AuthManagerEvent::ReceivedDeviceAuthorizationCode { .. } => {}

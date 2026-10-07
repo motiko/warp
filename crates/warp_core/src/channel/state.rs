@@ -44,8 +44,8 @@ impl ChannelState {
             config: ChannelConfig {
                 app_id,
                 logfile_name: "".into(),
-                server_config: WarpServerConfig::production(),
-                oz_config: OzConfig::production(),
+                server_config: WarpServerConfig::offline(),
+                oz_config: OzConfig::offline(),
                 telemetry_config: None,
                 autoupdate_config: None,
                 crash_reporting_config: None,
@@ -83,6 +83,12 @@ impl ChannelState {
 
     pub fn is_release_bundle() -> bool {
         cfg!(feature = "release_bundle")
+    }
+
+    /// Whether this build has no server configured, in which case nothing may be sent over
+    /// the network to Warp's services.
+    pub fn is_offline() -> bool {
+        Self::server_root_url().is_empty()
     }
 
     pub fn enable_debug_features() -> bool {
@@ -294,11 +300,12 @@ impl ChannelState {
         }
     }
 
-    // Returns the origin url, with scheme, domain, and ports (if any)
+    /// Returns the origin url, with scheme, domain, and ports (if any). An offline build has no
+    /// server root URL, so it yields an opaque origin that matches nothing.
     pub fn server_root_domain() -> Origin {
         Url::parse(&Self::server_root_url())
-            .expect("Server root URL should be valid")
-            .origin()
+            .map(|url| url.origin())
+            .unwrap_or_else(|_| Origin::new_opaque())
     }
 
     /// Returns the rudderstack destination for all events that don't contain user-generated content.

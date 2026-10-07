@@ -1412,6 +1412,9 @@ impl ServerApi {
         include_changelogs: bool,
         is_daily: bool,
     ) -> Result<ChannelVersions> {
+        if ChannelState::is_offline() {
+            anyhow::bail!("offline build: no server configured");
+        }
         let mut url = Url::parse(&ChannelState::server_root_url())
             .expect("Should not fail to parse server root URL");
         if is_daily {

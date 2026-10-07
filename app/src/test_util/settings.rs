@@ -128,3 +128,19 @@ pub fn initialize_settings_for_tests_with_mode(
         ctx.add_singleton_model(ai::api_keys::ApiKeyManager::new);
     });
 }
+
+/// Turns on `is_any_ai_enabled`, which defaults to off, for tests that exercise AI surfaces.
+#[cfg(test)]
+pub fn enable_ai_for_tests(app: &mut App) {
+    use settings::Setting;
+    use warpui::SingletonEntity;
+
+    use crate::settings::AISettings;
+
+    AISettings::handle(app).update(app, |settings, ctx| {
+        settings
+            .is_any_ai_enabled
+            .load_value(true, true, ctx)
+            .expect("enabling AI should succeed in tests");
+    });
+}

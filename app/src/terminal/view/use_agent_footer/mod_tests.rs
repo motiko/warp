@@ -27,6 +27,7 @@ use crate::terminal::model::ansi::{BootstrappedValue, Handler as _, InitShellVal
 use crate::terminal::shared_session::SharedSessionSource;
 use crate::terminal::{CLIAgent, Event};
 use crate::test_util::add_window_with_terminal;
+use crate::test_util::settings::enable_ai_for_tests;
 use crate::test_util::terminal::initialize_app_for_terminal_view;
 
 struct PendingAIBlockModel {
@@ -195,6 +196,7 @@ fn insert_pending_ai_block(
 fn use_agent_footer_renders_for_manual_handoff_even_when_user_command_footer_setting_disabled() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         FeatureFlag::AgentView.set_enabled(true);
         AISettings::handle(&app).update(&mut app, |settings, ctx| {
             let _ = settings
@@ -239,6 +241,7 @@ fn use_agent_footer_renders_for_manual_handoff_even_when_user_command_footer_set
 fn use_agent_footer_renders_for_manual_handoff_when_unfinished_ai_block_remains() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         FeatureFlag::AgentView.set_enabled(true);
 
         let terminal = add_window_with_terminal(&mut app, None);

@@ -76,6 +76,7 @@ where
                 GraphQLError::RequestError(_)
                 | GraphQLError::StagingAccessBlocked
                 | GraphQLError::IapChallengeBlocked
+                | GraphQLError::Offline
                 | GraphQLError::ResponseError(_) => false,
             };
             if !base_client.is_auth_refresh_allowed() && is_auth_rejection {

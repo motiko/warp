@@ -823,6 +823,12 @@ mod origin_tests {
 
     #[test]
     fn server_and_rtc_origins_match() {
+        // An offline build has no server origin, so nothing can match it.
+        if ChannelState::is_offline() {
+            let url = reqwest::Url::parse("https://app.warp.dev/graphql/v2").unwrap();
+            assert!(!is_warp_server_origin(&url));
+            return;
+        }
         // Derive the expected origins from `ChannelState` so the assertion holds
         // regardless of which channel config the test build resolves to.
         let server = reqwest::Url::parse(ChannelState::server_root_url().as_ref()).unwrap();

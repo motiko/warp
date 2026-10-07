@@ -18154,11 +18154,10 @@ impl Workspace {
         if self.auth_state.is_anonymous_or_logged_out()
             && workflow.as_workflow().is_agent_mode_workflow()
         {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
+            AuthManager::handle(ctx).update(ctx, |auth_manager, _| {
                 auth_manager.attempt_login_gated_feature(
                     "Run Agent Mode Workflow",
                     AuthViewVariant::RequireLoginCloseable,
-                    ctx,
                 )
             });
             return;
@@ -24089,11 +24088,10 @@ impl TypedActionView for Workspace {
         let window_id = ctx.window_id();
 
         if self.auth_state.is_anonymous_or_logged_out() && action.blocked_for_anonymous_user() {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
+            AuthManager::handle(ctx).update(ctx, |auth_manager, _| {
                 auth_manager.attempt_login_gated_feature(
                     action.into(),
                     AuthViewVariant::RequireLoginCloseable,
-                    ctx,
                 )
             });
             return;
@@ -25557,11 +25555,10 @@ impl TypedActionView for Workspace {
                 ctx.notify();
             }
             AttemptLoginGatedAIUpgrade => {
-                AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
+                AuthManager::handle(ctx).update(ctx, |auth_manager, _| {
                     auth_manager.attempt_login_gated_feature(
                         "Upgrade AI Usage",
                         AuthViewVariant::RequireLoginCloseable,
-                        ctx,
                     )
                 });
             }

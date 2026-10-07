@@ -1560,11 +1560,10 @@ impl TypedActionView for AgentProfilesPageView {
                 ctx.open_url(&hyperlink.url);
             }
             AgentProfilesPageAction::AttemptLoginGatedUpgrade => {
-                AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
+                AuthManager::handle(ctx).update(ctx, |auth_manager, _| {
                     auth_manager.attempt_login_gated_feature(
                         action.into(),
                         AuthViewVariant::RequireLoginCloseable,
-                        ctx,
                     )
                 });
             }

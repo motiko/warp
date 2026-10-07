@@ -182,7 +182,7 @@ impl AuthViewBody {
             ctx.notify();
         });
 
-        let allow_loginless = !FeatureFlag::ForceLogin.is_enabled();
+        let allow_loginless = true;
 
         let network_status = NetworkStatus::handle(ctx);
         ctx.subscribe_to_model(&network_status, |_, _, _, ctx| {

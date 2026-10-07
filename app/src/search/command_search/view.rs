@@ -946,11 +946,10 @@ impl TypedActionView for CommandSearchView {
                 ctx.open_url(upgrade_link);
             }
             AttemptLoginGatedUpgrade => {
-                AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
+                AuthManager::handle(ctx).update(ctx, |auth_manager, _| {
                     auth_manager.attempt_login_gated_feature(
                         "Upgrade AI Usage",
                         AuthViewVariant::RequireLoginCloseable,
-                        ctx,
                     )
                 });
             }

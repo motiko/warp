@@ -24,6 +24,7 @@ use crate::server::ids::{ServerId, SyncId};
 use crate::server::server_api::ServerApiProvider;
 use crate::server::server_api::ai::{ForkConversationResponse, MockAIClient, SpawnAgentResponse};
 use crate::test_util::add_window_with_terminal;
+use crate::test_util::settings::enable_ai_for_tests;
 use crate::test_util::terminal::initialize_app_for_terminal_view;
 use crate::workspaces::user_workspaces::TeamContextForOperation;
 
@@ -180,6 +181,7 @@ fn execute_revalidates_current_model_before_returning_future() {
     let _local_cloud = FeatureFlag::HandoffLocalCloud.override_enabled(true);
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         let mut mock = MockAIClient::new();
         mock.expect_spawn_agent().times(0);
         let client: Arc<dyn AIClient> = Arc::new(mock);
@@ -201,6 +203,7 @@ fn execute_revalidates_current_environment_catalog_before_returning_future() {
     let _local_cloud = FeatureFlag::HandoffLocalCloud.override_enabled(true);
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
+        enable_ai_for_tests(&mut app);
         let mut mock = MockAIClient::new();
         mock.expect_spawn_agent().times(0);
         let client: Arc<dyn AIClient> = Arc::new(mock);

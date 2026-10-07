@@ -4,7 +4,6 @@ use anyhow::{Result, anyhow};
 use pathfinder_color::ColorU;
 use pathfinder_geometry::vector::vec2f;
 use url::Url;
-use warp_core::features::FeatureFlag;
 use warp_core::{safe_anyhow, safe_error};
 use warp_errors::{ErrorExt, report_error};
 use warpui::actions::StandardAction;
@@ -277,15 +276,9 @@ impl AuthView {
     }
 
     pub fn handle_login_later(&mut self, ctx: &mut ViewContext<Self>) {
-        if FeatureFlag::SkipFirebaseAnonymousUser.is_enabled() {
-            AuthManager::handle(ctx).update(ctx, |_, ctx| {
-                ctx.emit(AuthManagerEvent::SkippedLogin);
-            });
-        } else {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                auth_manager.create_anonymous_user(None, ctx)
-            });
-        }
+        AuthManager::handle(ctx).update(ctx, |_, ctx| {
+            ctx.emit(AuthManagerEvent::SkippedLogin);
+        });
     }
 
     fn handle_auth_manager_event(&mut self, event: &AuthManagerEvent, ctx: &mut ViewContext<Self>) {
@@ -309,10 +302,6 @@ impl AuthView {
                         Some(LoginFailureReason::FailedUserAuthentication);
                 }
 
-                self.set_auth_token_input_editable(true, ctx);
-            }
-            AuthManagerEvent::CreateAnonymousUserFailed => {
-                self.last_login_failure_reason = Some(LoginFailureReason::FailedUserAuthentication);
                 self.set_auth_token_input_editable(true, ctx);
             }
             AuthManagerEvent::MintCustomTokenFailed(_err) => {

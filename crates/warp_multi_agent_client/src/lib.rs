@@ -8,6 +8,9 @@ use warp_server_client::base_client::{AmbientHeaderPolicy, BaseClient, TEAM_UID_
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("offline build: no server configured")]
+    Offline,
+
     #[error("Failed to authenticate multi-agent request")]
     Authentication(#[source] anyhow::Error),
 
@@ -50,6 +53,9 @@ pub async fn generate_multi_agent_output(
     request: &warp_multi_agent_api::Request,
     team_uid: Option<String>,
 ) -> Result<OutputStream, Error> {
+    if ChannelState::is_offline() {
+        return Err(Error::Offline);
+    }
     let auth_token = client
         .get_or_refresh_access_token()
         .await

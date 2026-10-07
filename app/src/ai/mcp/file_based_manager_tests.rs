@@ -20,6 +20,7 @@ use crate::ai::mcp::file_mcp_watcher::{
 use crate::ai::mcp::{FileMCPWatcher, FileMCPWatcherEvent, ParsedTemplatableMCPServerResult};
 use crate::auth::AuthStateProvider;
 use crate::settings::{AISettings, FocusedTerminalInfo};
+use crate::test_util::settings::enable_ai_for_tests;
 use crate::warp_managed_paths_watcher::{WarpManagedPathsWatcher, warp_managed_mcp_config_path};
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
@@ -492,6 +493,7 @@ fn test_global_non_warp_server_respects_toggle() {
 
     App::test((), |mut app| async move {
         let manager = setup_app(&mut app);
+        enable_ai_for_tests(&mut app);
         let events = subscribe_events(&mut app, &manager);
 
         // Toggle is off by default: detection should NOT auto-spawn.
@@ -749,6 +751,7 @@ fn test_server_referenced_from_both_global_and_project_is_global() {
 
     App::test((), |mut app| async move {
         let manager = setup_app(&mut app);
+        enable_ai_for_tests(&mut app);
         let events = subscribe_events(&mut app, &manager);
 
         // Register both a global and a project reference for the same server.

@@ -4998,11 +4998,10 @@ impl DriveIndex {
         };
 
         if self.auth_state.is_anonymous_or_logged_out() {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
+            AuthManager::handle(ctx).update(ctx, |auth_manager, _| {
                 auth_manager.attempt_login_gated_feature(
                     "Share Object",
                     AuthViewVariant::ShareRequirementCloseable,
-                    ctx,
                 )
             });
             return;
@@ -5336,11 +5335,10 @@ impl TypedActionView for DriveIndex {
     fn handle_action(&mut self, action: &DriveIndexAction, ctx: &mut ViewContext<Self>) {
         // Block anonymous users from performing team actions
         if self.auth_state.is_anonymous_or_logged_out() && action.blocked_for_anonymous_user() {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
+            AuthManager::handle(ctx).update(ctx, |auth_manager, _| {
                 auth_manager.attempt_login_gated_feature(
                     action.into(),
                     AuthViewVariant::RequireLoginCloseable,
-                    ctx,
                 )
             });
             return;

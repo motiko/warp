@@ -94,6 +94,9 @@ impl TelemetryApi {
     // Returns the number of events that were flushed.
     pub async fn flush_events(&self, settings_snapshot: PrivacySettingsSnapshot) -> Result<usize> {
         let events = warpui::telemetry::flush_events();
+        if !ChannelState::is_telemetry_available() {
+            return Ok(0);
+        }
         let event_count = events.len();
 
         #[cfg(not(target_family = "wasm"))]
@@ -122,6 +125,9 @@ impl TelemetryApi {
         path: &Path,
         settings_snapshot: PrivacySettingsSnapshot,
     ) -> Result<()> {
+        if !ChannelState::is_telemetry_available() {
+            return Ok(());
+        }
         if path.exists() {
             let file = File::open(path)?;
             let events: Vec<RudderBatchMessage> = serde_json::from_reader(file)?;
@@ -150,6 +156,9 @@ impl TelemetryApi {
         max_event_count: usize,
         settings_snapshot: PrivacySettingsSnapshot,
     ) -> Result<()> {
+        if !ChannelState::is_telemetry_available() {
+            return Ok(());
+        }
         self.flush_and_persist_events_at_path(
             max_event_count,
             settings_snapshot,
@@ -242,6 +251,9 @@ impl TelemetryApi {
         settings_snapshot: PrivacySettingsSnapshot,
     ) -> impl Future<Output = Result<()>> + '_ {
         let work = async move {
+            if !ChannelState::is_telemetry_available() {
+                return Result::Ok(());
+            }
             if settings_snapshot.should_disable_telemetry() {
                 log::info!("Not sending telemetry event because telemetry is disabled.");
                 return Result::Ok(());
@@ -308,6 +320,10 @@ impl TelemetryApi {
     ) -> Result<()> {
         if messages.is_empty() {
             log::debug!("Dropping empty RudderStack telemetry batch");
+            return Ok(());
+        }
+
+        if !ChannelState::is_telemetry_available() {
             return Ok(());
         }
 

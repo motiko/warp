@@ -75,6 +75,7 @@ use crate::settings::{
     AISettings, AgentModeCommandExecutionPredicate, CodeSettings, FocusedTerminalInfo,
 };
 use crate::system::SystemStats;
+use crate::test_util::settings::enable_ai_for_tests;
 use crate::workflows::workflow::Workflow;
 use crate::workflows::{CloudWorkflow, CloudWorkflowModel};
 use crate::workspaces::gql_convert::{
@@ -307,6 +308,7 @@ fn test_codebase_context_enabled_with_no_workspace() {
             Arc::new(MockTeamClient::new()),
             Arc::new(MockWorkspaceClient::new()),
         );
+        enable_ai_for_tests(&mut app);
 
         app.read(|ctx| {
             let codebase_context_enabled =
@@ -3115,6 +3117,7 @@ fn test_codebase_context_enabled_when_all_teams_enable_it() {
             Arc::new(MockTeamClient::new()),
             Arc::new(MockWorkspaceClient::new()),
         );
+        enable_ai_for_tests(&mut app);
 
         app.read(|ctx| {
             let user_workspaces = UserWorkspaces::as_ref(ctx);
@@ -3180,6 +3183,7 @@ fn test_codebase_context_respects_user_setting_when_any_team_does() {
             Arc::new(MockTeamClient::new()),
             Arc::new(MockWorkspaceClient::new()),
         );
+        enable_ai_for_tests(&mut app);
 
         app.read(|ctx| {
             let user_workspaces = UserWorkspaces::as_ref(ctx);

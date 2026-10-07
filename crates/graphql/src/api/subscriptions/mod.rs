@@ -2,12 +2,13 @@ pub mod get_warp_drive_updates;
 
 use std::collections::HashMap;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use async_channel::Sender;
 use cynic::{QueryFragment, QueryVariables, StreamingOperation as CynicStreamingOperation};
 use futures::StreamExt as _;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use warp_core::channel::ChannelState;
 
 const PROTOCOL: &str = "graphql-transport-ws";
 
@@ -43,6 +44,10 @@ where
     F: Fn(Option<Q>) -> Result<T> + Unpin + Send,
     V: QueryVariables + Serialize + Unpin + Send + 'static,
 {
+    if ChannelState::is_offline() {
+        bail!("offline build: no server configured");
+    }
+
     // TODO: eventually, we might want to explore re-using the client. But for now,
     // we only have one subscription so let's just create a new one (we have to
     // anyways for retry logic).
