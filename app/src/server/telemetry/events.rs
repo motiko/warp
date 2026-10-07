@@ -2134,11 +2134,6 @@ pub enum TelemetryEvent {
         is_git_operations_autogen_enabled: bool,
     },
 
-    /// Emitted when the user toggles the "Voice Input" setting in the AI settings page.
-    ToggleVoiceInputSetting {
-        is_voice_input_enabled: bool,
-    },
-
     /// Emitted when the user toggles the "Show Agent Tips" setting in the AI settings page.
     ToggleShowAgentTips {
         is_enabled: bool,
@@ -2411,16 +2406,6 @@ pub enum TelemetryEvent {
         is_udi_enabled: bool,
         origin: InputUXChangeOrigin,
     },
-    /// User used voice input functionality
-    VoiceInputUsed {
-        action: String, // "start", "stop", "cancel"
-        /// Duration of voice session in milliseconds (for stop action)
-        session_duration_ms: Option<u64>,
-        /// Whether or not Universal Developer Input mode is enabled
-        is_udi_enabled: bool,
-        /// Current input mode when voice was used
-        current_input_mode: InputType,
-    },
     /// User interacted with @-menu for context attachment
     AtMenuInteracted {
         /// Length of the query string
@@ -2602,10 +2587,6 @@ pub enum TelemetryEvent {
     AgentManagementViewOpenedSession,
     /// Emitted when the user copies a session link from the Agent Management View.
     AgentManagementViewCopiedSessionLink,
-    /// Detected that Warp is running in an isolated sandbox.
-    DetectedIsolationPlatform {
-        platform: warp_isolation_platform::IsolationPlatformType,
-    },
 
     AgentTipShown {
         tip: String,
@@ -2618,11 +2599,6 @@ pub enum TelemetryEvent {
     AgentExitedShellProcess {
         command: String,
         server_output_id: Option<ServerOutputId>,
-    },
-    /// Emitted when the user uses voice input from the CLI agent footer.
-    CLIAgentToolbarVoiceInputUsed {
-        /// The CLI agent being used.
-        cli_agent: CLIAgentType,
     },
     /// Emitted when the user attaches an image from the CLI agent footer.
     CLIAgentToolbarImageAttached {
@@ -2759,8 +2735,6 @@ pub enum TelemetryEvent {
     /// (e.g. no display), so the run's requests omit the computer-use tools. At most once per run.
     ComputerUseUnavailable {
         ambient_agent_task_id: AmbientAgentTaskId,
-        /// Whether the client is running inside a sandbox (a Warp-hosted cloud agent).
-        sandboxed: bool,
     },
     /// Emitted when a warp://linear deeplink is opened.
     LinearIssueLinkOpened,
@@ -3520,9 +3494,6 @@ impl TelemetryEvent {
             } => Some(
                 json!({"is_git_operations_autogen_enabled": is_git_operations_autogen_enabled}),
             ),
-            TelemetryEvent::ToggleVoiceInputSetting {
-                is_voice_input_enabled,
-            } => Some(json!({"is_voice_input_enabled": is_voice_input_enabled})),
             TelemetryEvent::AgentModePotentialAutoDetectionFalsePositive(
                 AgentModeAutoDetectionFalsePositivePayload::InternalDogfoodUsers { input_text },
             ) => Some(json!({"input_text": input_text})),
@@ -3978,17 +3949,6 @@ impl TelemetryEvent {
             } => Some(json!({
                 "is_udi_enabled": is_udi_enabled,
                 "origin": origin,
-            })),
-            TelemetryEvent::VoiceInputUsed {
-                action,
-                session_duration_ms,
-                is_udi_enabled,
-                current_input_mode,
-            } => Some(json!({
-                "action": action,
-                "session_duration_ms": session_duration_ms,
-                "is_udi_enabled": is_udi_enabled,
-                "current_input_mode": current_input_mode,
             })),
             TelemetryEvent::AtMenuInteracted {
                 action,
@@ -4536,18 +4496,12 @@ impl TelemetryEvent {
             })),
             TelemetryEvent::AgentManagementViewOpenedSession => None,
             TelemetryEvent::AgentManagementViewCopiedSessionLink => None,
-            TelemetryEvent::DetectedIsolationPlatform { platform } => Some(json!({
-                "platform": platform,
-            })),
             TelemetryEvent::AgentExitedShellProcess {
                 command,
                 server_output_id,
             } => Some(json!({
                 "command": command,
                 "server_output_id": server_output_id,
-            })),
-            TelemetryEvent::CLIAgentToolbarVoiceInputUsed { cli_agent } => Some(json!({
-                "agent_name": cli_agent,
             })),
             TelemetryEvent::CLIAgentToolbarImageAttached { cli_agent } => Some(json!({
                 "agent_name": cli_agent,
@@ -4660,10 +4614,8 @@ impl TelemetryEvent {
             })),
             TelemetryEvent::ComputerUseUnavailable {
                 ambient_agent_task_id,
-                sandboxed,
             } => Some(json!({
                 "ambient_agent_task_id": ambient_agent_task_id.to_string(),
-                "sandboxed": sandboxed,
                 "os": std::env::consts::OS,
             })),
             TelemetryEvent::LoginButtonClicked { source }
@@ -4987,7 +4939,6 @@ impl TelemetryEvent {
             | TelemetryEvent::ToggleActiveAI { .. }
             | TelemetryEvent::TogglePromptSuggestionsSetting { .. }
             | TelemetryEvent::ToggleCodeSuggestionsSetting { .. }
-            | TelemetryEvent::ToggleVoiceInputSetting { .. }
             | TelemetryEvent::TierLimitHit(_)
             | TelemetryEvent::SharedObjectLimitHitBannerViewPlansButtonClicked
             | TelemetryEvent::ResourceUsageStats { .. }
@@ -5053,7 +5004,6 @@ impl TelemetryEvent {
             | TelemetryEvent::SearchCodebaseRequested { .. }
             | TelemetryEvent::SearchCodebaseRepoUnavailable { .. }
             | TelemetryEvent::InputUXModeChanged { .. }
-            | TelemetryEvent::VoiceInputUsed { .. }
             | TelemetryEvent::AtMenuInteracted { .. }
             | TelemetryEvent::UserMenuUpgradeClicked
             | TelemetryEvent::TabCloseButtonPositionUpdated { .. }
@@ -5106,11 +5056,9 @@ impl TelemetryEvent {
             | TelemetryEvent::AgentManagementViewToggled { .. }
             | TelemetryEvent::AgentManagementViewOpenedSession
             | TelemetryEvent::AgentManagementViewCopiedSessionLink
-            | TelemetryEvent::DetectedIsolationPlatform { .. }
             | TelemetryEvent::AgentTipShown { .. }
             | TelemetryEvent::AgentTipClicked { .. }
             | TelemetryEvent::ToggleShowAgentTips { .. }
-            | TelemetryEvent::CLIAgentToolbarVoiceInputUsed { .. }
             | TelemetryEvent::CLIAgentToolbarImageAttached { .. }
             | TelemetryEvent::CLIAgentToolbarShown { .. }
             | TelemetryEvent::CLIAgentPluginChipClicked { .. }
@@ -5548,7 +5496,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
                 EnablementState::Flag(FeatureFlag::GitOperationsInCodeReview)
             }
             Self::ZeroStatePromptSuggestionUsed => EnablementState::Always,
-            Self::ToggleVoiceInputSetting => EnablementState::Always,
             Self::AgentModeCodeSuggestionEditedByUser
             | Self::AgentModeCodeFilesNavigated
             | Self::AgentModeCodeDiffHunksNavigated => EnablementState::Always,
@@ -5598,7 +5545,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::FileGlobToolFailed { .. } => EnablementState::Always,
             Self::ShellTerminatedPrematurely { .. } => EnablementState::Always,
             Self::InputUXModeChanged { .. } => EnablementState::Always,
-            Self::VoiceInputUsed { .. } => EnablementState::Always,
             Self::AtMenuInteracted { .. } => EnablementState::Always,
             Self::UserMenuUpgradeClicked => EnablementState::Always,
             Self::TabCloseButtonPositionUpdated { .. } => EnablementState::Always,
@@ -5647,9 +5593,7 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             | Self::AgentManagementViewCopiedSessionLink => {
                 EnablementState::Flag(FeatureFlag::AgentManagementView)
             }
-            Self::DetectedIsolationPlatform { .. } => EnablementState::Always,
             Self::AgentExitedShellProcess { .. } => EnablementState::Always,
-            Self::CLIAgentToolbarVoiceInputUsed { .. } => EnablementState::Always,
             Self::CLIAgentToolbarImageAttached { .. } => EnablementState::Always,
             Self::CLIAgentToolbarShown { .. } => EnablementState::Always,
             Self::CLIAgentPluginChipClicked { .. }
@@ -6039,7 +5983,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::ToggleIntelligentAutosuggestionsSetting => {
                 "Toggle Intelligent Autosuggestions Setting"
             }
-            Self::ToggleVoiceInputSetting => "Toggle Voice Input Setting",
             Self::EnvVarCollectionInvoked => "Invoked Environment Variables",
             Self::EnvVarWorkflowParameterization => {
                 "Parameterized Workflow With Environment Variables"
@@ -6143,7 +6086,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
                 "AgentMode.SearchCodebase.RepoUnavailable"
             }
             Self::InputUXModeChanged { .. } => "Input.InputUXModeChanged",
-            Self::VoiceInputUsed { .. } => "Input.VoiceInputUsed",
             Self::AtMenuInteracted { .. } => "Input.AtMenuInteracted",
             Self::UserMenuUpgradeClicked => "User Menu Upgrade Clicked",
             Self::TabCloseButtonPositionUpdated { .. } => "Update Tab Close Button Position",
@@ -6201,12 +6143,10 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::AgentManagementViewCopiedSessionLink => {
                 "Agent Management View Copied Session Link"
             }
-            Self::DetectedIsolationPlatform { .. } => "Isolation.DetectedIsolationPlatform",
             Self::AgentTipShown => "AgentTip Shown",
             Self::AgentTipClicked => "AgentTip Clicked",
             Self::ToggleShowAgentTips => "Toggle Show Agent Tips",
             Self::AgentExitedShellProcess => "AgentMode.ExitedShellProcess",
-            Self::CLIAgentToolbarVoiceInputUsed { .. } => "CLIAgentFooter.VoiceInputUsed",
             Self::CLIAgentToolbarImageAttached { .. } => "CLIAgentFooter.ImageAttached",
             Self::CLIAgentToolbarShown { .. } => "CLIAgentFooter.Shown",
             Self::CLIAgentPluginChipClicked { .. } => "CLIAgentPlugin.ChipClicked",
@@ -6750,7 +6690,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::ToggleGitOperationsAutogenSetting => {
                 "Toggled on/off the git operations autogen setting"
             }
-            Self::ToggleVoiceInputSetting => "Toggled on/off the voice input setting",
             Self::UnitTestSuggestionShown { .. } => "Suggested prompt shown",
             Self::UnitTestSuggestionAccepted { .. } => "Suggested prompt accepted",
             Self::UnitTestSuggestionCancelled { .. } => "Suggested prompt cancelled",
@@ -6922,7 +6861,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
                 "Tried to use the Search Codebase tool on a repo that is unavailable"
             }
             Self::InputUXModeChanged { .. } => "Changed the input UX mode",
-            Self::VoiceInputUsed { .. } => "Used voice input",
             Self::AtMenuInteracted { .. } => "Interacted with the @ menu",
             Self::UserMenuUpgradeClicked => "Clicked the 'Upgrade' menu item in the user menu",
             Self::TabCloseButtonPositionUpdated { .. } => "Updated the tab close button position",
@@ -7001,16 +6939,10 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::AgentManagementViewCopiedSessionLink => {
                 "User copied a session link from the Agent Management View"
             }
-            Self::DetectedIsolationPlatform { .. } => {
-                "Detected that Warp is running in an isolated sandbox"
-            }
             Self::AgentTipShown => "Selected an Agent Tip to show in the Agent Mode status bar",
             Self::AgentTipClicked => "User clicked a link or action in an Agent Tip",
             Self::AgentExitedShellProcess => {
                 "An agent-requested command caused the shell process to exit"
-            }
-            Self::CLIAgentToolbarVoiceInputUsed { .. } => {
-                "User used voice input from the CLI agent footer"
             }
             Self::CLIAgentToolbarImageAttached { .. } => {
                 "User attached an image from the CLI agent footer"

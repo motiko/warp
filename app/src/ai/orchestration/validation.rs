@@ -2,58 +2,21 @@
 
 use ai::agent::action::RunAgentsExecutionMode;
 use warp_cli::agent::Harness;
-use warpui::AppContext;
 
-use super::config_state::{AuthSecretSelection, OrchestrationConfigState};
-use crate::ai::auth_secret_types::auth_secret_types_for_harness;
+use super::config_state::OrchestrationConfigState;
 use crate::ai::local_harness_setup::{LocalHarnessSetupState, local_harness_setup_state};
 use crate::ai::orchestration::providers::ORCHESTRATION_WARP_WORKER_HOST;
 
-/// Returns `true` when the auth secret picker should be visible: Cloud +
-/// non-Oz + a harness with at least one supported auth-secret type. Local
-/// non-Oz children inherit auth from the user's shell environment.
-pub fn should_show_auth_secret_picker(state: &OrchestrationConfigState) -> bool {
-    if !state.execution_mode.is_remote() {
-        return false;
-    }
-    let Some(harness) = Harness::parse_orchestration_harness(&state.harness_type) else {
-        return false;
-    };
-    if harness == Harness::Oz {
-        return false;
-    }
-    !auth_secret_types_for_harness(harness).is_empty()
+/// Returns `true` when the auth secret picker should be visible. No harness has managed
+/// auth-secret types once managed secrets are gone, so the picker never shows; the picker
+/// itself is removed with the cloud-agent orchestration layer.
+pub fn should_show_auth_secret_picker() -> bool {
+    false
 }
 
-/// `true` when the user must pick an API key (or Inherit) before Accept is
-/// allowed. Fires on `Unset` for any non-Oz cloud harness with managed-secret
-/// types, regardless of fetch state — dispatching with an unintended
-/// `Inherit` while secrets are still loading would fail downstream.
-pub fn auth_secret_selection_required(state: &OrchestrationConfigState, _ctx: &AppContext) -> bool {
-    if !should_show_auth_secret_picker(state) {
-        return false;
-    }
-    if !matches!(
-        state.auth_secret_selection,
-        AuthSecretSelection::Unset | AuthSecretSelection::CreatingNew
-    ) {
-        return false;
-    }
-    let Some(harness) = Harness::parse_orchestration_harness(&state.harness_type) else {
-        return false;
-    };
-    if harness == Harness::Oz || auth_secret_types_for_harness(harness).is_empty() {
-        return false;
-    }
-    true
-}
-
-/// [`OrchestrationConfigState::accept_disabled_reason`] plus the
-/// auth-secret-selection gate. Card views should prefer this.
-pub fn accept_disabled_reason_with_auth(
-    state: &OrchestrationConfigState,
-    ctx: &AppContext,
-) -> Option<String> {
+/// [`OrchestrationConfigState::accept_disabled_reason`] plus the local harness
+/// setup gate. Card views should prefer this.
+pub fn accept_disabled_reason_with_auth(state: &OrchestrationConfigState) -> Option<String> {
     if let Some(reason) = state.accept_disabled_reason() {
         return Some(reason.to_string());
     }
@@ -69,9 +32,6 @@ pub fn accept_disabled_reason_with_auth(
             }
             LocalHarnessSetupState::Ready => {}
         }
-    }
-    if auth_secret_selection_required(state, ctx) {
-        return Some("Select an API key for this harness to continue.".to_string());
     }
     None
 }

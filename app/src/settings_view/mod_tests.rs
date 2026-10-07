@@ -809,7 +809,7 @@ fn stub_widgets_page() -> PageType<TestSettingsView> {
             terms: "file search fuzzy opener",
         }),
         Box::new(StubWidget {
-            terms: "voice input",
+            terms: "input hint text",
         }),
     ];
     PageType::new_uncategorized(widgets, None)

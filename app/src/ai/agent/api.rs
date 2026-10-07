@@ -370,11 +370,7 @@ impl RequestParams {
             warp_multi_agent_api::AutonomyLevel::Supervised
         };
 
-        let isolation_level = if app_execution_mode.is_sandboxed() {
-            warp_multi_agent_api::IsolationLevel::Sandbox
-        } else {
-            warp_multi_agent_api::IsolationLevel::None
-        };
+        let isolation_level = warp_multi_agent_api::IsolationLevel::None;
 
         let web_search_enabled =
             BlocklistAIPermissions::as_ref(app).get_web_search_enabled(app, terminal_view_id);
@@ -397,7 +393,7 @@ impl RequestParams {
             && !computer_use_supported
             && let Some(task_id) = conversation.ambient_agent_task_id
         {
-            report_computer_use_unavailable(task_id, app_execution_mode.is_sandboxed(), app);
+            report_computer_use_unavailable(task_id, app);
         }
         let ask_user_question_enabled = BlocklistAIPermissions::as_ref(app)
             .get_ask_user_question_setting(app, terminal_view_id)
@@ -465,7 +461,7 @@ impl RequestParams {
 /// Reports that computer use was enabled for a run but is unavailable on this host, at most once
 /// per run for the lifetime of the process. Request params are rebuilt for every request, so
 /// emitting unconditionally would produce one event per turn.
-fn report_computer_use_unavailable(task_id: AmbientAgentTaskId, sandboxed: bool, app: &AppContext) {
+fn report_computer_use_unavailable(task_id: AmbientAgentTaskId, app: &AppContext) {
     static REPORTED_TASKS: LazyLock<Mutex<HashSet<AmbientAgentTaskId>>> =
         LazyLock::new(Default::default);
     let newly_reported = REPORTED_TASKS
@@ -477,7 +473,6 @@ fn report_computer_use_unavailable(task_id: AmbientAgentTaskId, sandboxed: bool,
     send_telemetry_from_app_ctx!(
         TelemetryEvent::ComputerUseUnavailable {
             ambient_agent_task_id: task_id,
-            sandboxed,
         },
         app
     );

@@ -365,8 +365,7 @@ impl TemplatableMCPServerManager {
                 | AuthManagerEvent::SkippedLogin => me.sync_builtin_servers(false, ctx),
                 AuthManagerEvent::AttemptedLoginGatedFeature { .. }
                 | AuthManagerEvent::LoginOverrideDetected(_)
-                | AuthManagerEvent::MintCustomTokenFailed(_)
-                | AuthManagerEvent::ReceivedDeviceAuthorizationCode { .. } => {}
+                | AuthManagerEvent::MintCustomTokenFailed(_) => {}
             });
 
             let server_api_provider = ServerApiProvider::handle(ctx);
@@ -652,15 +651,6 @@ impl TemplatableMCPServerManager {
         });
     }
 
-    /// Get all runnable MCP servers (templatable installations).
-    pub fn get_all_runnable_mcp_servers(ctx: &AppContext) -> Vec<(Uuid, String)> {
-        TemplatableMCPServerManager::as_ref(ctx)
-            .get_installed_templatable_servers()
-            .iter()
-            .map(|(uuid, installation)| (*uuid, installation.templatable_mcp_server().name.clone()))
-            .collect()
-    }
-
     /// Get all cloud synced MCP servers (templatable templates).
     pub fn get_all_cloud_synced_mcp_servers(ctx: &AppContext) -> HashMap<Uuid, String> {
         TemplatableMCPServerManager::as_ref(ctx)
@@ -752,16 +742,6 @@ impl TemplatableMCPServerManager {
             },
             ctx,
         );
-    }
-
-    /// Spawns an ephemeral MCP server started via the CLI (`oz agent run --mcp`).
-    pub fn spawn_cli_ephemeral_server(
-        &mut self,
-        installation: TemplatableMCPServerInstallation,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.cli_spawned_server_uuids.insert(installation.uuid());
-        self.spawn_ephemeral_server(installation, ctx);
     }
 
     /// Reconciles built-in Warp-hosted MCP servers (currently the Factory

@@ -5,7 +5,6 @@ use ai::agent::orchestration_config::{
     OrchestrationConfig, OrchestrationConfigStatus, OrchestrationExecutionMode,
 };
 use settings::Setting;
-use warp_cli::agent::Harness;
 use warp_core::execution_mode::ExecutionMode;
 use warp_core::features::FeatureFlag;
 use warpui::{App, Entity, EntityId, ModelHandle};
@@ -16,26 +15,23 @@ use crate::ai::agent::task::TaskId;
 use crate::ai::blocklist::{
     BlocklistAIHistoryModel, BlocklistAIPermissions, StartAgentExecutorEvent, StartAgentRequest,
 };
-use crate::ai::cloud_agent_settings::{AuthSecretPreference, CloudAgentSettings};
+use crate::ai::cloud_agent_settings::CloudAgentSettings;
 use crate::ai::document::ai_document_model::{AIDocumentModel, AIDocumentSaveStatus};
 use crate::ai::execution_profiles::RunAgentsPermission;
 use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
 use crate::ai::mcp::templatable_manager::TemplatableMCPServerManager;
-use crate::ai::orchestration::populate_default_auth_secret_for_execution;
 use crate::appearance::Appearance;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::network::NetworkStatus;
 use crate::server::cloud_objects::update_manager::UpdateManager;
-use crate::server::ids::{ServerId, SyncId};
+use crate::server::ids::SyncId;
 use crate::server::sync_queue::SyncQueue;
 use crate::settings::PrivacySettings;
 use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::test_util::settings::initialize_settings_for_tests_with_mode;
 use crate::workspaces::team_tester::TeamTesterStatus;
-use crate::workspaces::user_workspaces::{
-    TeamContextForOperation, TeamScope, TeamlessScopeForTest, UserWorkspaces,
-};
+use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::{
     AgentNotificationsModel, GlobalResourceHandles, GlobalResourceHandlesProvider, LaunchMode,
 };
@@ -93,72 +89,6 @@ fn persist_plan_config_with_harness(
                 },
                 status,
             );
-    });
-}
-
-fn team_scope_for_team(team_uid: i64) -> TeamContextForOperation {
-    TeamContextForOperation::new_for_test(ServerId::from(team_uid))
-}
-
-fn persist_scoped_default_auth_secret<S: TeamScope + ?Sized>(
-    app: &mut App,
-    team_scope: &S,
-    harness: Harness,
-    secret_name: &str,
-) {
-    CloudAgentSettings::handle(app).update(app, |settings, ctx| {
-        settings.persist_auth_secret_preference(
-            team_scope,
-            harness,
-            Some(AuthSecretPreference::Named(secret_name.to_string())),
-            ctx,
-        );
-    });
-}
-
-#[test]
-fn scoped_auth_secret_default_overrides_legacy_fallback_for_its_team() {
-    App::test((), |mut app| async move {
-        let state = initialize_run_agents_test(&mut app, ExecutionMode::App);
-        let team_a_scope = team_scope_for_team(7);
-        let team_b_scope = team_scope_for_team(8);
-        persist_default_auth_secret(&mut app, "claude", "legacy-personal-key");
-        persist_scoped_default_auth_secret(
-            &mut app,
-            &team_a_scope,
-            Harness::Claude,
-            "team-a-anthropic-key",
-        );
-        let AIAgentActionType::RunAgents(mut team_b_request) =
-            remote_run_agents_action("claude").action
-        else {
-            panic!("expected run_agents action");
-        };
-        let mut team_a_request = team_b_request.clone();
-        let mut personal_request = team_b_request.clone();
-
-        state.executor.update(&mut app, |_, ctx| {
-            populate_default_auth_secret_for_execution(&mut team_b_request, &team_b_scope, ctx);
-            populate_default_auth_secret_for_execution(&mut team_a_request, &team_a_scope, ctx);
-            populate_default_auth_secret_for_execution(
-                &mut personal_request,
-                &TeamlessScopeForTest,
-                ctx,
-            );
-        });
-
-        assert_eq!(
-            team_b_request.harness_auth_secret_name.as_deref(),
-            Some("legacy-personal-key")
-        );
-        assert_eq!(
-            team_a_request.harness_auth_secret_name.as_deref(),
-            Some("team-a-anthropic-key")
-        );
-        assert_eq!(
-            personal_request.harness_auth_secret_name.as_deref(),
-            Some("legacy-personal-key")
-        );
     });
 }
 
@@ -236,7 +166,7 @@ fn execute_denies_duplicate_launched_agent() {
 }
 
 fn initialize_run_agents_test(app: &mut App, mode: ExecutionMode) -> RunAgentsTestState {
-    initialize_settings_for_tests_with_mode(app, mode, false);
+    initialize_settings_for_tests_with_mode(app, mode);
     app.update(warp_core::telemetry::testing::MockTelemetryContextProvider::register);
     let global_resource_handles = GlobalResourceHandles::mock(app);
     app.add_singleton_model(|_| GlobalResourceHandlesProvider::new(global_resource_handles));
@@ -400,33 +330,6 @@ fn should_autoexecute_when_plan_has_approved_orchestration_config() {
         });
 
         assert!(should_autoexecute);
-    });
-}
-
-#[test]
-fn should_not_autoexecute_approved_remote_non_warp_plan_without_default_auth_secret() {
-    App::test((), |mut app| async move {
-        let state = initialize_run_agents_test(&mut app, ExecutionMode::App);
-        persist_plan_config_with_harness(
-            &mut app,
-            state.conversation_id,
-            "plan-1",
-            "codex",
-            OrchestrationConfigStatus::Approved,
-        );
-        let action = with_plan_id(remote_run_agents_action("oz"), "plan-1");
-
-        let should_autoexecute = state.executor.update(&mut app, |executor, ctx| {
-            executor.should_autoexecute(
-                ExecuteActionInput {
-                    action: &action,
-                    conversation_id: state.conversation_id,
-                },
-                ctx,
-            )
-        });
-
-        assert!(!should_autoexecute);
     });
 }
 
@@ -833,37 +736,6 @@ fn execute_denies_child_run_agents_when_multi_level_orchestration_disabled() {
 }
 
 #[test]
-fn execute_denies_remote_non_warp_harness_without_default_auth_secret() {
-    App::test((), |mut app| async move {
-        let state = initialize_run_agents_test(&mut app, ExecutionMode::App);
-        let action = remote_run_agents_action("codex");
-
-        let execution = state.executor.update(&mut app, |executor, ctx| {
-            executor
-                .execute(
-                    ExecuteActionInput {
-                        action: &action,
-                        conversation_id: state.conversation_id,
-                    },
-                    ctx,
-                )
-                .into()
-        });
-
-        let AnyActionExecution::Sync(AIAgentActionResultType::RunAgents(RunAgentsResult::Denied {
-            reason,
-        })) = execution
-        else {
-            panic!("expected synchronous run_agents denial");
-        };
-        assert_eq!(
-            reason,
-            "Cloud child agents using this harness require an API key before they can run."
-        );
-    });
-}
-
-#[test]
 fn should_autoexecute_remote_non_warp_harness_with_always_allow_even_without_default_auth_secret() {
     App::test((), |mut app| async move {
         let state = initialize_run_agents_test(&mut app, ExecutionMode::App);
@@ -924,26 +796,5 @@ fn should_autoexecute_remote_warp_harness_without_default_auth_secret() {
         });
 
         assert!(should_autoexecute);
-    });
-}
-
-#[test]
-fn populate_default_auth_secret_for_autoexecute_uses_persisted_secret() {
-    App::test((), |mut app| async move {
-        let state = initialize_run_agents_test(&mut app, ExecutionMode::App);
-        persist_default_auth_secret(&mut app, "claude", "default-anthropic-key");
-        let AIAgentActionType::RunAgents(mut request) = remote_run_agents_action("claude").action
-        else {
-            panic!("expected run_agents action");
-        };
-
-        state.executor.update(&mut app, |_, ctx| {
-            populate_default_auth_secret_for_execution(&mut request, &TeamlessScopeForTest, ctx);
-        });
-
-        assert_eq!(
-            request.harness_auth_secret_name.as_deref(),
-            Some("default-anthropic-key")
-        );
     });
 }

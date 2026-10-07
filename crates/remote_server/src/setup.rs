@@ -460,11 +460,16 @@ pub fn daemon_pid_name() -> String {
     }
 }
 
-/// Returns the binary name, keyed by channel.
-///
-/// Matches the CLI command names: `oz` (stable), `oz-preview`, `oz-dev`.
+/// Returns the remote server binary name, keyed by channel.
 pub fn binary_name() -> &'static str {
-    ChannelState::channel().cli_command_name()
+    match ChannelState::channel() {
+        Channel::Stable => "oz",
+        Channel::Dev => "oz-dev",
+        Channel::Preview => "oz-preview",
+        Channel::Local => "oz-local",
+        Channel::Integration => "oz-integration",
+        Channel::Oss => "alefbet-cli",
+    }
 }
 
 /// Returns the full remote binary path for the current channel and client

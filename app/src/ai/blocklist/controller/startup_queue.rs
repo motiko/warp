@@ -12,10 +12,10 @@ use crate::ai::agent::{AIAgentAttachment, BaseUserQuery};
 use crate::ai::attachment_utils::{
     build_file_attachment_map, download_task_file_attachments, resolve_agent_attachments,
 };
+#[cfg(test)]
+use crate::ai::blocklist::QueuedPromptDeliveryMode;
 use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
-use crate::ai::blocklist::{
-    BlocklistAIHistoryModel, QueuedPromptDeliveryMode, QueuedQuery, QueuedQueryId, QueuedQueryModel,
-};
+use crate::ai::blocklist::{BlocklistAIHistoryModel, QueuedQuery, QueuedQueryId, QueuedQueryModel};
 use crate::server::server_api::ServerApiProvider;
 
 impl BlocklistAIController {
@@ -23,7 +23,7 @@ impl BlocklistAIController {
     /// delivering startup follow-ups, so `route_native_startup_injection` knows which
     /// conversation to target for the rest of this run. Idempotent: returns the existing
     /// binding if one is already in place.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn bind_native_prompt_conversation(
         &mut self,
         restored_conversation_id: Option<AIConversationId>,
@@ -61,7 +61,7 @@ impl BlocklistAIController {
     /// behind an active CLI subagent could go out) and releasing the native setup barrier if it
     /// was still held -- otherwise this conversation would stay permanently dispatch-blocked for
     /// any future local queueing against it, since nothing else would ever release that barrier.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn unbind_native_prompt_conversation(&mut self, ctx: &mut ModelContext<Self>) {
         let Some(id) = self.native_prompt_conversation_id.take() else {
             return;

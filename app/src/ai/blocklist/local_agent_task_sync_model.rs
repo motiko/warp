@@ -1,6 +1,7 @@
 mod update_queue;
 
 use std::collections::HashMap;
+#[cfg(test)]
 use std::future::Future;
 use std::sync::Arc;
 
@@ -113,7 +114,7 @@ impl LocalAgentTaskSyncModel {
     /// Resolves once the task has no pending or in-flight `update_agent_task`
     /// calls in this model's queue. Resolves immediately when the task is
     /// already idle. Callers should bound the wait with a timeout.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
+    #[cfg(test)]
     pub fn wait_for_idle(
         &mut self,
         task_id: AmbientAgentTaskId,
@@ -137,7 +138,7 @@ impl LocalAgentTaskSyncModel {
     /// ground truth: it only reflects updates sent through this model, not
     /// direct `update_agent_task` calls made elsewhere in this process or
     /// writes made server-side.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
+    #[cfg(test)]
     pub fn confirmed_terminal_state(&self, task_id: &AmbientAgentTaskId) -> Option<AgentTaskState> {
         self.confirmed_terminal_states.get(task_id).copied()
     }
@@ -163,7 +164,7 @@ impl LocalAgentTaskSyncModel {
     /// status changes from `CLIAgentSessionsModel` are reported to the
     /// server. Called by `AgentDriver` when setting up a third-party
     /// harness run.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
+    #[cfg(test)]
     pub fn register_cli_session(
         &mut self,
         terminal_view_id: EntityId,
@@ -218,7 +219,7 @@ impl LocalAgentTaskSyncModel {
     /// Stops reporting CLI agent status changes for a completed driver run.
     /// Task updates accepted before unregistration remain queued until delivery
     /// finishes.
-    #[cfg_attr(target_family = "wasm", expect(dead_code))]
+    #[cfg(test)]
     pub fn unregister_cli_session(&mut self, terminal_view_id: EntityId) {
         if let Some(task_id) = self.cli_session_task_ids.remove(&terminal_view_id) {
             self.update_queue.remove_task(&task_id);

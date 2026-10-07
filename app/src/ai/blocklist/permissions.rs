@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use warp_completer::parsers::simple::{command_without_leading_env_vars, decompose_command};
-use warp_core::execution_mode::AppExecutionMode;
 use warp_core::features::FeatureFlag;
 use warp_core::settings::Setting;
 use warp_core::user_preferences::GetUserPreferences;
@@ -227,19 +226,8 @@ impl BlocklistAIPermissions {
         self.permissions_profile_for_id(active_profile.id(), scope, ctx)
     }
 
-    /// Returns the applicable workspace autonomy settings based on execution mode.
-    /// In sandboxed mode, returns settings derived from the sandboxed agent config.
-    /// In unsandboxed mode, returns the standard AI autonomy settings.
     fn team_autonomy_settings(scope: &impl TeamScope, ctx: &AppContext) -> AiAutonomySettings {
-        if AppExecutionMode::as_ref(ctx).is_sandboxed() {
-            AiAutonomySettings {
-                execute_commands_denylist: UserWorkspaces::as_ref(ctx)
-                    .sandboxed_agent_execute_commands_denylist_for_scope(scope),
-                ..Default::default()
-            }
-        } else {
-            UserWorkspaces::as_ref(ctx).ai_autonomy_settings(scope)
-        }
+        UserWorkspaces::as_ref(ctx).ai_autonomy_settings(scope)
     }
 
     pub fn get_apply_code_diffs_setting_for_profile(
@@ -928,9 +916,8 @@ impl BlocklistAIPermissions {
         let auto_approve_enabled = BlocklistAIHistoryModel::as_ref(ctx)
             .conversation(conversation_id)
             .is_some_and(|convo| convo.autoexecute_any_action());
-        let bypass_user_denylist = auto_approve_enabled
-            && !AppExecutionMode::as_ref(ctx).is_sandboxed()
-            && *AISettings::as_ref(ctx).auto_approve_bypasses_command_denylist;
+        let bypass_user_denylist =
+            auto_approve_enabled && *AISettings::as_ref(ctx).auto_approve_bypasses_command_denylist;
 
         // The denylist takes precedence over the remaining conditions.
         let denylist = if bypass_user_denylist {

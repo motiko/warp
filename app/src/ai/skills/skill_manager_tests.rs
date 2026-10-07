@@ -546,7 +546,7 @@ name: test-skill
 description: Test skill with variables
 ---
 
-Run `{{warp_cli_binary_name}}` to connect to {{warp_server_url}}.
+Connect to {{warp_server_url}}.
 Use `{{warpctrl_binary_name}}` from {{warpctrl_wrapper_path}}.
 "#,
     )
@@ -557,11 +557,12 @@ Use `{{warpctrl_binary_name}}` from {{warpctrl_wrapper_path}}.
     assert_eq!(skills.len(), 1);
     let skill = skills.get("test-skill").unwrap();
 
-    let expected_cli = ChannelState::channel().cli_command_name();
     let expected_url = ChannelState::server_root_url();
-    assert!(skill.content.contains(&format!(
-        "Run `{expected_cli}` to connect to {expected_url}."
-    )));
+    assert!(
+        skill
+            .content
+            .contains(&format!("Connect to {expected_url}."))
+    );
     let expected_warpctrl = ChannelState::channel().warpctrl_command_name();
     let expected_wrapper = resources_dir.join("bin").join(expected_warpctrl);
     assert!(skill.content.contains(&format!(
@@ -626,7 +627,7 @@ name: test-skill
 description: Test skill with mixed variables
 ---
 
-Use {{other_var}}, {{warp_cli_binary_name}}, and {{skill_dir}} together.
+Use {{other_var}}, {{warp_url_scheme}}, and {{skill_dir}} together.
 "#,
     )
     .unwrap();
@@ -636,9 +637,9 @@ Use {{other_var}}, {{warp_cli_binary_name}}, and {{skill_dir}} together.
     assert_eq!(skills.len(), 1);
     let skill = skills.get("test-skill").unwrap();
 
-    let expected_cli = ChannelState::channel().cli_command_name();
     assert!(skill.content.contains(&format!(
-        "Use {{{{other_var}}}}, {expected_cli}, and {} together.",
+        "Use {{{{other_var}}}}, {}, and {} together.",
+        ChannelState::url_scheme(),
         skill_dir.display()
     )));
 }
@@ -679,9 +680,8 @@ fn test_build_bundled_skill_context() {
     let skill_dir = resources_dir.join("bundled/skills/test-skill");
     let context = build_bundled_skill_context(resources_dir, &skill_dir);
 
-    assert_eq!(context.len(), 9);
+    assert_eq!(context.len(), 8);
     assert!(context.contains_key("warp_server_url"));
-    assert!(context.contains_key("warp_cli_binary_name"));
     assert!(context.contains_key("warpctrl_binary_name"));
     assert!(context.contains_key("warpctrl_wrapper_path"));
     assert!(context.contains_key("warp_url_scheme"));
@@ -702,10 +702,6 @@ fn test_build_bundled_skill_context() {
     assert_eq!(
         context.get("warp_server_url").unwrap(),
         &ChannelState::server_root_url().to_string()
-    );
-    assert_eq!(
-        context.get("warp_cli_binary_name").unwrap(),
-        ChannelState::channel().cli_command_name()
     );
     assert_eq!(
         context.get("warpctrl_binary_name").unwrap(),

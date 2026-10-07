@@ -58,7 +58,6 @@ use settings::{Setting as _, ToggleableSetting};
 use string_offset::{ByteOffset, CharOffset};
 use vec1::Vec1;
 use vim::vim::{VimHandler, VimMode};
-use warp_cli::agent::Harness;
 use warp_completer::completer::{
     self, CompleterOptions, CompletionContext, CompletionsFallbackStrategy, Description,
     ExplicitTabCompletion, MatchStrategy, MatchType, PathSeparators, PreparedSuggestion,
@@ -187,7 +186,6 @@ use crate::ai::blocklist::{
     QueuedQueryOrigin, SlashCommandRequest, ai_brand_color, ai_indicator_height,
     render_ai_agent_mode_icon, render_ai_follow_up_icon,
 };
-use crate::ai::cloud_agent_settings::{AuthSecretPreference, CloudAgentSettings};
 use crate::ai::cloud_environments::CloudAmbientAgentEnvironment;
 use crate::ai::connected_self_hosted_workers::{
     ConnectedSelfHostedWorkersEvent, ConnectedSelfHostedWorkersModel,
@@ -324,7 +322,6 @@ use crate::terminal::package_installers::command_at_cursor_has_common_package_in
 use crate::terminal::prompt_render_helper::should_render_ps1_prompt;
 use crate::terminal::universal_developer_input::AtContextMenuDisabledReason;
 use crate::terminal::view::ambient_agent::{
-    AuthSecretFtuxView, AuthSecretFtuxViewEvent, AuthSecretSelector, AuthSecretSelectorEvent,
     HarnessSelector, HarnessSelectorEvent, HostSelector, HostSelectorEvent, NakedHeaderButtonTheme,
     cloud_agent_team_required_toast_message,
 };
@@ -1134,9 +1131,6 @@ pub enum Event {
     OpenAutoReloadModal {
         purchased_credits: i32,
     },
-    AuthSecretDeleteConfirmationDialogToggled {
-        is_open: bool,
-    },
     ShowToast {
         message: String,
         flavor: ToastFlavor,
@@ -1150,7 +1144,6 @@ pub enum Event {
     EnterCloudAgentView {
         initial_prompt: Option<String>,
     },
-    CreateDockerSandbox,
     /// Exit cloud mode (ambient agent) and start a new *local* agent conversation in the root terminal.
     ///
     /// If `initial_prompt` is `Some`, it should prefill the local agent prompt but not auto-send.
@@ -1940,8 +1933,6 @@ struct AmbientAgentViewState {
     #[allow(dead_code)]
     harness_selector: ViewHandle<HarnessSelector>,
     host_selector: Option<ViewHandle<HostSelector>>,
-    auth_secret_selector: Option<ViewHandle<AuthSecretSelector>>,
-    auth_secret_ftux_view: Option<ViewHandle<AuthSecretFtuxView>>,
 }
 
 impl AmbientAgentViewState {
@@ -2603,100 +2594,6 @@ impl Input {
         view
     }
 
-    /// Builds the cloud-mode auth-secret selector and its FTUX view for an ambient agent view
-    /// model. Composer-only. Shared by [`Self::attach_ambient_agent_view_model`], which is the
-    /// single wiring point for both the eager (`Input::new`) and lazy (`SessionJoined`) paths.
-    fn build_auth_secret_selector(
-        view_model: ModelHandle<AmbientAgentViewModel>,
-        menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
-        ctx: &mut ViewContext<Self>,
-    ) -> (
-        ViewHandle<AuthSecretSelector>,
-        ViewHandle<AuthSecretFtuxView>,
-    ) {
-        let selector = ctx.add_typed_action_view(|ctx| {
-            AuthSecretSelector::new(menu_positioning_provider.clone(), view_model.clone(), ctx)
-        });
-        ctx.subscribe_to_view(&selector, |me, _, event, ctx| match event {
-            AuthSecretSelectorEvent::MenuVisibilityChanged { open: false } => {
-                me.focus_input_box(ctx);
-            }
-            AuthSecretSelectorEvent::NewTypeSelected {
-                harness,
-                type_index,
-            } => {
-                if let Some(ftux_view) = me.auth_secret_ftux_view().cloned() {
-                    let harness = *harness;
-                    let type_index = *type_index;
-                    ftux_view.update(ctx, |view, ctx| {
-                        view.enter_creation_state_public(harness, type_index, ctx);
-                    });
-                }
-                ctx.notify();
-            }
-            AuthSecretSelectorEvent::DeleteConfirmationDialogToggled { is_open } => {
-                ctx.emit(Event::AuthSecretDeleteConfirmationDialogToggled { is_open: *is_open });
-            }
-            AuthSecretSelectorEvent::MenuVisibilityChanged { open: true } => {}
-        });
-        let initial_harness = view_model.as_ref(ctx).selected_harness();
-        let ftux_view =
-            ctx.add_typed_action_view(|ctx| AuthSecretFtuxView::new(initial_harness, ctx));
-
-        // Forward the pane's harness changes into the FTUX view.
-        let ftux_for_harness_sub = ftux_view.clone();
-        ctx.subscribe_to_model(&view_model, move |_me, vm, event, ctx| {
-            if matches!(event, AmbientAgentViewModelEvent::HarnessSelected) {
-                let harness = vm.as_ref(ctx).selected_harness();
-                ftux_for_harness_sub.update(ctx, |view, ctx| {
-                    view.set_harness(harness, ctx);
-                });
-            }
-        });
-
-        let vm_for_events = view_model.clone();
-        ctx.subscribe_to_view(&ftux_view, move |_me, _, event, ctx| match event {
-            AuthSecretFtuxViewEvent::SecretSelected { harness, name }
-            | AuthSecretFtuxViewEvent::Created { harness, name } => {
-                let harness = *harness;
-                let name = name.clone();
-                vm_for_events.update(ctx, |model, ctx| {
-                    model.set_harness_auth_secret_name(Some(name.clone()), ctx);
-                });
-                let team_scope = UserWorkspaces::as_ref(ctx).team_context_for_operation(ctx);
-                CloudAgentSettings::handle(ctx).update(ctx, |settings, ctx| {
-                    settings.mark_harness_auth_ftux_completed(harness, ctx);
-                    settings.persist_auth_secret_preference(
-                        &team_scope,
-                        harness,
-                        Some(AuthSecretPreference::Named(name)),
-                        ctx,
-                    );
-                });
-            }
-            AuthSecretFtuxViewEvent::Cancelled => {
-                vm_for_events.update(ctx, |model, ctx| {
-                    model.set_harness(Harness::Oz, ctx);
-                });
-            }
-            AuthSecretFtuxViewEvent::Skipped { harness } => {
-                let harness = *harness;
-                let team_scope = UserWorkspaces::as_ref(ctx).team_context_for_operation(ctx);
-                CloudAgentSettings::handle(ctx).update(ctx, |settings, ctx| {
-                    settings.mark_harness_auth_ftux_completed(harness, ctx);
-                    settings.persist_auth_secret_preference(
-                        &team_scope,
-                        harness,
-                        Some(AuthSecretPreference::Inherit),
-                        ctx,
-                    );
-                });
-            }
-            AuthSecretFtuxViewEvent::Failed { .. } => {}
-        });
-        (selector, ftux_view)
-    }
-
     /// Wires an ambient agent view model into this input. This is the SINGLE wiring point,
     /// invoked by both `Input::new` (eager/composer, when a model is supplied at construction)
     /// and the shared-session viewer's `SessionJoined` path (lazy, e.g. a raw `shared_session`
@@ -2772,11 +2669,10 @@ impl Input {
         // in agent view, so unreachable for a cloud viewer) and per-exchange AI blocks / ambient
         // setup-command blocks (created after the model exists).
         //
-        // The host / auth-secret / FTUX selectors are composer-only: a viewer of an existing run
-        // does not compose a new run, so they stay `None` for a shared-session viewer.
+        // The host selector is composer-only: a viewer of an existing run does not compose a new
+        // run, so it stays `None` for a shared-session viewer.
         let is_cloud_mode_composer = self.model.lock().is_dummy_cloud_mode_session();
-        let (host_selector, auth_secret_selector, auth_secret_ftux_view) = if is_cloud_mode_composer
-            && FeatureFlag::CloudModeInputV2.is_enabled()
+        let host_selector = if is_cloud_mode_composer && FeatureFlag::CloudModeInputV2.is_enabled()
         {
             let host_selector = Self::build_host_selector(
                 view_model.clone(),
@@ -2793,25 +2689,14 @@ impl Input {
                     }
                 },
             );
-            let (auth_secret_selector, auth_secret_ftux_view) = Self::build_auth_secret_selector(
-                view_model.clone(),
-                self.menu_positioning_provider.clone(),
-                ctx,
-            );
-            (
-                Some(host_selector),
-                Some(auth_secret_selector),
-                Some(auth_secret_ftux_view),
-            )
+            Some(host_selector)
         } else {
-            (None, None, None)
+            None
         };
         self.ambient_agent_view_state = Some(AmbientAgentViewState {
             view_model,
             harness_selector,
             host_selector,
-            auth_secret_selector,
-            auth_secret_ftux_view,
         });
         ctx.notify();
     }
@@ -2974,10 +2859,6 @@ impl Input {
         let ambient_agent_view_state: Option<AmbientAgentViewState> = None;
         ctx.subscribe_to_view(&agent_input_footer, |me, _, event, ctx| {
             match event {
-                #[cfg(feature = "voice_input")]
-                AgentInputFooterEvent::ToggleVoiceInput(from) => {
-                    me.toggle_voice_input(from, ctx);
-                }
                 AgentInputFooterEvent::SelectFile => {
                     me.select_image(ctx);
                 }
@@ -2989,7 +2870,6 @@ impl Input {
                 // The UseAgentToolbar shares this same AgentInputFooter instance,
                 // so its subscriber always fires alongside ours for every chip click.
                 AgentInputFooterEvent::WriteToPty(_)
-                | AgentInputFooterEvent::InsertIntoCLIPty(_)
                 | AgentInputFooterEvent::InsertIntoCLIRichInput(_)
                 | AgentInputFooterEvent::ToggleCodeReviewPane(_)
                 | AgentInputFooterEvent::ToggleFileExplorer(_)
@@ -3176,8 +3056,6 @@ impl Input {
             let ai_input_model = ai_input_model.clone();
 
             ctx.subscribe_to_model(&ai_input_model, |me, _, _, ctx| {
-                #[cfg(feature = "voice_input")]
-                me.update_voice_transcription_options(ctx);
                 me.update_image_context_options(ctx);
                 me.update_ai_context_menu(ctx);
                 me.check_slash_menu_disabled_state(ctx);
@@ -4233,8 +4111,6 @@ impl Input {
             input.set_zero_state_hint_text(ctx);
         }
 
-        #[cfg(feature = "voice_input")]
-        input.update_voice_transcription_options(ctx);
         input.update_image_context_options(ctx);
         input.update_ai_context_menu(ctx);
         // Ambient wiring goes through the single setter path (`attach_ambient_agent_view_model`)
@@ -4243,32 +4119,6 @@ impl Input {
             input.attach_ambient_agent_view_model(ambient_agent_view_model, ctx);
         }
         input
-    }
-
-    #[cfg(feature = "voice_input")]
-    fn update_voice_transcription_options(&mut self, ctx: &mut ViewContext<Self>) {
-        let ai_input_model = self.ai_input_model.as_ref(ctx);
-        let ai_settings = AISettings::as_ref(ctx);
-
-        let voice_transcription_options = match (
-            ai_input_model.input_type(),
-            ai_settings.is_voice_input_enabled(ctx),
-        ) {
-            (InputType::AI, true) => crate::editor::VoiceTranscriptionOptions::Enabled {
-                // If UDI is enabled, we show the button below the text input
-                show_button: !self.should_show_universal_developer_input(ctx)
-                    && !FeatureFlag::AgentView.is_enabled(),
-            },
-            (InputType::Shell, true) => {
-                crate::editor::VoiceTranscriptionOptions::Enabled { show_button: false }
-            }
-            (_, false) => crate::editor::VoiceTranscriptionOptions::Disabled,
-        };
-
-        self.editor.update(ctx, move |editor, ctx| {
-            editor.update_voice_transcription_options(voice_transcription_options, ctx);
-            ctx.notify();
-        });
     }
 
     fn update_ai_context_menu(&mut self, ctx: &mut ViewContext<Self>) {
@@ -4609,26 +4459,6 @@ impl Input {
         self.ambient_agent_view_state
             .as_ref()
             .and_then(|state| state.host_selector.as_ref())
-    }
-
-    fn auth_secret_selector(&self) -> Option<&ViewHandle<AuthSecretSelector>> {
-        self.ambient_agent_view_state
-            .as_ref()
-            .and_then(|state| state.auth_secret_selector.as_ref())
-    }
-
-    pub(super) fn auth_secret_delete_confirmation_dialog_element(
-        &self,
-        ctx: &AppContext,
-    ) -> Option<Box<dyn Element>> {
-        self.auth_secret_selector()
-            .map(|selector| selector.as_ref(ctx).delete_confirmation_dialog_element())
-    }
-
-    pub(super) fn auth_secret_ftux_view(&self) -> Option<&ViewHandle<AuthSecretFtuxView>> {
-        self.ambient_agent_view_state
-            .as_ref()
-            .and_then(|state| state.auth_secret_ftux_view.as_ref())
     }
 
     /// Opens the V2 cloud-mode host selector popover, if the feature is enabled and the
@@ -7037,21 +6867,6 @@ impl Input {
         }
     }
 
-    #[cfg(feature = "voice_input")]
-    pub(super) fn toggle_voice_input(
-        &mut self,
-        from: &voice_input::VoiceInputToggledFrom,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.enter_ai_mode(Some(InputTypeAutoDetectionSource::VoiceInputToggle), ctx);
-        let did_start_listening = self
-            .editor
-            .update(ctx, |editor, ctx| editor.toggle_voice_input(from, ctx));
-        if did_start_listening {
-            self.focus_input_box(ctx);
-        }
-    }
-
     pub(crate) fn attach_file(&mut self, ctx: &mut ViewContext<Self>) {
         self.agent_input_footer.update(ctx, |footer, ctx| {
             footer.select_file(ctx);
@@ -7179,10 +6994,6 @@ impl Input {
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
-            #[cfg(feature = "voice_input")]
-            UniversalDeveloperInputButtonBarEvent::ToggleVoiceInput(from) => {
-                self.toggle_voice_input(from, ctx);
-            }
             UniversalDeveloperInputButtonBarEvent::InputTypeSelected(input_type) => {
                 if self.is_input_mode_toggle_disabled(ctx) {
                     return;
@@ -7619,10 +7430,6 @@ impl Input {
                         ctx,
                     );
                 }
-            }
-            #[cfg(feature = "voice_input")]
-            AISettingsChangedEvent::VoiceInputEnabled { .. } => {
-                self.update_voice_transcription_options(ctx);
             }
             AISettingsChangedEvent::SubmitRichInputOnCtrlEnter { .. } => {
                 // ctrl_enter now depends on the toggle: re-sync so flipping
@@ -9483,14 +9290,6 @@ impl Input {
     }
 
     pub fn focus_input_box(&self, ctx: &mut ViewContext<Self>) {
-        if self.should_show_auth_secret_ftux(ctx)
-            && let Some(ftux_view) = self.auth_secret_ftux_view().cloned()
-        {
-            ftux_view.update(ctx, |view, ctx| {
-                view.focus_dropdown_editor(ctx);
-            });
-            return;
-        }
         ctx.focus_self();
     }
 
@@ -9559,25 +9358,6 @@ impl Input {
     }
 
     fn editor_up(&mut self, ctx: &mut ViewContext<Self>) {
-        if self.should_show_auth_secret_ftux(ctx) {
-            if let Some(ftux_view) = self.auth_secret_ftux_view().cloned() {
-                ftux_view.update(ctx, |view, ctx| {
-                    view.select_previous_in_dropdown(ctx);
-                });
-            }
-            return;
-        }
-
-        if let Some(selector) = self.auth_secret_selector()
-            && selector.as_ref(ctx).is_menu_open()
-        {
-            let selector = selector.clone();
-            selector.update(ctx, |selector, ctx| {
-                selector.select_previous(ctx);
-            });
-            return;
-        }
-
         if self.is_editing_queued_prompt(ctx) {
             return;
         }
@@ -11644,34 +11424,6 @@ impl Input {
             EditorEvent::Focused => ctx.emit(Event::EditorFocused),
             EditorEvent::ProcessingAttachedImages(is_processing) => {
                 self.set_is_processing_attached_images(*is_processing, ctx);
-            }
-            EditorEvent::VoiceStateUpdated {
-                is_listening,
-                is_transcribing,
-            } => {
-                self.universal_developer_input_button_bar
-                    .update(ctx, |button_bar, ctx| {
-                        button_bar.set_voice_is_listening(*is_listening, ctx);
-                    });
-                self.agent_input_footer.update(ctx, |footer, ctx| {
-                    footer.set_voice_is_active(*is_listening || *is_transcribing, ctx);
-                });
-
-                if *is_listening || *is_transcribing {
-                    // Show voice status as placeholder when the buffer is empty.
-                    if self.editor.as_ref(ctx).is_empty(ctx) {
-                        let placeholder = if *is_listening {
-                            "Listening..."
-                        } else {
-                            "Transcribing..."
-                        };
-                        self.editor.update(ctx, |editor, ctx| {
-                            editor.set_placeholder_text(placeholder, ctx);
-                        });
-                    }
-                } else {
-                    self.set_zero_state_hint_text(ctx);
-                }
             }
             EditorEvent::SetAIContextMenuOpen(open) => {
                 self.set_ai_context_menu_open(*open, ctx);

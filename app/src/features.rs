@@ -79,14 +79,8 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::AIRules,
         #[cfg(feature = "shell_selector")]
         FeatureFlag::ShellSelector,
-        #[cfg(feature = "integration_command")]
-        FeatureFlag::IntegrationCommand,
         #[cfg(feature = "artifact_command")]
         FeatureFlag::ArtifactCommand,
-        #[cfg(feature = "cloud_environments")]
-        FeatureFlag::CloudEnvironments,
-        #[cfg(feature = "cloud_runners")]
-        FeatureFlag::CloudRunners,
         #[cfg(feature = "cloud_agent_runners")]
         FeatureFlag::CloudAgentRunners,
         #[cfg(feature = "account_first_onboarding")]
@@ -275,14 +269,8 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::FileTree,
         #[cfg(feature = "allow_ignoring_input_suggestions")]
         FeatureFlag::AllowIgnoringInputSuggestions,
-        #[cfg(feature = "ambient_agents_command_line")]
-        FeatureFlag::AmbientAgentsCommandLine,
-        #[cfg(feature = "ambient_agents_image_upload")]
-        FeatureFlag::AmbientAgentsImageUpload,
         #[cfg(feature = "scheduled_ambient_agents")]
         FeatureFlag::ScheduledAmbientAgents,
-        #[cfg(feature = "conversation_api")]
-        FeatureFlag::ConversationApi,
         #[cfg(feature = "code_launch_modal")]
         FeatureFlag::CodeLaunchModal,
         #[cfg(feature = "api_key_management")]
@@ -311,8 +299,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::SummarizationConversationCommand,
         #[cfg(feature = "mcp_grouped_server_context")]
         FeatureFlag::MCPGroupedServerContext,
-        #[cfg(feature = "well_known_mcp_ids")]
-        FeatureFlag::WellKnownMcpIds,
         #[cfg(feature = "factory_mcp")]
         FeatureFlag::FactoryMcp,
         #[cfg(feature = "web_search_ui")]
@@ -343,8 +329,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::AgentView,
         #[cfg(feature = "agent_view_block_context")]
         FeatureFlag::AgentViewBlockContext,
-        #[cfg(feature = "warp_managed_secrets")]
-        FeatureFlag::WarpManagedSecrets,
         #[cfg(feature = "v4a_file_diffs")]
         FeatureFlag::V4AFileDiffs,
         #[cfg(feature = "interactive_conversation_management_view")]
@@ -405,10 +389,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::LSPAsATool,
         #[cfg(feature = "inline_profile_selector")]
         FeatureFlag::InlineProfileSelector,
-        #[cfg(feature = "oz_platform_skills")]
-        FeatureFlag::OzPlatformSkills,
-        #[cfg(feature = "oz_identity_federation")]
-        FeatureFlag::OzIdentityFederation,
         #[cfg(feature = "oz_changelog_updates")]
         FeatureFlag::OzChangelogUpdates,
         #[cfg(feature = "bundled_skills")]
@@ -501,8 +481,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::CloudModeInputV2,
         #[cfg(feature = "handoff_cloud_cloud")]
         FeatureFlag::HandoffCloudCloud,
-        #[cfg(feature = "git_credential_refresh")]
-        FeatureFlag::GitCredentialRefresh,
         #[cfg(feature = "remote_code_review")]
         FeatureFlag::RemoteCodeReview,
         #[cfg(feature = "custom_model_routers")]

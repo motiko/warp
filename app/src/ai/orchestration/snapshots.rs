@@ -15,10 +15,9 @@ use super::providers::{
     get_base_model_choices, resolve_default_host_slug, resolve_recent_host_slug,
 };
 use crate::LLMPreferences;
-use crate::ai::auth_secret_types::auth_secret_types_for_harness;
 use crate::ai::cloud_environments::{CloudAmbientAgentEnvironment, environment_matches_scope};
 use crate::ai::connected_self_hosted_workers::ConnectedSelfHostedWorkersModel;
-use crate::ai::harness_availability::{AuthSecretFetchState, HarnessAvailabilityModel};
+use crate::ai::harness_availability::HarnessAvailabilityModel;
 use crate::ai::harness_display;
 use crate::ai::local_harness_setup::{
     LocalHarnessSetupState, local_harness_is_product_enabled, local_harness_setup_state,
@@ -31,8 +30,6 @@ const DEFAULT_MODEL_LABEL: &str = "Default model";
 /// (the child agent will inherit credentials from its environment).
 pub(crate) const AUTH_SECRET_INHERIT_LABEL: &str = "Skip (advanced)";
 const CUSTOM_HOST_LABEL: &str = "Custom host…";
-const AUTH_SECRETS_LOAD_FAILED_MESSAGE: &str = "Unable to load secrets";
-
 /// One selectable row in an option snapshot. Carries no GUI types.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OptionRow {
@@ -71,7 +68,6 @@ pub enum OptionBadge {
 pub enum OptionSourceStatus {
     Ready,
     Loading,
-    Failed { message: String },
     Empty { message: String },
 }
 
@@ -80,9 +76,6 @@ pub enum OptionSourceStatus {
 pub enum OptionFooter {
     /// Free-form text entry (e.g. custom host slug).
     CustomText { label: String },
-    /// "New API key…" affordance. The GUI renders it for harnesses that
-    /// support managed secrets; the TUI intentionally omits resource creation.
-    CreateNewAuthSecret,
 }
 
 /// A complete option list for one configuration field.
@@ -377,74 +370,26 @@ fn build_non_oz_model_snapshot(
 
 // ── API key ─────────────────────────────────────────────────────────
 
-/// Fetch state reduced to plain data for the pure API-key builder.
-enum AuthSecretNamesInput {
-    NotLoaded,
-    Loaded(Vec<String>),
-    Failed,
-}
-
-/// Builds the API-key options: "Skip (advanced)" (inherit) plus loaded
-/// managed-secret names. Secret values are never included — names only.
-/// Status mirrors `AuthSecretFetchState`; the `CreateNewAuthSecret`
-/// footer is emitted for harnesses with managed-secret types.
-pub fn api_key_snapshot<S: TeamScope + ?Sized>(
-    state: &OrchestrationConfigState,
-    team_scope: &S,
-    ctx: &AppContext,
-) -> OptionSnapshot {
+/// Builds the API-key options. No managed secrets exist, so the only option is
+/// "Skip (advanced)" (inherit).
+pub fn api_key_snapshot(state: &OrchestrationConfigState) -> OptionSnapshot {
     let Some(harness) = Harness::parse_orchestration_harness(&state.harness_type) else {
         return OptionSnapshot::ready(Vec::new(), None);
     };
     if harness == Harness::Oz {
         return OptionSnapshot::ready(Vec::new(), None);
     }
-    let names = match HarnessAvailabilityModel::as_ref(ctx).auth_secrets_for(team_scope, harness) {
-        AuthSecretFetchState::Loaded(secrets) => {
-            AuthSecretNamesInput::Loaded(secrets.iter().map(|s| s.name.clone()).collect())
-        }
-        AuthSecretFetchState::NotFetched | AuthSecretFetchState::Loading => {
-            AuthSecretNamesInput::NotLoaded
-        }
-        AuthSecretFetchState::Failed(_) => AuthSecretNamesInput::Failed,
-    };
-    let supports_create_new = !auth_secret_types_for_harness(harness).is_empty();
-    build_api_key_snapshot(names, &state.auth_secret_selection, supports_create_new)
-}
-
-/// Pure core of [`api_key_snapshot`].
-fn build_api_key_snapshot(
-    names: AuthSecretNamesInput,
-    selection: &AuthSecretSelection,
-    supports_create_new: bool,
-) -> OptionSnapshot {
-    let mut rows = vec![OptionRow::new(String::new(), AUTH_SECRET_INHERIT_LABEL)];
-    let status = match names {
-        AuthSecretNamesInput::Loaded(names) => {
-            for name in names {
-                rows.push(OptionRow::new(name.clone(), name));
-            }
-            OptionSourceStatus::Ready
-        }
-        AuthSecretNamesInput::NotLoaded => OptionSourceStatus::Loading,
-        AuthSecretNamesInput::Failed => OptionSourceStatus::Failed {
-            message: AUTH_SECRETS_LOAD_FAILED_MESSAGE.to_string(),
-        },
-    };
-    // The selection derives directly from the edit state. `Named` is kept
-    // even while the catalog is loading so a transient refresh never
-    // clears it; `Unset`/`CreatingNew` have no selected row.
-    let selected_id = match selection {
+    // `Named` is kept so a persisted selection is not silently cleared; `Unset` has no selected
+    // row.
+    let selected_id = match &state.auth_secret_selection {
         AuthSecretSelection::Named(name) => Some(name.clone()),
         AuthSecretSelection::Inherit => Some(String::new()),
-        AuthSecretSelection::Unset | AuthSecretSelection::CreatingNew => None,
+        AuthSecretSelection::Unset => None,
     };
-    OptionSnapshot {
-        rows,
+    OptionSnapshot::ready(
+        vec![OptionRow::new(String::new(), AUTH_SECRET_INHERIT_LABEL)],
         selected_id,
-        status,
-        footer: supports_create_new.then_some(OptionFooter::CreateNewAuthSecret),
-    }
+    )
 }
 
 // ── Host ────────────────────────────────────────────────────────────

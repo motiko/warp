@@ -32,7 +32,7 @@ use crate::terminal::model_events::ModelEventDispatcher;
 use crate::warp_managed_paths_watcher::WarpManagedPathsWatcher;
 
 fn initialize_app(app: &mut App) {
-    app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+    app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, ctx));
     app.add_singleton_model(DirectoryWatcher::new);
     app.add_singleton_model(AISettings::new_with_defaults);
     app.add_singleton_model(|_| DetectedRepositories::default());

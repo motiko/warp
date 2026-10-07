@@ -35,15 +35,11 @@ use crate::ai::document::plan_publication::{
     prepare_plan_publications, wait_for_plan_publications,
 };
 use crate::ai::local_harness_setup::local_harness_product_disabled_message;
-use crate::ai::orchestration::{
-    OrchestrationConfigState, can_execute_with_auth_secret,
-    populate_default_auth_secret_for_execution,
-};
+use crate::ai::orchestration::OrchestrationConfigState;
 use crate::features::FeatureFlag;
 use crate::server::team_scope::RequestTeamScope;
 use crate::workspaces::user_workspaces::{
-    TeamContextForOperation, TeamContextForOperationResolver, TeamContextResolver, TeamScope,
-    UserWorkspaces,
+    TeamContextForOperation, TeamContextForOperationResolver, TeamContextResolver, UserWorkspaces,
 };
 
 /// Per-child spawn timeout. If a child agent doesn't report back within
@@ -413,7 +409,6 @@ impl RunAgentsExecutor {
             parent_conversation_id,
             self.terminal_view_id,
             &self.launched_agents,
-            &team_scope,
             ctx,
         ) {
             let result = RunAgentsResult::Denied { reason };
@@ -476,23 +471,17 @@ impl RunAgentsExecutor {
             return true;
         }
         let mut resolved_request = request.clone();
-        let team_scope = self.team_scope(ctx);
         resolve_request_from_approved_config(&mut resolved_request, input.conversation_id, ctx);
-        populate_default_auth_secret_for_execution(&mut resolved_request, &team_scope, ctx);
         if self
             .duplicate_launched_agents_reason(&resolved_request, input.conversation_id, ctx)
             .is_some()
         {
             return true;
         }
-        approved_orchestration_config_can_autoexecute(
-            request,
-            input.conversation_id,
-            &team_scope,
-            ctx,
-        ) || BlocklistAIPermissions::as_ref(ctx)
-            .get_run_agents_setting(ctx, Some(self.terminal_view_id))
-            .is_always_allow()
+        approved_orchestration_config_can_autoexecute(request, input.conversation_id, ctx)
+            || BlocklistAIPermissions::as_ref(ctx)
+                .get_run_agents_setting(ctx, Some(self.terminal_view_id))
+                .is_always_allow()
     }
 
     pub(super) fn preprocess_action(
@@ -516,13 +505,11 @@ enum ChildSlot {
 fn approved_orchestration_config_can_autoexecute(
     request: &RunAgentsRequest,
     parent_conversation_id: AIConversationId,
-    team_scope: &(impl TeamScope + ?Sized),
     ctx: &ModelContext<RunAgentsExecutor>,
 ) -> bool {
     let mut resolved_request = request.clone();
     resolve_request_from_approved_config(&mut resolved_request, parent_conversation_id, ctx)
         .is_some_and(|status| status.is_approved())
-        && can_execute_with_auth_secret(&resolved_request, team_scope, ctx)
 }
 
 fn resolve_request_from_approved_config(
@@ -549,11 +536,9 @@ fn prepare_request_for_execution(
     parent_conversation_id: AIConversationId,
     terminal_view_id: EntityId,
     launched_agents: &HashMap<AIConversationId, HashMap<String, ExistingLaunchedAgent>>,
-    team_scope: &(impl TeamScope + ?Sized),
     ctx: &ModelContext<RunAgentsExecutor>,
 ) -> Option<String> {
     let status = resolve_request_from_approved_config(request, parent_conversation_id, ctx);
-    populate_default_auth_secret_for_execution(request, team_scope, ctx);
     if let Some(reason) =
         duplicate_launched_agents_reason(request, parent_conversation_id, launched_agents, ctx)
     {
@@ -586,13 +571,6 @@ fn prepare_request_for_execution(
     {
         return Some(
             "Running child agents is disabled by the active execution profile.".to_string(),
-        );
-    }
-
-    if !can_execute_with_auth_secret(request, team_scope, ctx) {
-        return Some(
-            "Cloud child agents using this harness require an API key before they can run."
-                .to_string(),
         );
     }
 

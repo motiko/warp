@@ -16,21 +16,21 @@ use std::path::{Path, PathBuf};
 use ai::skills::{
     ParsedSkill, SKILL_PROVIDER_DEFINITIONS, SkillProvider, home_skills_path, parse_skill,
 };
-use command::r#async::Command as AsyncCommand;
 use command::blocking::Command;
-use warp_cli::skill::SkillSpec;
 use warp_util::local_or_remote_path::LocalOrRemotePath;
 use warpui::{AppContext, SingletonEntity as _};
 
 use super::SkillManager;
+use crate::ai::skills::SkillSpec;
 use crate::warp_managed_paths_watcher::warp_managed_skill_dirs;
 
 const SKILL_FILE_NAME: &str = "SKILL.md";
 
 #[derive(Debug, Clone)]
 pub struct ResolvedSkill {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub skill_path: PathBuf,
-    pub name: String,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub instructions: String,
     /// The full parsed skill, used for proto conversion when sending to server.
     pub parsed_skill: ParsedSkill,
@@ -99,12 +99,6 @@ pub enum ResolveSkillError {
     },
     #[error("Failed to parse skill file {path}: {message}")]
     ParseFailed { path: PathBuf, message: String },
-    #[error("Failed to clone repository '{org}/{repo}': {message}")]
-    CloneFailed {
-        org: String,
-        repo: String,
-        message: String,
-    },
 }
 
 /// Resolve a `SkillSpec` (from the `--skill` CLI arg) into a concrete SKILL.md file.
@@ -134,73 +128,6 @@ pub fn resolve_skill_spec(
         Some(repo) => resolve_repo_qualified(spec, repo, working_dir, skill_manager, ctx),
         None => resolve_unqualified(spec, working_dir, ctx, skill_manager),
     }
-}
-
-/// Clone a repository from GitHub into the working directory for skill resolution.
-///
-/// Uses HTTPS format: `https://github.com/org/repo.git`
-///
-/// This is used in sandboxed environments to auto-clone repos when a fully-qualified
-/// skill spec references a repo that doesn't exist locally.
-pub async fn clone_repo_for_skill(
-    org: &str,
-    repo: &str,
-    working_dir: &Path,
-) -> Result<(), ResolveSkillError> {
-    let repo_url = format!("https://github.com/{org}/{repo}.git");
-    let target_dir = working_dir.join(repo);
-
-    // Check if target already exists.
-    if target_dir.exists() {
-        if target_dir.join(".git").is_dir() {
-            log::info!(
-                "Target directory {} already exists and appears to be a git repo, skipping clone",
-                target_dir.display()
-            );
-            return Ok(());
-        }
-
-        return Err(ResolveSkillError::CloneFailed {
-            org: org.to_string(),
-            repo: repo.to_string(),
-            message: format!(
-                "Target directory {} already exists but is not a git repository",
-                target_dir.display()
-            ),
-        });
-    }
-
-    log::info!("Cloning {} into {}", repo_url, target_dir.display());
-    log::debug!(
-        "[GIT OPERATION] resolve_skill_spec.rs clone_repo_for_skill git clone {} {}",
-        repo_url,
-        target_dir.display()
-    );
-
-    let output = AsyncCommand::new("git")
-        .arg("clone")
-        .arg(&repo_url)
-        .arg(&target_dir)
-        .current_dir(working_dir)
-        .output()
-        .await
-        .map_err(|e| ResolveSkillError::CloneFailed {
-            org: org.to_string(),
-            repo: repo.to_string(),
-            message: format!("Failed to execute git clone: {e}"),
-        })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ResolveSkillError::CloneFailed {
-            org: org.to_string(),
-            repo: repo.to_string(),
-            message: stderr.trim().to_string(),
-        });
-    }
-
-    log::info!("Successfully cloned {org}/{repo}");
-    Ok(())
 }
 
 fn resolve_repo_qualified(
@@ -472,7 +399,6 @@ fn parsed_skill_from_manager_or_disk(
 fn to_resolved_skill(skill_path: PathBuf, parsed: ParsedSkill) -> ResolvedSkill {
     let instructions = instructions_body(&parsed);
     ResolvedSkill {
-        name: parsed.name.clone(),
         instructions,
         skill_path,
         parsed_skill: parsed,

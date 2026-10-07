@@ -314,8 +314,8 @@ impl AIDocumentView {
                                 && !*from_restore
                                 && let Some(block) = &me.orchestration_config_block
                             {
-                                block.update(ctx, |block, ctx| {
-                                    block.arm_for_fresh_dispatch(ctx);
+                                block.update(ctx, |block, _| {
+                                    block.arm_for_fresh_dispatch();
                                 });
                             }
                             ctx.notify();

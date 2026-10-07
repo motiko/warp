@@ -2,9 +2,9 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context as _, Result};
-use warp_cli::skill::SkillSpec;
 
 use super::*;
+use crate::ai::skills::SkillSpec;
 
 fn write_skill_file(path: &Path, name: &str, description: &str, body: &str) -> Result<()> {
     let parent = path

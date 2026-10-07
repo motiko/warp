@@ -18,7 +18,7 @@ use crate::workspaces::user_workspaces::TeamContext;
 use crate::{
     ai::{
         agent::{AIAgentAction, AIAgentActionResultType, AIAgentActionType, UploadArtifactResult},
-        agent_sdk::artifact_upload::{FileArtifactUploadRequest, FileArtifactUploader},
+        artifact_upload::{FileArtifactUploadRequest, FileArtifactUploader},
         blocklist::{BlocklistAIHistoryModel, BlocklistAIPermissions},
         paths::host_native_absolute_path,
     },

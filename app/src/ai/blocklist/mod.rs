@@ -39,10 +39,6 @@ pub(crate) mod telemetry_banner;
 pub(crate) mod view_util;
 
 pub(crate) use action_model::recording_controller::{RecordingController, video_recording_enabled};
-#[cfg(not(target_family = "wasm"))]
-pub(crate) use action_model::recording_finalize::{
-    FinalizeReason, finalize_recording_for_conversation,
-};
 pub use action_model::{
     BlocklistAIActionEvent, BlocklistAIActionModel, ShellCommandExecutor, ShellCommandExecutorEvent,
 };
@@ -106,9 +102,10 @@ pub(crate) use persistence::PersistedAIInputType;
 #[cfg_attr(target_family = "wasm", allow(unused))]
 pub use persistence::maybe_build_ai_query_upsert_event;
 pub(crate) use persistence::{PersistedAIInput, SerializedBlockListItem};
+#[cfg(test)]
+pub(crate) use queued_query::QueuedPromptDeliveryMode;
 pub(crate) use queued_query::{
-    AutofireAction, QueuedPromptDeliveryMode, QueuedQuery, QueuedQueryId, QueuedQueryOrigin,
-    is_lrc_auto_queue_active,
+    AutofireAction, QueuedQuery, QueuedQueryId, QueuedQueryOrigin, is_lrc_auto_queue_active,
 };
 pub use queued_query::{QueuedQueryEvent, QueuedQueryModel};
 pub use suggestion_chip_view::*;

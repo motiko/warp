@@ -18,9 +18,6 @@ pub enum AuthSecretSelection {
     Inherit,
     /// User picked a managed secret by name.
     Named(String),
-    /// Creating a key (modal open). Blocks Accept and, unlike `Unset`, is
-    /// not re-seeded from persisted settings.
-    CreatingNew,
 }
 
 impl AuthSecretSelection {
@@ -58,21 +55,13 @@ impl OrchestrationConfigState {
     /// Cloud/non-Oz config from leaking into the on-wire payload after the
     /// user toggles to Local or switches to a harness without auth.
     pub fn auth_secret_name(&self) -> Option<&str> {
-        if !should_show_auth_secret_picker(self) {
+        if !should_show_auth_secret_picker() {
             return None;
         }
         match &self.auth_secret_selection {
             AuthSecretSelection::Named(name) => Some(name.as_str()),
-            AuthSecretSelection::Inherit
-            | AuthSecretSelection::Unset
-            | AuthSecretSelection::CreatingNew => None,
+            AuthSecretSelection::Inherit | AuthSecretSelection::Unset => None,
         }
-    }
-
-    /// User picked "New API key…"; mark `CreatingNew` to block Accept until a
-    /// key is created or another option is chosen.
-    pub fn select_create_new_auth_secret(&mut self) {
-        self.auth_secret_selection = AuthSecretSelection::CreatingNew;
     }
 }
 

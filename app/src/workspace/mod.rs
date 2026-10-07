@@ -1258,25 +1258,9 @@ pub fn init(app: &mut AppContext) {
         .with_context_predicate(id!("Workspace") & id!(flags::ENABLE_WARP_DRIVE))]);
     }
 
-    // Oz and Warp Control CLI install/uninstall actions (macOS only)
+    // Warp Control CLI install/uninstall actions (macOS only)
     #[cfg(target_os = "macos")]
     {
-        app.register_editable_bindings([
-            EditableBinding::new(
-                "workspace:install_cli",
-                "Install Oz CLI globally for use outside of Warp",
-                WorkspaceAction::InstallOz,
-            )
-            .with_group(bindings::BindingGroup::Settings.as_str())
-            .with_context_predicate(id!("Workspace")),
-            EditableBinding::new(
-                "workspace:uninstall_cli",
-                "Undo global Oz CLI installation (oz will still work within Warp)",
-                WorkspaceAction::UninstallOz,
-            )
-            .with_group(bindings::BindingGroup::Settings.as_str())
-            .with_context_predicate(id!("Workspace")),
-        ]);
         if FeatureFlag::WarpControlCli.is_enabled() {
             app.register_editable_bindings([
                 EditableBinding::new(

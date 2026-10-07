@@ -20,8 +20,6 @@ use super::tab_settings::{
 use super::view::{OnboardingTutorial, WorkspaceBanner};
 use crate::ai::agent::AIAgentExchangeId;
 use crate::ai::agent::api::ServerConversationToken;
-#[cfg(not(target_family = "wasm"))]
-use crate::ai::agent::conversation::AIAgentHarness;
 use crate::ai::agent::conversation::AIConversationId;
 use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::blocklist::PendingAttachment;
@@ -609,12 +607,6 @@ pub enum WorkspaceAction {
     ContinueConversationLocally {
         conversation_id: AIConversationId,
     },
-    /// Continue a completed third-party cloud harness run in a local split pane.
-    #[cfg(not(target_family = "wasm"))]
-    ContinueThirdPartyConversationLocally {
-        task_id: AmbientAgentTaskId,
-        harness: AIAgentHarness,
-    },
     /// Insert the /fork slash command into the active terminal's input.
     InsertForkSlashCommand,
     /// Open a local-to-cloud handoff pane next to the active conversation
@@ -644,23 +636,12 @@ pub enum WorkspaceAction {
     /// environments exist.
     ShowHandoffEnvironmentCreationModal,
     ShowCloudModeV2EnvironmentCreationModal,
-    /// Open the workspace modal for creating a new managed auth secret.
-    /// Dispatched by orchestration card pickers' "New API key…" item.
-    OpenCreateAuthSecretModal {
-        harness: warp_cli::agent::Harness,
-    },
     /// Summarize the active AI conversation in the focused pane.
     SummarizeAIConversation {
         prompt: Option<String>,
         /// Optional prompt to send after summarization completes successfully.
         initial_prompt: Option<String>,
     },
-    /// Install the Oz CLI command to /usr/local/bin
-    #[cfg(target_os = "macos")]
-    InstallOz,
-    /// Uninstall the Oz CLI command from /usr/local/bin
-    #[cfg(target_os = "macos")]
-    UninstallOz,
     /// Install the Warp Control CLI command to /usr/local/bin
     #[cfg(target_os = "macos")]
     InstallWarpctrl,
@@ -925,8 +906,6 @@ impl WorkspaceAction {
         match self {
             #[cfg(not(target_family = "wasm"))]
             ContinueConversationLocally { .. } => true,
-            #[cfg(not(target_family = "wasm"))]
-            ContinueThirdPartyConversationLocally { .. } => true,
             ActivateTab(_)
             | ActivateTabByNumber(_)
             | SetTabShortcutModifierKey { .. }
@@ -1208,7 +1187,6 @@ impl WorkspaceAction {
             | AutoHandoffActiveAgentToCloud { .. }
             | ShowHandoffEnvironmentCreationModal
             | ShowCloudModeV2EnvironmentCreationModal
-            | OpenCreateAuthSecretModal { .. }
             | OpenNetworkLogPane
             | OpenNewWindowForTeam { .. }
             | BrowseTeams
@@ -1244,8 +1222,6 @@ impl WorkspaceAction {
             ViewLogs => false,
             #[cfg(target_os = "macos")]
             SampleProcess => false,
-            #[cfg(target_os = "macos")]
-            InstallOz | UninstallOz => false,
             #[cfg(target_os = "macos")]
             InstallWarpctrl | UninstallWarpctrl => false,
             #[cfg(feature = "local_fs")]

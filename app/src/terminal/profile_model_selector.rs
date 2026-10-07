@@ -553,10 +553,8 @@ impl ProfileModelSelector {
 
         ctx.subscribe_to_model(
             &HarnessAvailabilityModel::handle(ctx),
-            |me, _, event, ctx| {
-                if let HarnessAvailabilityEvent::Changed = event {
-                    me.refresh_state(ctx);
-                }
+            |me, _, event, ctx| match event {
+                HarnessAvailabilityEvent::Changed => me.refresh_state(ctx),
             },
         );
 

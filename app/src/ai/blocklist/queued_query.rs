@@ -348,7 +348,7 @@ impl Entity for QueuedQueryModel {
 impl SingletonEntity for QueuedQueryModel {}
 
 impl QueuedQueryModel {
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn begin_native_setup(
         &mut self,
         conversation_id: AIConversationId,
@@ -392,7 +392,7 @@ impl QueuedQueryModel {
     }
 
     /// Sets the delivery mode for `conversation_id`'s queue. See [`QueuedPromptDeliveryMode`].
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn set_delivery_mode(
         &mut self,
         conversation_id: AIConversationId,
@@ -422,7 +422,7 @@ impl QueuedQueryModel {
     }
 
     /// Whether setup or queued injections still need to finish, including attachment preparation.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn has_pending_native_injections(&self, conversation_id: AIConversationId) -> bool {
         self.queues
             .get(&conversation_id)
@@ -512,7 +512,7 @@ impl QueuedQueryModel {
     /// `BlocklistAIController::unbind_native_prompt_conversation` to drop any prompts that never
     /// made it out when the run ends, regardless of whether they were queued locally or via a
     /// shared-session injection.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn clear_queue(
         &mut self,
         conversation_id: AIConversationId,

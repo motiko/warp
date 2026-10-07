@@ -3,9 +3,8 @@ use warp_cli::agent::Harness;
 use warpui::App;
 
 use super::{
-    AUTH_SECRET_INHERIT_LABEL, AuthSecretNamesInput, DEFAULT_MODEL_LABEL, HarnessEntryInput,
-    ModelChoiceInput, OptionBadge, OptionFooter, OptionSourceStatus, build_api_key_snapshot,
-    build_environment_snapshot, build_harness_snapshot, build_host_snapshot,
+    DEFAULT_MODEL_LABEL, HarnessEntryInput, ModelChoiceInput, OptionBadge, OptionFooter,
+    OptionSourceStatus, build_environment_snapshot, build_harness_snapshot, build_host_snapshot,
     build_non_oz_model_snapshot, build_oz_model_snapshot, build_runner_snapshot,
     environment_snapshot,
 };
@@ -13,7 +12,7 @@ use crate::ai::cloud_environments::{
     AmbientAgentEnvironment, CloudAmbientAgentEnvironment, CloudAmbientAgentEnvironmentModel,
 };
 use crate::ai::local_harness_setup::LocalHarnessSetupState;
-use crate::ai::orchestration::config_state::{AuthSecretSelection, OrchestrationConfigState};
+use crate::ai::orchestration::config_state::OrchestrationConfigState;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{CloudObjectMetadata, CloudObjectPermissions, Owner};
 use crate::server::ids::{ServerId, SyncId};
@@ -210,48 +209,6 @@ fn non_oz_model_snapshot_falls_back_to_default_for_unknown_or_empty_id() {
 }
 
 // ── API key ─────────────────────────────────────────────────────────
-
-#[test]
-fn api_key_snapshot_lists_skip_then_names() {
-    let snapshot = build_api_key_snapshot(
-        AuthSecretNamesInput::Loaded(vec!["key-a".to_string(), "key-b".to_string()]),
-        &AuthSecretSelection::Named("key-b".to_string()),
-        true,
-    );
-
-    let labels: Vec<&str> = snapshot.rows.iter().map(|r| r.label.as_str()).collect();
-    assert_eq!(labels, vec![AUTH_SECRET_INHERIT_LABEL, "key-a", "key-b"]);
-    assert_eq!(snapshot.selected_id.as_deref(), Some("key-b"));
-    assert_eq!(snapshot.status, OptionSourceStatus::Ready);
-    assert_eq!(snapshot.footer, Some(OptionFooter::CreateNewAuthSecret));
-}
-
-#[test]
-fn api_key_snapshot_keeps_named_selection_while_loading() {
-    let snapshot = build_api_key_snapshot(
-        AuthSecretNamesInput::NotLoaded,
-        &AuthSecretSelection::Named("my-key".to_string()),
-        true,
-    );
-    assert_eq!(snapshot.selected_id.as_deref(), Some("my-key"));
-}
-
-#[test]
-fn api_key_snapshot_maps_inherit_and_unset_selection() {
-    let inherit = build_api_key_snapshot(
-        AuthSecretNamesInput::Loaded(vec![]),
-        &AuthSecretSelection::Inherit,
-        true,
-    );
-    assert_eq!(inherit.selected_id.as_deref(), Some(""));
-
-    let unset = build_api_key_snapshot(
-        AuthSecretNamesInput::Loaded(vec![]),
-        &AuthSecretSelection::Unset,
-        true,
-    );
-    assert_eq!(unset.selected_id, None);
-}
 
 // ── Host ────────────────────────────────────────────────────────────
 

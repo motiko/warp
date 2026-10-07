@@ -11,8 +11,7 @@
 use std::collections::HashMap;
 
 use ai::agent::action::RunAgentsExecutionMode;
-use warp_cli::agent::Harness;
-use warpui::{AppContext, SingletonEntity};
+use warpui::AppContext;
 
 use super::config_state::{AuthSecretSelection, OrchestrationConfigState};
 use super::providers::{
@@ -20,7 +19,6 @@ use super::providers::{
     persist_auth_secret_selection, resolve_auth_secret_selection_for_harness,
     resolve_default_environment_id,
 };
-use crate::ai::harness_availability::{AuthSecretFetchState, HarnessAvailabilityModel};
 use crate::workspaces::user_workspaces::TeamScope;
 
 impl OrchestrationConfigState {
@@ -78,22 +76,10 @@ impl OrchestrationConfigState {
         team_scope: &S,
         ctx: &AppContext,
     ) {
-        let loaded_secret_names = Harness::parse_orchestration_harness(&self.harness_type)
-            .filter(|harness| *harness != Harness::Oz)
-            .and_then(|harness| {
-                match HarnessAvailabilityModel::as_ref(ctx).auth_secrets_for(team_scope, harness) {
-                    AuthSecretFetchState::Loaded(secrets) => {
-                        Some(secrets.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
-                    }
-                    AuthSecretFetchState::NotFetched
-                    | AuthSecretFetchState::Loading
-                    | AuthSecretFetchState::Failed(_) => None,
-                }
-            });
         let reseeded_selection =
             resolve_auth_secret_selection_for_harness(team_scope, &self.harness_type, ctx);
         self.revalidate_after_catalog_change_core(
-            loaded_secret_names.as_deref(),
+            None,
             reseeded_selection,
             &|id, harness, is_local| is_model_in_filtered_choices(id, harness, is_local, ctx),
             &|harness| first_filtered_model_id(harness, ctx),

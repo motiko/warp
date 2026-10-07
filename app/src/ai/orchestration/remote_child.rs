@@ -10,8 +10,6 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use prost::Message as _;
 use warp_cli::agent::Harness;
-#[cfg(not(target_family = "wasm"))]
-use warp_cli::skill::SkillSpec;
 use warp_multi_agent_api as multi_agent_api;
 #[cfg(not(target_family = "wasm"))]
 use warp_util::local_or_remote_path::LocalOrRemotePath;
@@ -25,6 +23,8 @@ use crate::ai::ambient_agents::{
     OUT_OF_CREDITS_TASK_FAILURE_MESSAGE, SERVER_OVERLOADED_TASK_FAILURE_MESSAGE, github_auth_url,
 };
 use crate::ai::blocklist::StartAgentRequest;
+#[cfg(not(target_family = "wasm"))]
+use crate::ai::skills::SkillSpec;
 #[cfg(not(target_family = "wasm"))]
 use crate::ai::skills::resolve_skill_spec;
 use crate::ai::skills::{SkillManager, SkillReference};

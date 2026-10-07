@@ -12,7 +12,7 @@
 #   - BUNDLE_ID: The app ID for the bundle (e.g.: "dev.alefbet.Alefbet").
 #   - EXECUTABLE_PATH: The path to the compiled executable we want to install.
 #   - BINARY_NAME: The name that the compiled executable should have on the target machine.
-#   - ARTIFACT: Which artifact to build: app or cli.
+#   - ARTIFACT: Which artifact to build: app.
 
 set -e
 

@@ -6,9 +6,7 @@ use std::path::{Path, PathBuf};
 use ai::skills::{
     ParsedSkill, SkillPathOrigin, SkillProvider, SkillReference, SkillScope, provider_rank,
 };
-pub use file_watchers::{
-    SkillWatcher, SkillWatcherEvent, extract_skill_parent_directory, read_skills_from_directories,
-};
+pub use file_watchers::{SkillWatcher, SkillWatcherEvent, extract_skill_parent_directory};
 use warp_core::features::FeatureFlag;
 use warp_util::host_id::HostId;
 use warp_util::local_or_remote_path::LocalOrRemotePath;
@@ -86,12 +84,6 @@ impl SkillManager {
             is_cloud_environment: false,
             skill_watcher,
         }
-    }
-
-    /// Marks this manager as running in a cloud environment, enabling all
-    /// directory skills to be in scope regardless of the current working directory.
-    pub fn set_cloud_environment(&mut self, value: bool) {
-        self.is_cloud_environment = value;
     }
 
     /// Returns skills available for the given working directory.
@@ -577,34 +569,6 @@ impl SkillManager {
                     );
                 }
             }
-        }
-    }
-
-    /// Registers skills loaded from `WARP_SKILL_DIRS` environment variable directories
-    /// as personal (home) tier skills.
-    ///
-    /// Unlike [`handle_skills_added`], this method does not require each skill's path
-    /// to follow a known provider directory structure. Skills are stored directly
-    /// under the local home directory bucket so they are always in scope—the same
-    /// precedence as `~/.agents/skills` and other personal skills.
-    ///
-    /// Call this after reading skills with [`ai::skills::read_skills_for_skills_dirs`].
-    pub fn add_skills_dirs_skills(&mut self, skills: Vec<ParsedSkill>) {
-        let Some(home_dir) = dirs::home_dir() else {
-            log::warn!("WARP_SKILL_DIRS: home directory unavailable; cannot register env skills");
-            return;
-        };
-        let home_dir = LocalOrRemotePath::Local(home_dir);
-        for skill in skills {
-            self.directory_skills
-                .entry(home_dir.clone())
-                .or_default()
-                .insert(skill.path.clone());
-            self.skills_by_name
-                .entry(skill.name.clone())
-                .or_default()
-                .insert(skill.path.clone());
-            self.skills_by_path.insert(skill.path.clone(), skill);
         }
     }
 

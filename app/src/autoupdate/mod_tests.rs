@@ -23,7 +23,7 @@ fn initialize_app(app: &mut App) -> ModelHandle<AutoupdateState> {
 #[test]
 fn test_queueing_behavior() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, ctx));
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, ctx| {
@@ -69,7 +69,7 @@ fn test_queueing_behavior() {
 #[test]
 fn test_queue_behavior_sdk_mode() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::Sdk, false, ctx));
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::Sdk, ctx));
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, ctx| {
@@ -117,7 +117,7 @@ fn test_queue_behavior_sdk_mode() {
 #[test]
 fn test_cli_sdk_mode_prevents_autoupdate_polling() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::Sdk, false, ctx));
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::Sdk, ctx));
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, ctx| {
@@ -156,7 +156,7 @@ fn test_cli_sdk_mode_prevents_autoupdate_polling() {
 #[test]
 fn test_user_usage_triggered_daily_check() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, ctx));
         let autoupdate_state = initialize_app(&mut app);
         let some_date = NaiveDate::from_ymd_opt(1991, 8, 22).unwrap();
 
@@ -187,7 +187,7 @@ fn test_user_usage_triggered_daily_check() {
 #[test]
 fn test_polling_triggered_daily_check() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, ctx));
         let autoupdate_state = initialize_app(&mut app);
         let some_date = NaiveDate::from_ymd_opt(1991, 8, 22).unwrap();
 
@@ -223,7 +223,7 @@ fn test_polling_triggered_daily_check() {
 #[test]
 fn test_manually_triggered_daily_check() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, ctx));
         let autoupdate_state = initialize_app(&mut app);
         let some_date = NaiveDate::from_ymd_opt(1991, 8, 22).unwrap();
 
@@ -291,7 +291,7 @@ fn make_version_info(version_string: impl Into<String>, is_rollback: bool) -> Ve
 #[test]
 fn test_download_failure_allows_retry() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, ctx));
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, ctx| {
@@ -333,7 +333,7 @@ fn test_download_failure_allows_retry() {
 #[test]
 fn test_successful_download_prevents_redownload() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, ctx));
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, ctx| {
@@ -385,7 +385,7 @@ fn test_successful_download_prevents_redownload() {
 #[test]
 fn test_failed_download_preserves_previous_successful_download() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, ctx));
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, ctx| {
@@ -453,7 +453,7 @@ fn test_failed_download_preserves_previous_successful_download() {
 #[test]
 fn test_successful_download_after_failure_replaces_preserved_download() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, ctx));
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, ctx| {
@@ -507,7 +507,7 @@ fn test_successful_download_after_failure_replaces_preserved_download() {
 #[test]
 fn test_should_update() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, ctx));
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, _| {

@@ -54,14 +54,13 @@ impl ExecutionMode {
 #[derive(Clone, Debug)]
 pub struct AppExecutionMode {
     mode: ExecutionMode,
-    is_sandboxed: bool,
 }
 
 impl AppExecutionMode {
     /// Create an `AppExecutionMode` model with the execution mode set.
-    pub fn new(mode: ExecutionMode, is_sandboxed: bool, _ctx: &mut ModelContext<Self>) -> Self {
+    pub fn new(mode: ExecutionMode, _ctx: &mut ModelContext<Self>) -> Self {
         let _ = GLOBAL_EXECUTION_MODE.set(mode);
-        Self { mode, is_sandboxed }
+        Self { mode }
     }
 
     /// True if running as an interactive app client.
@@ -140,12 +139,6 @@ impl AppExecutionMode {
     /// no explicit `mcp_execution_path` setting is available.
     pub fn can_inherit_process_path_for_mcp(&self) -> bool {
         self.mode.can_inherit_process_path_for_mcp()
-    }
-
-    /// If true, Warp is running in a sandbox like a Docker container or VM, rather than directly
-    /// on a user machine.
-    pub fn is_sandboxed(&self) -> bool {
-        self.is_sandboxed
     }
 }
 

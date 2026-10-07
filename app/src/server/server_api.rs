@@ -4,10 +4,7 @@ pub mod block;
 #[cfg(not(target_family = "wasm"))]
 pub(crate) mod download;
 pub mod factory;
-pub mod harness_support;
 pub mod integrations;
-pub mod managed_mcp;
-pub mod managed_secrets;
 pub mod object;
 pub(crate) mod presigned_upload;
 pub mod referral;
@@ -25,11 +22,9 @@ use anyhow::{Context, Result, anyhow};
 use auth::AuthClient;
 use block::BlockClient;
 use channel_versions::ChannelVersions;
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset};
 use factory::FactoryClient;
 use instant::Instant;
-use managed_mcp::ManagedMcpClient;
-use managed_secrets::AppManagedSecretsClient;
 use object::ObjectClient;
 use parking_lot::Mutex;
 use referral::ReferralsClient;
@@ -44,7 +39,7 @@ use warp_server_client::HttpStatusError;
 use warp_server_client::auth::{AuthClientImpl, AuthEvent, EXPERIMENT_ID_HEADER};
 use warp_server_client::base_client::{
     AmbientHeaderPolicy, AuthenticatedGraphqlConfig, BaseClient, GraphqlRoutingConfig,
-    HeaderOverride, TEAM_UID_HEADER,
+    TEAM_UID_HEADER,
 };
 use warp_server_client::iap::{IapManager, IapState};
 use warp_server_client::network_logging::NetworkLogModel;
@@ -59,7 +54,6 @@ use crate::ai::predict::generate_ai_input_suggestions::GenerateAIInputSuggestion
 use crate::ai::predict::generate_am_query_suggestions::GenerateAMQuerySuggestionsRequest;
 use crate::ai::predict::predict_am_queries::{PredictAMQueriesRequest, PredictAMQueriesResponse};
 use crate::ai::predict::{generate_ai_input_suggestions, generate_am_query_suggestions};
-use crate::ai::voice::transcribe::{TranscribeRequest, TranscribeResponse};
 use crate::auth::auth_manager::AuthManager;
 use crate::auth::auth_state::AuthState;
 use crate::server::team_scope::RequestTeamScope;
@@ -368,65 +362,6 @@ impl ErrorExt for AIApiError {
 }
 register_error!(AIApiError);
 
-#[derive(thiserror::Error, Debug)]
-pub enum TranscribeError {
-    #[error("Request failed due to lack of Voice quota.")]
-    QuotaLimit,
-
-    #[error("Warp is currently overloaded. Please try again later.")]
-    ServerOverloaded,
-
-    #[error("Internal error occurred at transport layer.")]
-    Transport(#[source] reqwest::Error),
-
-    #[error("Failed with status code {0}")]
-    ErrorStatus(http::StatusCode),
-
-    #[error("Failed to deserialize JSON.")]
-    Deserialization(#[source] DeserializationError),
-
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
-}
-
-impl TranscribeError {
-    fn from_json_error(err: reqwest::Error) -> Self {
-        if err.is_decode() {
-            #[cfg(not(target_family = "wasm"))]
-            {
-                use std::error::Error as _;
-                let mut source = err.source();
-                while let Some(underlying) = source {
-                    if underlying.is::<hyper::Error>() {
-                        return TranscribeError::Transport(err);
-                    }
-                    source = underlying.source();
-                }
-            }
-            return TranscribeError::Deserialization(DeserializationError::Transport(err));
-        }
-        TranscribeError::Transport(err)
-    }
-}
-
-impl ErrorExt for TranscribeError {
-    fn is_actionable(&self) -> bool {
-        match self {
-            TranscribeError::Transport(error) => error.is_actionable(),
-            TranscribeError::ErrorStatus(status) => {
-                !status.is_server_error() && *status != http::StatusCode::TOO_MANY_REQUESTS
-            }
-            TranscribeError::Other(error) => error.is_actionable(),
-            TranscribeError::Deserialization(error) => match error {
-                DeserializationError::Json(_) => true,
-                DeserializationError::Transport(error) => error.is_actionable(),
-            },
-            TranscribeError::QuotaLimit | TranscribeError::ServerOverloaded => false,
-        }
-    }
-}
-register_error!(TranscribeError);
-
 /// An API wrapper struct with methods to requests to warp-server.
 ///
 /// Prefer NOT adding new methods directly on this struct; instead, add to one of the existing
@@ -548,34 +483,6 @@ impl ServerApi {
     ) -> Result<Vec<(String, String)>> {
         self.ambient_headers(AmbientHeaderPolicy::for_task(task_id.to_string()))
             .await
-    }
-
-    /// Returns task-scoped ambient agent headers for a caller that pins them into a long-lived
-    /// transport instead of resolving them per request.
-    ///
-    /// `must_outlive` is the instant through which the pinned headers have to keep working,
-    /// typically the end of the run. The workload token is attached only when it stays valid
-    /// that long, since warp-server rejects an expired one but tolerates its absence. Pass
-    /// `None` when no such instant is known, which resolves the token the same way an ordinary
-    /// per-request caller would.
-    pub async fn pinned_ambient_agent_headers_for_task(
-        &self,
-        task_id: &AmbientAgentTaskId,
-        must_outlive: Option<DateTime<Utc>>,
-    ) -> Result<Vec<(String, String)>> {
-        let workload_token = match must_outlive {
-            Some(must_outlive) => self
-                .base_client
-                .get_ambient_workload_token_valid_until(must_outlive)
-                .await?
-                .map_or(HeaderOverride::Omit, HeaderOverride::Set),
-            None => HeaderOverride::Inherit,
-        };
-        self.ambient_headers(AmbientHeaderPolicy {
-            workload_token,
-            ..AmbientHeaderPolicy::for_task(task_id.to_string())
-        })
-        .await
     }
 
     pub fn send_graphql_request<'a, QF, O: warp_graphql::client::Operation<QF> + Send + 'a>(
@@ -750,6 +657,43 @@ impl ServerApi {
     {
         self.post_public_api_response_for_team(path, body, None)
             .await
+    }
+
+    pub(crate) async fn post_public_api_response_for_task<B>(
+        &self,
+        task_id: &AmbientAgentTaskId,
+        path: &str,
+        body: &B,
+    ) -> Result<http_client::Response>
+    where
+        B: Serialize,
+    {
+        let auth_token = self
+            .get_or_refresh_access_token()
+            .await
+            .context("Failed to get access token for API request")?;
+
+        let url = format!("{}/api/v1/{}", crate::ChannelState::server_root_url(), path);
+
+        let mut request = self.base_client.http_client().post(&url).json(body);
+        if let Some(token) = auth_token.as_bearer_token() {
+            request = request.bearer_auth(token);
+        }
+
+        for (name, value) in self.ambient_agent_headers_for_task(task_id).await? {
+            request = request.header(name, value);
+        }
+
+        let response = request
+            .send()
+            .await
+            .with_context(|| format!("Failed to send API request to {url}"))?;
+
+        if response.status().is_success() {
+            Ok(response)
+        } else {
+            Err(Self::error_from_response(response).await)
+        }
     }
 
     async fn post_public_api_response_for_team<B>(
@@ -1289,64 +1233,6 @@ impl ServerApi {
         Ok(response)
     }
 
-    /// Hits the /ai/transcribe endpoint to get the transcription for the given audio.
-    pub async fn transcribe(
-        &self,
-        request: &TranscribeRequest,
-        team_scope: RequestTeamScope,
-    ) -> Result<TranscribeResponse, TranscribeError> {
-        let auth_token = self.get_or_refresh_access_token().await?;
-
-        let mut request_builder = self
-            .base_client
-            .http_client()
-            .post(format!("{}/ai/transcribe", ChannelState::server_root_url()));
-        if let Some(team_uid) = team_scope.team_uid() {
-            request_builder = request_builder.header(TEAM_UID_HEADER, team_uid.uid());
-        }
-        let response = if let Some(token) = auth_token.as_bearer_token() {
-            request_builder.bearer_auth(token)
-        } else {
-            request_builder
-        }
-        .json(request)
-        .send()
-        .await;
-
-        match response {
-            Ok(res) => {
-                if res.status().is_success() {
-                    match res.json::<TranscribeResponse>().await {
-                        Ok(output_response) => Ok(output_response),
-                        Err(e) => {
-                            log::warn!("Failed to deserialize response: {e:?}");
-                            Err(TranscribeError::from_json_error(e))
-                        }
-                    }
-                } else if res.status() == http::StatusCode::TOO_MANY_REQUESTS {
-                    if res
-                        .headers()
-                        .get(WARP_ERROR_CODE_HEADER)
-                        .and_then(|v| v.to_str().ok())
-                        == Some(WARP_ERROR_CODE_OUT_OF_CREDITS)
-                    {
-                        Err(TranscribeError::QuotaLimit)
-                    } else {
-                        Err(TranscribeError::ServerOverloaded)
-                    }
-                } else {
-                    let status = res.status();
-                    log::warn!("Non-success status code received: {status}");
-                    Err(TranscribeError::ErrorStatus(status))
-                }
-            }
-            Err(e) => {
-                log::warn!("Error while sending request: {e:?}");
-                Err(TranscribeError::Transport(e))
-            }
-        }
-    }
-
     fn set_server_time(&self, server_time: ServerTime) {
         let mut last_server_time = self.last_server_time.lock();
         *last_server_time = Some(server_time);
@@ -1584,15 +1470,6 @@ impl ServerApiProvider {
         self.server_api.clone()
     }
 
-    pub fn get_managed_secrets_client(&self) -> Arc<AppManagedSecretsClient> {
-        self.server_api.clone()
-    }
-
-    #[cfg_attr(target_family = "wasm", expect(dead_code))]
-    pub fn get_managed_mcp_client(&self) -> Arc<dyn ManagedMcpClient> {
-        self.server_api.clone()
-    }
-
     pub fn get_factory_client(&self) -> Arc<dyn FactoryClient> {
         self.server_api.clone()
     }
@@ -1601,11 +1478,6 @@ impl ServerApiProvider {
     /// and includes standard Warp request headers.
     pub fn get_http_client(&self) -> Arc<http_client::Client> {
         self.server_api.owned_http_client()
-    }
-
-    #[cfg_attr(target_family = "wasm", expect(dead_code))]
-    pub fn get_harness_support_client(&self) -> Arc<dyn harness_support::HarnessSupportClient> {
-        self.server_api.clone()
     }
 }
 

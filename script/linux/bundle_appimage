@@ -17,16 +17,9 @@ STAGE_DIR="$DIST_DIR/appimagepkg"
 APP_DIR="$DIST_DIR/AppDir"
 
 # Extract channel suffix from BINARY_NAME.  The OSS channel is the Alefbet release
-# channel, so its app package carries no suffix; its CLI binary is named after
-# Alefbet rather than oz, so that suffix is fixed instead.
+# channel, so its package carries no suffix.
 if [ "$RELEASE_CHANNEL" = "oss" ]; then
-  if [ "$ARTIFACT" = "cli" ]; then
-    CHANNEL_SUFFIX="-oss"
-  else
-    CHANNEL_SUFFIX=""
-  fi
-elif [ "$ARTIFACT" = "cli" ]; then
-  CHANNEL_SUFFIX="${BINARY_NAME#oz}"
+  CHANNEL_SUFFIX=""
 else
   CHANNEL_SUFFIX="${BINARY_NAME#warp}"
 fi

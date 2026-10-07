@@ -54,7 +54,6 @@ pub enum SlashCommandKind {
     CloudAgent,
     AddMcp,
     CreateEnvironment,
-    CreateDockerSandbox,
     CreateNewProject,
     EditSkill,
     InvokeSkill,

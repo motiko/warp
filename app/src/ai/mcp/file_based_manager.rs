@@ -141,17 +141,6 @@ impl FileBasedMCPManager {
         ctx.emit(FileBasedMCPManagerEvent::InitialGlobalMcpScanComplete { wait_server_uuids });
     }
 
-    /// Returns the frozen initial-global-scan wait set, or `None` while the scan is pending.
-    ///
-    /// The watcher runs during application initialization, so a driver created later can miss
-    /// the transient completion event. This cached result preserves the settled snapshot.
-    pub fn initial_global_scan_result(&self) -> Option<Vec<Uuid>> {
-        match &self.initial_global_scan_state {
-            InitialGlobalMcpScanState::Complete(uuids) => Some(uuids.clone()),
-            InitialGlobalMcpScanState::Pending(_) => None,
-        }
-    }
-
     /// Get file-based MCP servers in scope for the given current working directory.
     pub fn get_servers_for_working_directory(
         &self,
@@ -567,15 +556,6 @@ impl FileBasedMCPManager {
             .collect()
     }
 
-    #[cfg(test)]
-    pub fn global_warp_servers(&self) -> Vec<&TemplatableMCPServerInstallation> {
-        self.file_based_servers
-            .iter()
-            .filter(|(hash, _)| self.is_global_warp_server(**hash))
-            .map(|(_, installation)| installation)
-            .collect()
-    }
-
     /// Returns all detected file-based MCP server installations.
     pub fn file_based_servers(&self) -> Vec<&TemplatableMCPServerInstallation> {
         self.file_based_servers.values().collect()
@@ -753,9 +733,9 @@ pub enum FileBasedMCPManagerEvent {
     PurgeCredentials {
         installation_hashes: Vec<u64>,
     },
+    #[allow(dead_code)]
     CloudEnvMcpScanComplete {
         repo_path: PathBuf,
-        #[allow(dead_code)]
         detected_servers: Vec<CloudEnvMcpScanServer>,
         wait_server_uuids: Vec<Uuid>,
     },
@@ -763,6 +743,7 @@ pub enum FileBasedMCPManagerEvent {
     /// [`FileBasedMCPManager::initial_global_scan_result`] instead of only listening for
     /// this event, since it can fire long before a given run's driver ever subscribes.
     InitialGlobalMcpScanComplete {
+        #[allow(dead_code)]
         wait_server_uuids: Vec<Uuid>,
     },
 }

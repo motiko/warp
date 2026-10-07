@@ -86,7 +86,6 @@ mod user_config;
 pub mod util;
 mod view_components;
 mod vim_registers;
-mod voice;
 mod voltron;
 mod warp_managed_paths_watcher;
 #[cfg(target_family = "wasm")]
@@ -138,7 +137,6 @@ pub use ai::agent::todos::AIAgentTodoList;
 pub use ai::agent::{AIAgentActionResultType, FileEdit, TodoOperation};
 use ai::agent_conversations_model::AgentConversationsModel;
 use ai::agent_management::AgentNotificationsModel;
-use ai::ambient_agents::scheduled::ScheduledAgentManager;
 use ai::blocklist::{BlocklistAIHistoryModel, BlocklistAIPermissions};
 use ai::chatgpt_subscription::ChatGPTSubscriptionModel;
 use ai::execution_profiles::editor::ExecutionProfileEditorManager;
@@ -158,7 +156,6 @@ use repo_metadata::{
 };
 use server::network_log_pane_manager::NetworkLogPaneManager;
 use server::telemetry::context_provider::AppTelemetryContextProvider;
-use server::voice_transcriber::ServerVoiceTranscriber;
 #[cfg(feature = "local_fs")]
 use settings::import::model::ImportedConfigModel;
 use settings_view::pane_manager::SettingsPaneManager;
@@ -167,9 +164,6 @@ use terminal::keys_settings::KeysSettings;
 #[cfg(all(not(target_family = "wasm"), feature = "local_tty"))]
 use terminal::local_shell::LocalShellState;
 pub use util::bindings::cmd_or_ctrl_shift;
-use voice::transcriber::VoiceTranscriber;
-use warp_cli::agent::AgentCommand;
-use warp_cli::{CliCommand, GlobalOptions};
 #[cfg(feature = "local_fs")]
 use watcher::HomeDirectoryWatcher;
 
@@ -221,7 +215,7 @@ use warp_errors::{report_error, report_if_error};
 #[cfg(feature = "local_fs")]
 use warp_files::FileModel;
 use warp_logging::{LogDestination, LogFrontend};
-use warp_server_client::iap::{IapManager, IapManagerEvent, IapState, ManagedIapMint};
+use warp_server_client::iap::{IapManager, IapManagerEvent, IapState};
 use warp_server_client::network_logging::NetworkLogModel;
 use warpui::integration::TestDriver;
 use warpui::modals::{AlertDialogWithCallbacks, AppModalCallback};
@@ -236,8 +230,6 @@ use workspace::sync_inputs::SyncedInputState;
 use self::features::FeatureFlag;
 use crate::ai::AIRequestUsageModel;
 use crate::ai::agent::conversation::AIConversationId;
-#[cfg(not(target_family = "wasm"))]
-use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
 use crate::ai::blocklist::RecordingController;
 use crate::ai::connected_self_hosted_workers::ConnectedSelfHostedWorkersModel;
@@ -283,9 +275,6 @@ use crate::root_view::{
 use crate::server::cloud_objects::listener::Listener;
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::experiments::ServerExperiments;
-#[cfg(not(target_family = "wasm"))]
-use crate::server::iap_identity_minter::ManagedSecretsIapMinter;
-use crate::server::server_api::managed_secrets::AppManagedSecretManager as ManagedSecretManager;
 use crate::server::sync_queue::{QueueItem, SyncQueue};
 pub use crate::server::telemetry::{
     AgentModeEntrypoint, AgentModeEntrypointSelectionType, TelemetryEvent,
@@ -329,13 +318,6 @@ fn determine_agent_source(
     launch_mode: &LaunchMode,
 ) -> Option<crate::ai::ambient_agents::AgentSource> {
     match launch_mode {
-        LaunchMode::CommandLine { .. } => {
-            if std::env::var("GITHUB_ACTIONS").ok().as_deref() == Some("true") {
-                Some(crate::ai::ambient_agents::AgentSource::GitHubAction)
-            } else {
-                Some(crate::ai::ambient_agents::AgentSource::Cli)
-            }
-        }
         LaunchMode::App { .. } | LaunchMode::Test { .. } => {
             Some(crate::ai::ambient_agents::AgentSource::CloudMode)
         }
@@ -355,10 +337,7 @@ fn daemon_codebase_index_snapshot_storage(launch_mode: &LaunchMode) -> Option<Sn
                 .join("codebase_index_snapshots");
             SnapshotStorage::from_dir(snapshot_dir)
         }
-        LaunchMode::App { .. }
-        | LaunchMode::CommandLine { .. }
-        | LaunchMode::RemoteServerProxy
-        | LaunchMode::Test { .. } => None,
+        LaunchMode::App { .. } | LaunchMode::RemoteServerProxy | LaunchMode::Test { .. } => None,
     }
 }
 
@@ -372,16 +351,6 @@ pub(crate) enum LaunchMode {
         api_key: Option<String>,
     },
 
-    /// Run the Warp command-line SDK.
-    CommandLine {
-        command: warp_cli::CliCommand,
-        global_options: GlobalOptions,
-        debug: bool,
-        /// Whether this CLI invocation is running in a sandboxed environment.
-        is_sandboxed: bool,
-        /// Override for computer use permission from CLI flags. If None, uses default behavior.
-        computer_use_override: Option<bool>,
-    },
     /// Run a test - this may be an integration test or an eval.
     Test {
         driver: Box<Option<TestDriver>>,
@@ -412,8 +381,7 @@ impl LaunchMode {
     fn args(&self) -> Cow<'_, warp_cli::AppArgs> {
         match self {
             LaunchMode::App { args, .. } => Cow::Borrowed(args),
-            LaunchMode::CommandLine { .. }
-            | LaunchMode::Test { .. }
+            LaunchMode::Test { .. }
             | LaunchMode::RemoteServerProxy
             | LaunchMode::RemoteServerDaemon { .. } => Cow::Owned(warp_cli::AppArgs::default()),
         }
@@ -421,7 +389,6 @@ impl LaunchMode {
 
     fn api_key(&self) -> Option<String> {
         match self {
-            LaunchMode::CommandLine { global_options, .. } => global_options.api_key.clone(),
             LaunchMode::App { api_key, .. } => api_key.clone(),
             LaunchMode::Test { .. }
             | LaunchMode::RemoteServerProxy
@@ -444,7 +411,6 @@ impl LaunchMode {
                 ..
             } => *is_integration_test,
             LaunchMode::App { .. }
-            | LaunchMode::CommandLine { .. }
             | LaunchMode::RemoteServerProxy
             | LaunchMode::RemoteServerDaemon { .. } => false,
         }
@@ -454,7 +420,6 @@ impl LaunchMode {
         match self {
             LaunchMode::Test { driver, .. } => driver.take(),
             LaunchMode::App { .. }
-            | LaunchMode::CommandLine { .. }
             | LaunchMode::RemoteServerProxy
             | LaunchMode::RemoteServerDaemon { .. } => None,
         }
@@ -471,7 +436,6 @@ impl LaunchMode {
     fn execution_mode(&self) -> ExecutionMode {
         match self {
             LaunchMode::App { .. } => ExecutionMode::App,
-            LaunchMode::CommandLine { .. } => ExecutionMode::Sdk,
             LaunchMode::Test { .. } => ExecutionMode::App,
             // RemoteServerProxy is a thin byte bridge; Sdk is the closest match.
             LaunchMode::RemoteServerProxy => ExecutionMode::Sdk,
@@ -480,23 +444,10 @@ impl LaunchMode {
         }
     }
 
-    fn is_sandboxed(&self) -> bool {
-        match self {
-            LaunchMode::CommandLine { is_sandboxed, .. } => *is_sandboxed,
-            LaunchMode::App { .. }
-            | LaunchMode::Test { .. }
-            | LaunchMode::RemoteServerProxy
-            | LaunchMode::RemoteServerDaemon { .. } => false,
-        }
-    }
-
     /// Returns `true` if Warp renders to native GUI windows on the platform app backend.
     fn is_gui(&self) -> bool {
         match self {
             LaunchMode::App { .. } | LaunchMode::Test { .. } => true,
-            LaunchMode::CommandLine { command, .. } => {
-                matches!(command, CliCommand::Agent(AgentCommand::Run(args)) if args.gui)
-            }
             LaunchMode::RemoteServerProxy | LaunchMode::RemoteServerDaemon { .. } => false,
         }
     }
@@ -504,10 +455,6 @@ impl LaunchMode {
     /// Returns `true` if Warp runs with no user interface at all.
     fn is_headless(&self) -> bool {
         match self {
-            LaunchMode::CommandLine { command, .. } => match command {
-                CliCommand::Agent(AgentCommand::Run(args)) => !args.gui,
-                _ => true,
-            },
             LaunchMode::RemoteServerProxy | LaunchMode::RemoteServerDaemon { .. } => true,
             LaunchMode::App { .. } | LaunchMode::Test { .. } => false,
         }
@@ -525,9 +472,6 @@ impl LaunchMode {
     /// Returns `true` if this process can build and sync codebase indices.
     fn supports_indexing(&self) -> bool {
         match self {
-            LaunchMode::CommandLine { command, .. } => {
-                matches!(command, CliCommand::Agent(AgentCommand::Run { .. }))
-            }
             LaunchMode::RemoteServerDaemon { .. } => {
                 FeatureFlag::RemoteCodebaseIndexing.is_enabled()
             }
@@ -541,8 +485,7 @@ impl LaunchMode {
     pub(crate) fn crash_recovery_enabled(&self) -> bool {
         match self {
             LaunchMode::App { .. } => true,
-            LaunchMode::CommandLine { .. }
-            | LaunchMode::Test { .. }
+            LaunchMode::Test { .. }
             | LaunchMode::RemoteServerProxy
             | LaunchMode::RemoteServerDaemon { .. } => false,
         }
@@ -553,7 +496,6 @@ impl LaunchMode {
     pub(crate) fn needs_crash_reporting(&self) -> bool {
         match self {
             LaunchMode::App { .. }
-            | LaunchMode::CommandLine { .. }
             | LaunchMode::Test { .. }
             | LaunchMode::RemoteServerDaemon { .. }
             | LaunchMode::RemoteServerProxy => true,
@@ -564,7 +506,6 @@ impl LaunchMode {
     pub(crate) fn needs_profiling(&self) -> bool {
         match self {
             LaunchMode::App { .. }
-            | LaunchMode::CommandLine { .. }
             | LaunchMode::Test { .. }
             | LaunchMode::RemoteServerDaemon { .. }
             | LaunchMode::RemoteServerProxy => true,
@@ -574,13 +515,6 @@ impl LaunchMode {
     /// Log destination for this mode.
     fn log_destination(&self) -> Option<LogDestination> {
         match self {
-            LaunchMode::CommandLine { debug, .. } => {
-                if *debug {
-                    Some(LogDestination::Stderr)
-                } else {
-                    Some(LogDestination::File)
-                }
-            }
             // Proxy must log to stderr because stdout is the protocol channel.
             LaunchMode::RemoteServerProxy => Some(LogDestination::Stderr),
             LaunchMode::RemoteServerDaemon { .. } => Some(LogDestination::File),
@@ -591,16 +525,15 @@ impl LaunchMode {
     fn log_frontend(&self) -> LogFrontend {
         match self {
             LaunchMode::App { .. } | LaunchMode::Test { .. } => LogFrontend::Gui,
-            LaunchMode::CommandLine { .. }
-            | LaunchMode::RemoteServerProxy
-            | LaunchMode::RemoteServerDaemon { .. } => LogFrontend::Cli,
+            LaunchMode::RemoteServerProxy | LaunchMode::RemoteServerDaemon { .. } => {
+                LogFrontend::Cli
+            }
         }
     }
 
     fn as_str_for_tracing(&self) -> &'static str {
         match self {
             LaunchMode::App { .. } => "app",
-            LaunchMode::CommandLine { command, .. } => command.as_str_for_tracing(),
             LaunchMode::Test { .. } => "test",
             LaunchMode::RemoteServerDaemon { .. } => "remote_server_daemon",
             LaunchMode::RemoteServerProxy => "remote_server_proxy",
@@ -705,26 +638,6 @@ pub fn run() -> Result<()> {
             warp_cli::Command::Completions { shell } => {
                 return warp_cli::completions::generate_to_stdout(*shell);
             }
-            warp_cli::Command::CommandLine(cmd) => {
-                let (is_sandboxed, computer_use_override) = match cmd.as_ref() {
-                    warp_cli::CliCommand::Agent(warp_cli::agent::AgentCommand::Run(run_args)) => (
-                        run_args.sandboxed,
-                        run_args.computer_use.computer_use_override(),
-                    ),
-                    _ => (false, None),
-                };
-
-                return run_internal(LaunchMode::CommandLine {
-                    command: cmd.as_ref().clone(),
-                    global_options: GlobalOptions {
-                        output_format: args.output_format(),
-                        api_key: args.api_key().cloned(),
-                    },
-                    debug: args.debug(),
-                    is_sandboxed,
-                    computer_use_override,
-                });
-            }
             warp_cli::Command::DumpDebugInfo => {
                 return debug_dump::run();
             }
@@ -737,16 +650,6 @@ pub fn run() -> Result<()> {
                 return TelemetryEvent::print_telemetry_events_json();
             }
         }
-    }
-
-    // If running as a standalone CLI binary or invoked as "oz", print help
-    // instead of launching the GUI app.
-    let is_cli_binary = cfg!(feature = "standalone")
-        || warp_cli::binary_name().is_some_and(|name| name.starts_with("oz"))
-        || std::env::var_os("WARP_CLI_MODE").is_some();
-    if is_cli_binary {
-        warp_cli::Args::clap_command().print_help()?;
-        return Ok(());
     }
 
     let api_key = args.api_key().cloned();
@@ -781,13 +684,12 @@ fn run_worker_command(worker: &warp_cli::WorkerCommand) -> Result<()> {
             // It only needs logging to stderr since stdout is the protocol
             // channel. No crash reporting, no initialize_app.
             let launch_mode = LaunchMode::RemoteServerProxy;
-            let mut tracing_initialization = tracing::init()?;
+            tracing::init()?;
             warp_logging::init(warp_logging::LogConfig {
                 frontend: launch_mode.log_frontend(),
                 log_destination: launch_mode.log_destination(),
                 ..Default::default()
             })?;
-            tracing_initialization.log_initialization_warning();
             crate::remote_server::run_proxy(args.identity_key.clone())
         }
         #[cfg(not(target_family = "wasm"))]
@@ -861,10 +763,9 @@ fn run_internal(mut launch_mode: LaunchMode) -> Result<()> {
         sentry::Hub::main();
     }
 
-    let mut tracing_initialization = launch_mode
-        .needs_profiling()
-        .then(tracing::init)
-        .transpose()?;
+    if launch_mode.needs_profiling() {
+        tracing::init()?;
+    }
 
     // Start the `run_internal` span here - we can't do it before this point
     // because we need the tracing initialization to be complete first.
@@ -897,9 +798,6 @@ fn run_internal(mut launch_mode: LaunchMode) -> Result<()> {
         }
     }
 
-    if let Some(initialization) = tracing_initialization.as_mut() {
-        initialization.log_initialization_warning();
-    }
     timer.mark_interval_end("LOG_FILE_SETUP_COMPLETE");
 
     // Claim a background-only process type before anything else can reach
@@ -1037,10 +935,7 @@ fn run_internal(mut launch_mode: LaunchMode) -> Result<()> {
     let pty_spawner =
         terminal::local_tty::spawner::PtySpawner::new().context("Failed to create pty spawner")?;
 
-    let callbacks = app_callbacks(
-        launch_mode.is_integration_test(),
-        tracing_initialization.take(),
-    );
+    let callbacks = app_callbacks(launch_mode.is_integration_test());
     let mut app_builder = if launch_mode.is_gui() {
         warpui::platform::AppBuilder::new(
             callbacks,
@@ -1140,13 +1035,7 @@ fn run_internal(mut launch_mode: LaunchMode) -> Result<()> {
             .spawn(warp_logging::rotate_log_files())
             .detach();
 
-        ctx.add_singleton_model(|ctx| {
-            AppExecutionMode::new(
-                launch_mode.execution_mode(),
-                launch_mode.is_sandboxed(),
-                ctx,
-            )
-        });
+        ctx.add_singleton_model(|ctx| AppExecutionMode::new(launch_mode.execution_mode(), ctx));
         #[cfg(feature = "crash_reporting")]
         crate::crash_reporting::set_client_type_tag(launch_mode.execution_mode().client_id());
 
@@ -1314,36 +1203,7 @@ pub(crate) fn initialize_app(
     });
 
     let server_api = server_api_provider.as_ref(ctx).get();
-    // Parse the ambient-agent task id once. A set-but-unparseable OZ_RUN_ID is
-    // treated as absent everywhere: it identifies no task and must not enable the
-    // runner-context IAP WIF mint below.
-    #[cfg(not(target_family = "wasm"))]
-    let ambient_agent_task_id: Option<AmbientAgentTaskId> = std::env::var(warp_cli::OZ_RUN_ID_ENV)
-        .ok()
-        .and_then(|run_id| match run_id.parse() {
-            Ok(task_id) => Some(task_id),
-            Err(err) => {
-                log::warn!("Ignoring invalid {}: {err}", warp_cli::OZ_RUN_ID_ENV);
-                None
-            }
-        });
-    #[cfg(all(not(target_family = "wasm"), feature = "crash_reporting"))]
-    if matches!(launch_mode, LaunchMode::CommandLine { .. })
-        && let Some(task_id) = ambient_agent_task_id
-    {
-        crash_reporting::set_task_id_tag(&task_id.to_string());
-    }
-    #[cfg(not(target_family = "wasm"))]
-    server_api.set_ambient_agent_task_id(ambient_agent_task_id);
     let ai_client = server_api_provider.as_ref(ctx).get_ai_client();
-    #[cfg(not(target_family = "wasm"))]
-    // Refresh starts only after the authenticated server client exists; tracing initialization
-    // remains responsible for deciding whether this process opted in to cloud-agent export.
-    tracing::start_auth_refresh(
-        server_api_provider.as_ref(ctx).get_managed_secrets_client(),
-        ctx,
-    );
-
     ctx.add_singleton_model(|_ctx| AuthStateProvider::new(auth_state.clone()));
 
     ctx.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
@@ -1368,10 +1228,9 @@ pub(crate) fn initialize_app(
                 identity_key: identity_key.clone(),
             }
         }
-        LaunchMode::App { .. }
-        | LaunchMode::CommandLine { .. }
-        | LaunchMode::RemoteServerProxy
-        | LaunchMode::Test { .. } => persistence::PersistenceScope::App,
+        LaunchMode::App { .. } | LaunchMode::RemoteServerProxy | LaunchMode::Test { .. } => {
+            persistence::PersistenceScope::App
+        }
     };
     // Only read the subsets of persisted data this launch mode actually
     // consumes; loading everything is expensive on large databases.
@@ -1379,10 +1238,9 @@ pub(crate) fn initialize_app(
         LaunchMode::RemoteServerDaemon { .. } => {
             persistence::PersistedDataScope::CodebaseIndicesOnly
         }
-        LaunchMode::App { .. }
-        | LaunchMode::CommandLine { .. }
-        | LaunchMode::RemoteServerProxy
-        | LaunchMode::Test { .. } => persistence::PersistedDataScope::Full,
+        LaunchMode::App { .. } | LaunchMode::RemoteServerProxy | LaunchMode::Test { .. } => {
+            persistence::PersistedDataScope::Full
+        }
     };
     let (sqlite_data, writer_handles) =
         persistence::initialize(ctx, persistence_scope, persisted_data_scope);
@@ -1633,14 +1491,6 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(|_| NetworkLogPaneManager::default());
     ctx.add_singleton_model(|_| pricing::PricingInfoModel::new());
     ctx.add_singleton_model(ai::pricing_promotion::PricingPromotionState::new);
-    ctx.add_singleton_model(|ctx| {
-        // Not using the *Provider types isn't ideal, but it's worth it for the ability to move managed secrets to a separate crate.
-        ManagedSecretManager::new(
-            server_api_provider.as_ref(ctx).get_managed_secrets_client(),
-            auth_state.clone(),
-        )
-    });
-
     #[cfg(target_os = "macos")]
     if launch_mode.is_gui() {
         AppearanceManager::as_ref(ctx).set_app_icon(ctx);
@@ -1919,12 +1769,6 @@ pub(crate) fn initialize_app(
     #[cfg(feature = "local_fs")]
     ctx.add_singleton_model(|_| LanguageServerShutdownManager::new());
 
-    #[cfg(feature = "voice_input")]
-    ctx.add_singleton_model(voice_input::VoiceInput::new);
-    ctx.add_singleton_model(|_| {
-        VoiceTranscriber::new(Arc::new(ServerVoiceTranscriber::new(server_api.clone())))
-    });
-
     let notebooks = cloud_objects
         .iter()
         .filter_map(|object| {
@@ -2151,18 +1995,6 @@ pub(crate) fn initialize_app(
         ctx.add_singleton_model(system::SystemInfo::new);
     }
 
-    // In a sandboxed Oz runner, mint IAP tokens by self-minting via Workload
-    // Identity Federation (impersonating the IAP access service account). Gated
-    // on a valid ambient-agent task id so local staging clients — and any runner
-    // with a stray or malformed OZ_RUN_ID — keep using the gcloud path.
-    #[cfg(not(target_family = "wasm"))]
-    let managed_iap_mint = ambient_agent_task_id.is_some().then(|| {
-        let client = server_api_provider.as_ref(ctx).get_managed_secrets_client();
-        ManagedIapMint::new(Arc::new(ManagedSecretsIapMinter::new(client)))
-    });
-    #[cfg(target_family = "wasm")]
-    let managed_iap_mint: Option<ManagedIapMint> = None;
-
     // `IapManager` drives IAP token refresh for staging builds.
     // Register it after `LocalShellState`: the Manager needs to know where the gcloud
     // cli lives & thus needs PATH config set by ~/.zshrc et al.
@@ -2185,7 +2017,7 @@ pub(crate) fn initialize_app(
 
             path_future
         });
-        IapManager::new(iap_state, path_resolver, managed_iap_mint, ctx)
+        IapManager::new(iap_state, path_resolver, ctx)
     });
     // Subscribe to IAP manager events to show toasts when refresh fails.
     ctx.subscribe_to_model(&IapManager::handle(ctx), |_, e, ctx| {
@@ -2211,16 +2043,11 @@ pub(crate) fn initialize_app(
         };
     });
 
-    // CLI commands establish IAP access and refresh auth in their dispatch path so they can
-    // surface failures synchronously. Other interactive clients gate startup user authentication
-    // on IAP here, since the request itself calls the IAP-gated warp-server.
-    let startup_authentication = if matches!(launch_mode, LaunchMode::CommandLine { .. }) {
-        None
-    } else {
-        pending_api_key
-            .map(StartupUserAuthentication::ApiKey)
-            .or_else(|| user_is_logged_in.then_some(StartupUserAuthentication::RefreshUser))
-    };
+    // Interactive clients gate startup user authentication on IAP here, since the request
+    // itself calls the IAP-gated warp-server.
+    let startup_authentication = pending_api_key
+        .map(StartupUserAuthentication::ApiKey)
+        .or_else(|| user_is_logged_in.then_some(StartupUserAuthentication::RefreshUser));
     if let Some(authentication) = startup_authentication {
         authenticate_user_after_iap_access(authentication, ctx);
     }
@@ -2240,10 +2067,6 @@ pub(crate) fn initialize_app(
 
     ctx.add_singleton_model(EnvVarCollectionManager::new);
     ctx.add_singleton_model(WorkflowManager::new);
-
-    if FeatureFlag::ScheduledAmbientAgents.is_enabled() {
-        ctx.add_singleton_model(ScheduledAgentManager::new);
-    }
 
     AutoupdateState::register(ctx, server_api.clone());
 
@@ -2265,9 +2088,8 @@ pub(crate) fn initialize_app(
                 model.revalidate_tips(ctx);
             });
         });
-        // Also revalidate when workspace/team data changes (e.g. voice toggled at
-        // the org level). Billing metadata — including `warp_ai_policy.is_voice_enabled`
-        // — lives inside the team data, so `TeamsChanged` covers all policy updates.
+        // Also revalidate when workspace/team data changes: billing metadata lives inside
+        // the team data, so `TeamsChanged` covers all policy updates.
         let tip_model_handle_for_teams = tip_model_handle.clone();
         ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), move |_, event, ctx| {
             if matches!(event, UserWorkspacesEvent::TeamsChanged) {
@@ -2387,10 +2209,7 @@ pub(crate) fn initialize_app(
     app_state
 }
 
-pub(crate) fn app_callbacks(
-    is_integration_test: bool,
-    mut tracing_initialization: Option<tracing::Initialization>,
-) -> warpui::platform::AppCallbacks {
+pub(crate) fn app_callbacks(is_integration_test: bool) -> warpui::platform::AppCallbacks {
     warpui::platform::AppCallbacks {
         on_internet_reachability_changed: Some(Box::new(move |reachable, ctx| {
             NetworkStatus::handle(ctx)
@@ -2434,21 +2253,6 @@ pub(crate) fn app_callbacks(
             let active_window_id = ctx.windows().active_window();
             let update_quake_mode_arg = UpdateQuakeModeEventArg { active_window_id };
 
-            #[cfg(feature = "voice_input")]
-            {
-                if let voice_input::VoiceInputState::Listening { enabled_from, .. } =
-                    voice_input::VoiceInput::as_ref(ctx).state()
-                {
-                    // Abort the voice input if it's toggled from a key press, as we cannot listen to key events
-                    // if the user is focused on a different app - we could miss the release of the key.
-                    if matches!(
-                        *enabled_from,
-                        voice_input::VoiceInputToggledFrom::Key { .. }
-                    ) {
-                        ctx.dispatch_global_action("root_view:abort_voice_input", &());
-                    }
-                }
-            }
             ctx.dispatch_global_action("root_view:update_quake_mode_state", &update_quake_mode_arg);
 
             let auth_state = AuthStateProvider::as_ref(ctx).get();
@@ -2509,9 +2313,6 @@ pub(crate) fn app_callbacks(
             crash_recovery::CrashRecovery::handle(ctx).update(ctx, |crash_recovery, _ctx| {
                 crash_recovery.teardown();
             });
-            if let Some(initialization) = tracing_initialization.as_mut() {
-                initialization.shutdown();
-            }
 
             // Tear down crash reporting as the last thing we do before the application
             // terminates.
@@ -2907,24 +2708,6 @@ fn launch(ctx: &mut warpui::AppContext, app_state: Option<AppState>, launch_mode
                     }
                 });
                 maybe_register_app_as_login_item(ctx);
-            }
-        }
-        #[cfg_attr(target_family = "wasm", allow(unused_variables))]
-        LaunchMode::CommandLine {
-            command,
-            global_options,
-            ..
-        } => {
-            cfg_if::cfg_if! {
-                if #[cfg(target_family = "wasm")] {
-                    panic!("Cannot execute CLI command {command:?} on the web");
-                } else {
-                    if let Err(err) = crate::ai::agent_sdk::run(ctx, command.clone(), global_options.clone()) {
-                        eprintln!("{err:#}");
-                        report_error!(err);
-                        std::process::exit(1);
-                    }
-                }
             }
         }
         // Proxy should never reach launch() — it's a thin byte bridge.

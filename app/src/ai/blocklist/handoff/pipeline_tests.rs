@@ -21,7 +21,6 @@ use crate::ai::blocklist::{
 use crate::ai::llms::{AvailableLLMs, LLMId, LLMInfo, LLMPreferences, ModelsByFeature};
 use crate::features::FeatureFlag;
 use crate::server::ids::{ServerId, SyncId};
-use crate::server::server_api::ServerApiProvider;
 use crate::server::server_api::ai::{ForkConversationResponse, MockAIClient, SpawnAgentResponse};
 use crate::test_util::add_window_with_terminal;
 use crate::test_util::settings::enable_ai_for_tests;
@@ -86,17 +85,13 @@ fn prepare_falls_back_to_auto_for_an_implicit_local_model() {
 
         let pending = terminal
             .update(&mut app, |view, ctx| {
-                let provider = ServerApiProvider::as_ref(ctx);
                 prepare_handoff(
                     HandoffPrepareInput::new(
                         view.id(),
                         BlocklistAIHistoryModel::handle(ctx),
                         view.ai_controller().clone(),
                         view.ai_context_model().clone(),
-                        SnapshotUploadTarget::Local {
-                            ai_client: provider.get_ai_client(),
-                            http: provider.get_http_client(),
-                        },
+                        SnapshotUploadTarget::Local,
                         HandoffEntryPoint::Ampersand,
                         HandoffSurface::Gui,
                     )
@@ -125,7 +120,7 @@ fn execute_revalidates_current_model_before_returning_future() {
         let mut mock = MockAIClient::new();
         mock.expect_spawn_agent().times(0);
         let client: Arc<dyn AIClient> = Arc::new(mock);
-        let mut pending = pending(client.clone(), None, false, "continue");
+        let mut pending = pending(None, false, "continue");
         pending.selected_model_id = "custom-router:local:byok".to_owned();
         pending.model_is_cloud_runnable = true;
 
@@ -147,7 +142,7 @@ fn execute_revalidates_current_environment_catalog_before_returning_future() {
         let mut mock = MockAIClient::new();
         mock.expect_spawn_agent().times(0);
         let client: Arc<dyn AIClient> = Arc::new(mock);
-        let mut pending = pending(client.clone(), None, false, "continue");
+        let mut pending = pending(None, false, "continue");
         let environment_id = SyncId::ServerId(ServerId::from(1));
         pending.selected_environment_id = Some(environment_id);
         pending.valid_environment_ids.insert(environment_id);
@@ -170,7 +165,7 @@ fn execute_revalidates_current_handoff_enablement_before_returning_future() {
         let mut mock = MockAIClient::new();
         mock.expect_spawn_agent().times(0);
         let client: Arc<dyn AIClient> = Arc::new(mock);
-        let pending = pending(client.clone(), None, false, "continue");
+        let pending = pending(None, false, "continue");
 
         let future = app.update(|ctx| execute_handoff(pending, client, None, None, ctx));
         let HandoffCommitOutcome::Rejected { error, .. } = future.await else {
@@ -184,7 +179,6 @@ fn snapshot_token() -> InitialSnapshotToken {
 }
 
 fn pending(
-    ai_client: Arc<dyn AIClient>,
     source_token: Option<String>,
     source_conversation_active: bool,
     prompt: &str,
@@ -216,10 +210,7 @@ fn pending(
             computer_use_enabled: Some(true),
             ..Default::default()
         },
-        snapshot_target: SnapshotUploadTarget::Local {
-            ai_client,
-            http: Arc::new(http_client::Client::new_for_test()),
-        },
+        snapshot_target: SnapshotUploadTarget::Local,
         snapshot_disabled: true,
         orchestration_handoff: Some(true),
         team_scope: RequestTeamScope::from_scope(&TeamContextForOperation::new_for_test(7.into())),
@@ -278,17 +269,13 @@ fn prepare_rejects_an_empty_source_without_a_prompt() {
         initialize_app_for_terminal_view(&mut app);
         let terminal = add_window_with_terminal(&mut app, None);
         let result = terminal.update(&mut app, |view, ctx| {
-            let provider = ServerApiProvider::as_ref(ctx);
             prepare_handoff(
                 HandoffPrepareInput::new(
                     view.id(),
                     BlocklistAIHistoryModel::handle(ctx),
                     view.ai_controller().clone(),
                     view.ai_context_model().clone(),
-                    SnapshotUploadTarget::Local {
-                        ai_client: provider.get_ai_client(),
-                        http: provider.get_http_client(),
-                    },
+                    SnapshotUploadTarget::Local,
                     HandoffEntryPoint::Ampersand,
                     HandoffSurface::Gui,
                 ),
@@ -309,17 +296,13 @@ fn prepare_accepts_a_cwd_snapshot_without_a_source_or_prompt() {
         let terminal = add_window_with_terminal(&mut app, None);
         let pending = terminal
             .update(&mut app, |view, ctx| {
-                let provider = ServerApiProvider::as_ref(ctx);
                 prepare_handoff(
                     HandoffPrepareInput::new(
                         view.id(),
                         BlocklistAIHistoryModel::handle(ctx),
                         view.ai_controller().clone(),
                         view.ai_context_model().clone(),
-                        SnapshotUploadTarget::Local {
-                            ai_client: provider.get_ai_client(),
-                            http: provider.get_http_client(),
-                        },
+                        SnapshotUploadTarget::Local,
                         HandoffEntryPoint::Ampersand,
                         HandoffSurface::Gui,
                     )
@@ -357,17 +340,13 @@ fn prepare_preserves_untransferred_source_attachments() {
 
         terminal
             .update(&mut app, |view, ctx| {
-                let provider = ServerApiProvider::as_ref(ctx);
                 prepare_handoff(
                     HandoffPrepareInput::new(
                         view.id(),
                         BlocklistAIHistoryModel::handle(ctx),
                         view.ai_controller().clone(),
                         view.ai_context_model().clone(),
-                        SnapshotUploadTarget::Local {
-                            ai_client: provider.get_ai_client(),
-                            http: provider.get_http_client(),
-                        },
+                        SnapshotUploadTarget::Local,
                         HandoffEntryPoint::Ampersand,
                         HandoffSurface::Gui,
                     )
@@ -455,17 +434,13 @@ fn prepare_collects_completed_descendant_paths() {
 
         let pending = terminal
             .update(&mut app, |view, ctx| {
-                let provider = ServerApiProvider::as_ref(ctx);
                 prepare_handoff(
                     HandoffPrepareInput::new(
                         view.id(),
                         BlocklistAIHistoryModel::handle(ctx),
                         view.ai_controller().clone(),
                         view.ai_context_model().clone(),
-                        SnapshotUploadTarget::Local {
-                            ai_client: provider.get_ai_client(),
-                            http: provider.get_http_client(),
-                        },
+                        SnapshotUploadTarget::Local,
                         HandoffEntryPoint::Ampersand,
                         HandoffSurface::Gui,
                     )
@@ -551,17 +526,13 @@ fn prepare_orders_guards_cancellation_token_check_and_attachment_transfer() {
         });
 
         let guarded = terminal.update(&mut app, |view, ctx| {
-            let provider = ServerApiProvider::as_ref(ctx);
             prepare_handoff(
                 HandoffPrepareInput::new(
                     view.id(),
                     BlocklistAIHistoryModel::handle(ctx),
                     view.ai_controller().clone(),
                     view.ai_context_model().clone(),
-                    SnapshotUploadTarget::Local {
-                        ai_client: provider.get_ai_client(),
-                        http: provider.get_http_client(),
-                    },
+                    SnapshotUploadTarget::Local,
                     HandoffEntryPoint::Ampersand,
                     HandoffSurface::Gui,
                 )
@@ -593,17 +564,13 @@ fn prepare_orders_guards_cancellation_token_check_and_attachment_transfer() {
         });
 
         let missing_token = terminal.update(&mut app, |view, ctx| {
-            let provider = ServerApiProvider::as_ref(ctx);
             prepare_handoff(
                 HandoffPrepareInput::new(
                     view.id(),
                     BlocklistAIHistoryModel::handle(ctx),
                     view.ai_controller().clone(),
                     view.ai_context_model().clone(),
-                    SnapshotUploadTarget::Local {
-                        ai_client: provider.get_ai_client(),
-                        http: provider.get_http_client(),
-                    },
+                    SnapshotUploadTarget::Local,
                     HandoffEntryPoint::Ampersand,
                     HandoffSurface::Gui,
                 )
@@ -640,17 +607,13 @@ fn prepare_orders_guards_cancellation_token_check_and_attachment_transfer() {
             );
         });
         let mut pending = terminal.update(&mut app, |view, ctx| {
-            let provider = ServerApiProvider::as_ref(ctx);
             prepare_handoff(
                 HandoffPrepareInput::new(
                     view.id(),
                     BlocklistAIHistoryModel::handle(ctx),
                     view.ai_controller().clone(),
                     view.ai_context_model().clone(),
-                    SnapshotUploadTarget::Local {
-                        ai_client: provider.get_ai_client(),
-                        http: provider.get_http_client(),
-                    },
+                    SnapshotUploadTarget::Local,
                     HandoffEntryPoint::Ampersand,
                     HandoffSurface::Gui,
                 )
@@ -730,12 +693,7 @@ async fn fork_materialization_precedes_exactly_one_spawn() {
     });
 
     let outcome = execute_validated_handoff(
-        pending(
-            client.clone(),
-            Some("source-conversation".to_owned()),
-            true,
-            "",
-        ),
+        pending(Some("source-conversation".to_owned()), true, ""),
         client,
         None,
         Some(materialize),
@@ -802,7 +760,7 @@ async fn fresh_launch_skips_fork_and_materializes_before_spawn() {
     });
 
     let outcome = execute_validated_handoff(
-        pending(client.clone(), None, false, "new task"),
+        pending(None, false, "new task"),
         client,
         None,
         Some(materialize),
@@ -832,7 +790,7 @@ async fn cancellation_after_materialization_stops_before_spawn() {
     });
 
     let outcome = execute_validated_handoff(
-        pending(client.clone(), None, false, "new task"),
+        pending(None, false, "new task"),
         client,
         None,
         Some(materialize),
@@ -878,7 +836,7 @@ async fn cancellation_during_spawn_cancels_the_created_task() {
     });
 
     let outcome = execute_validated_handoff(
-        pending(client.clone(), None, false, "new task"),
+        pending(None, false, "new task"),
         client,
         None,
         Some(materialize),
@@ -902,9 +860,6 @@ async fn snapshot_failure_degrades_to_spawn_without_token() {
 
     let mut mock = MockAIClient::new();
     mock.expect_fork_conversation().times(0);
-    mock.expect_upload_local_handoff_snapshot()
-        .times(1)
-        .returning(|_| Err(anyhow::anyhow!("snapshot unavailable")));
     mock.expect_spawn_agent().times(1).returning(|request, _| {
         assert!(request.initial_snapshot_token.is_none());
         Ok(SpawnAgentResponse {
@@ -914,7 +869,7 @@ async fn snapshot_failure_degrades_to_spawn_without_token() {
         })
     });
     let client: Arc<dyn AIClient> = Arc::new(mock);
-    let mut pending = pending(client.clone(), None, false, "continue");
+    let mut pending = pending(None, false, "continue");
     pending.source_paths = vec![path];
 
     let outcome = execute_validated_handoff(pending, client, None, None).await;
@@ -936,7 +891,7 @@ async fn caller_cancellation_stops_before_spawn() {
     cancel.send(()).expect("handoff cancellation receiver");
 
     let outcome = execute_validated_handoff(
-        pending(client.clone(), None, false, "new task"),
+        pending(None, false, "new task"),
         client,
         Some(cancellation),
         None,

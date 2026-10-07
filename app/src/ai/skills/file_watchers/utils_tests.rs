@@ -17,7 +17,7 @@ use warpui::App;
 
 use super::{
     extract_skill_parent_directory, find_project_skill_files_in_tree, is_home_provider_path,
-    is_home_skill_directory, is_skill_file, read_skills_from_files,
+    is_home_skill_directory, is_skill_file,
 };
 fn project_standing_results(
     skill_paths: impl IntoIterator<Item = StandardizedPath>,
@@ -575,16 +575,6 @@ fn find_skill_files_in_tree_finds_root_skills() {
                 assert!(skill_files.contains(&LocalOrRemotePath::Local(
                     repo.join(".claude/skills/root-skill-2/SKILL.md")
                 )));
-
-                let local_skill_files = skill_files
-                    .into_iter()
-                    .filter_map(|path| path.to_local_path().map(|path| path.to_path_buf()))
-                    .collect::<Vec<_>>();
-                let skills = read_skills_from_files(local_skill_files);
-                assert_eq!(skills.len(), 2);
-                let names: Vec<&str> = skills.iter().map(|s| s.name.as_str()).collect();
-                assert!(names.contains(&"root-skill-1"));
-                assert!(names.contains(&"root-skill-2"));
             });
         });
     });
@@ -742,16 +732,6 @@ fn find_skill_files_in_tree_finds_subdirectory_skills() {
                 assert!(skill_files.contains(&LocalOrRemotePath::Local(
                     repo.join("packages/frontend/.agents/skills/frontend-skill/SKILL.md")
                 )));
-
-                let local_skill_files = skill_files
-                    .into_iter()
-                    .filter_map(|path| path.to_local_path().map(|path| path.to_path_buf()))
-                    .collect::<Vec<_>>();
-                let skills = read_skills_from_files(local_skill_files);
-                assert_eq!(skills.len(), 2);
-                let names: Vec<&str> = skills.iter().map(|s| s.name.as_str()).collect();
-                assert!(names.contains(&"root-skill"));
-                assert!(names.contains(&"frontend-skill"));
             });
         });
     });

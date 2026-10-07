@@ -454,18 +454,12 @@ pub enum FeatureFlag {
     /// Enables auto-opening code review pane on first agent change and its setting UI.
     AutoOpenCodeReviewPane,
 
-    /// Enables the ambient agents command-line interface.
-    AmbientAgentsCommandLine,
-
     /// Feature flags for the Build Plan Auto Reload experiment.
     BuildPlanAutoReloadBannerToggle,
     BuildPlanAutoReloadPostPurchaseModal,
 
     /// Enables inline code review functionality
     InlineCodeReview,
-
-    /// Enables cloud environments management via CLI.
-    CloudEnvironments,
 
     /// Enables the /create-environment slash command for setting up Warp Environments
     CreateEnvironmentSlashCommand,
@@ -475,12 +469,6 @@ pub enum FeatureFlag {
 
     /// Enables the /compact slash command.
     SummarizationConversationCommand,
-
-    /// Enables the provider command for linking third-party services.
-    ProviderCommand,
-
-    /// Enables the integration command for managing agent integrations.
-    IntegrationCommand,
 
     /// Enables the artifact command for uploading and downloading CLI artifacts.
     ArtifactCommand,
@@ -567,9 +555,6 @@ pub enum FeatureFlag {
     /// Enables host selection in cloud mode.
     CloudModeHostSelector,
 
-    /// Enables Warp Managed Secrets functionality.
-    WarpManagedSecrets,
-
     /// Enables support for AM file diffs backed by the V4A patch format.
     V4AFileDiffs,
 
@@ -650,19 +635,8 @@ pub enum FeatureFlag {
     /// Enables auto-syncing ambient plans to Warp Drive.
     SyncAmbientPlans,
 
-    /// Enables platform skills support (--skill flag) for agent runs.
-    ///
-    /// Skills are loaded from `.agents/skills/`, `.warp/skills/`, `.claude/skills/`, and `.codex/skills/`
-    /// directories to provide base prompts for agent runs.
-    OzPlatformSkills,
-    /// Enables Oz identity federation commands.
-    OzIdentityFederation,
-
     /// Gates populating/reading oz updates from channel versions in the changelog model.
     OzChangelogUpdates,
-
-    /// Enables image upload for ambient agents.
-    AmbientAgentsImageUpload,
 
     /// Enables image attachment support for cloud mode conversations.
     CloudModeImageContext,
@@ -812,9 +786,6 @@ pub enum FeatureFlag {
     /// Replaces the in-block warpification banner with a warpify footer.
     WarpifyFooter,
 
-    /// Enables conversation retrieval via the CLI (oz run conversation get, oz run get --conversation).
-    ConversationApi,
-
     /// Guided onboarding flow for existing users introducing HOA features
     /// (vertical tabs, agent inbox, tab configs).
     HOAOnboardingFlow,
@@ -857,10 +828,6 @@ pub enum FeatureFlag {
     /// selector is replaced with "Agent" and users can pick which agent
     /// identity the key authenticates as.
     NamedAgents,
-    /// Gates the driver behavior that writes GitHub credentials to disk
-    /// (`~/.git-credentials`, `~/.config/gh/hosts.yaml`) and runs the
-    /// background refresh loop that keeps them fresh during a task run.
-    GitCredentialRefresh,
 
     /// Gates the v2 billing and usage page redesign.
     BillingAndUsagePageV2,
@@ -911,10 +878,6 @@ pub enum FeatureFlag {
     /// provider-side prompt cache has expired.
     PromptCacheExpiryWarning,
 
-    /// Enables the `--runner` flag on `run-cloud`, which overrides an agent's
-    /// compute (docker image, instance shape, setup commands) by runner ID.
-    CloudRunners,
-
     /// Renders MCP tool-call request and response JSON as an interactive
     /// collapsible tree with typed colors and per-row Copy JSON, instead of
     /// a flat pretty-printed blob.
@@ -935,11 +898,6 @@ pub enum FeatureFlag {
     /// pre-auth slides and post-auth account offer.
     AccountFirstOnboarding,
 
-    /// Accepts well-known non-UUID managed MCP ids (e.g. `"linear"`) as
-    /// `warp_id` values in MCP configs and as bare identifiers in CLI
-    /// `--mcp` arguments, resolved server-side at run setup.
-    WellKnownMcpIds,
-
     /// Automatically attaches the Warp-hosted Factory MCP server
     /// (`/api/v1/mcp/factory`) to agents as a built-in MCP server,
     /// authenticated with the logged-in user's session token. No manual MCP
@@ -951,13 +909,6 @@ pub enum FeatureFlag {
     /// `PricingTransparencyEnabled` flag in warp-server, but is a fully independent
     /// flag — the two do not sync automatically.
     PricingTransparency,
-
-    /// Enables periodic workspace-handoff checkpoints during a cloud agent run,
-    /// rather than only uploading a workspace snapshot once at end-of-run.
-    /// Requires `OzHandoff` to also be enabled; a no-op for local runs and when
-    /// `--no-snapshot` is set. Enabled for dogfood and preview builds while the
-    /// coordinator bakes ahead of a stable rollout.
-    PeriodicHandoffCheckpoints,
 
     /// Observes Ctrl-C (`0x03`) written on the shared-session viewer input
     /// path to a terminal with a working, rich-status-capable CLI agent
@@ -1026,7 +977,6 @@ pub const DOGFOOD_FLAGS: &[FeatureFlag] = &[
     FeatureFlag::ContextLineReviewComments,
     FeatureFlag::RunGeneratorsWithCmdExe,
     FeatureFlag::Projects,
-    FeatureFlag::ProviderCommand,
     FeatureFlag::MarkdownImages,
     FeatureFlag::FileAndDiffSetComments,
     FeatureFlag::FileGlobV2Warnings,
@@ -1067,7 +1017,7 @@ pub const DOGFOOD_FLAGS: &[FeatureFlag] = &[
 
 /// Features enabled for feature preview build users (e.g.: Friends of Warp).
 /// All PREVIEW_FLAGS are also automatically added to dogfood builds (WarpDev).
-pub const PREVIEW_FLAGS: &[FeatureFlag] = &[FeatureFlag::PeriodicHandoffCheckpoints];
+pub const PREVIEW_FLAGS: &[FeatureFlag] = &[];
 
 /// Features enabled for all release builds (i.e.: everything but WarpLocal).
 /// NOTE: if you are promoting a feature from Preview to launch, you'll likely
@@ -1148,9 +1098,6 @@ impl FeatureFlag {
             CodeReviewFind => Some("Enables the find bar in the code review pane."),
             BlocklistMarkdownImages => {
                 Some("Enables rendering markdown images inline in AI block list responses.")
-            }
-            CloudEnvironments => {
-                Some("Enables creating and managing Warp Environments via the CLI.")
             }
             CreateEnvironmentSlashCommand => Some(
                 "Enables the /create environment slash command for setting up Warp Environments with custom configurations.",

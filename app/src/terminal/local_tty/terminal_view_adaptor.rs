@@ -49,7 +49,6 @@ use crate::features::FeatureFlag;
 use crate::network::{NetworkStatusEvent, NetworkStatusKind};
 use crate::pane_group::TerminalViewResources;
 use crate::persistence::ModelEvent;
-use crate::server::server_api::ServerApiProvider;
 use crate::server::telemetry::{TelemetryAgentViewEntryOrigin, TelemetryEvent};
 use crate::terminal::cli_agent_sessions::{
     CLIAgentInputState, CLIAgentSessionsModel, CLIAgentSessionsModelEvent,
@@ -91,32 +90,6 @@ const ACL_UPDATE_FAILURE_RESPONSE: &str = "Something went wrong. Please try agai
 /// buffer stays in sync.
 fn should_skip_sharer_op(is_ambient_session: bool, op: &CrdtOperation) -> bool {
     is_ambient_session && matches!(op, CrdtOperation::UpdateSelections(_))
-}
-
-/// Decides whether a no-token agent prompt should be honored against a retained
-/// environment-setup-failure debug session, via the REMOTE-2661
-/// `setupFailureDebugAuthorization` server callback. The sharer cannot authenticate the
-/// participant itself, so anything short of an explicit `Ok(true)` rejects the prompt —
-/// deliberately no local fallback.
-async fn is_setup_failure_debug_prompt_authorized(
-    ai_client: &Arc<dyn crate::server::server_api::ai::AIClient>,
-    task_id: crate::ai::ambient_agents::AmbientAgentTaskId,
-    participant_firebase_uid: Option<crate::auth::UserUid>,
-    workload_token: Option<String>,
-) -> bool {
-    let (Some(participant_firebase_uid), Some(workload_token)) =
-        (participant_firebase_uid, workload_token)
-    else {
-        return false;
-    };
-    ai_client
-        .setup_failure_debug_authorization(
-            task_id,
-            workload_token,
-            participant_firebase_uid.as_string(),
-        )
-        .await
-        .unwrap_or(false)
 }
 
 /// Honors an already-authorized agent prompt. Callers must have already checked that
@@ -1557,70 +1530,15 @@ impl TerminalManager<TerminalView> {
                                 .get_task_data(task_id)
                                 .is_some_and(|task| task.is_setup_failure_debug_session_open())
                         });
-                        if let Some(task_id) = task_id {
-                            let participant_firebase_uid = terminal_view
-                                .as_ref(ctx)
-                                .shared_session_presence_manager()
-                                .and_then(|manager| {
-                                    manager.as_ref(ctx).viewer_firebase_uid(participant_id)
-                                });
-                            let Some(participant_firebase_uid) = participant_firebase_uid else {
-                                log::warn!(
-                                    "Rejecting a no-token agent prompt (REMOTE-2661): participant_id={participant_id} has no resolvable firebase_uid to authorize"
-                                );
-                                network.update(ctx, |network, _ctx| {
-                                    network.send_agent_prompt_rejection(
-                                        id.clone(),
-                                        participant_id.clone(),
-                                        AgentPromptFailureReason::InsufficientPermissions,
-                                    );
-                                });
-                                return;
-                            };
-
-                            let ai_client = ServerApiProvider::as_ref(ctx).get_ai_client();
-                            let id = id.clone();
-                            let participant_id = participant_id.clone();
-                            let request = request.clone();
-                            let terminal_view = terminal_view.clone();
-
-                            network.update(ctx, move |_network, ctx| {
-                                ctx.spawn(
-                                    async move {
-                                        let workload_token =
-                                            warp_isolation_platform::issue_workload_token(Some(
-                                                std::time::Duration::from_secs(60),
-                                            ))
-                                            .await
-                                            .map(|issued| issued.token)
-                                            .ok();
-                                        is_setup_failure_debug_prompt_authorized(
-                                            &ai_client,
-                                            task_id,
-                                            Some(participant_firebase_uid),
-                                            workload_token,
-                                        )
-                                        .await
-                                    },
-                                    move |network, authorized, ctx| {
-                                        if authorized {
-                                            accept_agent_prompt(
-                                                &terminal_view,
-                                                request,
-                                                participant_id,
-                                                ctx,
-                                            );
-                                        } else {
-                                            log::warn!(
-                                                "Rejecting a no-token agent prompt while retaining a setup-failed run (REMOTE-2661): server denied authorization or the call failed"
-                                            );
-                                            network.send_agent_prompt_rejection(
-                                                id,
-                                                participant_id,
-                                                AgentPromptFailureReason::InsufficientPermissions,
-                                            );
-                                        }
-                                    },
+                        if task_id.is_some() {
+                            log::warn!(
+                                "Rejecting a no-token agent prompt while retaining a setup-failed run (REMOTE-2661): authorization needs a workload token this client cannot issue"
+                            );
+                            network.update(ctx, |network, _ctx| {
+                                network.send_agent_prompt_rejection(
+                                    id.clone(),
+                                    participant_id.clone(),
+                                    AgentPromptFailureReason::InsufficientPermissions,
                                 );
                             });
                             return;
@@ -2287,7 +2205,3 @@ pub fn shutdown_all_pty_event_loops(ctx: &mut AppContext) {
         })
     })
 }
-
-#[cfg(test)]
-#[path = "terminal_view_adaptor_tests.rs"]
-mod tests;

@@ -1,17 +1,14 @@
 //! Snapshot derivation and upload used by the shared handoff commit pipeline.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use remote_server::proto::UploadHandoffSnapshotResponse;
 use warp_util::standardized_path::StandardizedPath;
 use warpui::{SingletonEntity, ViewContext};
 
-use crate::ai::agent_sdk::driver::upload_snapshot_for_handoff;
 use crate::ai::blocklist::handoff::touched_repos::{TouchedWorkspace, derive_touched_workspace};
 use crate::remote_server::manager::RemoteServerManager;
-use crate::server::server_api::ServerApiProvider;
-use crate::server::server_api::ai::{AIClient, InitialSnapshotToken};
+use crate::server::server_api::ai::InitialSnapshotToken;
 use crate::terminal::model::session::SessionId;
 use crate::workspace::Workspace;
 
@@ -37,11 +34,9 @@ pub(super) enum HandoffUploadResult {
 /// Callers resolve this from `RemoteServerManager::host_request_handle` before
 /// committing, keeping session-awareness out of the upload function itself.
 pub enum SnapshotUploadTarget {
-    /// Run `derive_touched_workspace` + `upload_snapshot_for_handoff` locally.
-    Local {
-        ai_client: Arc<dyn AIClient>,
-        http: Arc<http_client::Client>,
-    },
+    /// Derive the touched workspace locally. Local snapshot upload is unavailable, so this
+    /// target always fails the upload.
+    Local,
     /// Delegate to the remote server daemon via `UploadHandoffSnapshot` RPC.
     Remote {
         handle: remote_server::manager::HostRequestHandle,
@@ -123,24 +118,16 @@ pub(super) async fn upload_handoff_snapshot(
             };
             (TouchedWorkspace::default(), result)
         }
-        SnapshotUploadTarget::Local { ai_client, http } => {
+        SnapshotUploadTarget::Local => {
             let local_paths: Vec<PathBuf> =
                 paths.iter().map(|sp| sp.to_local_path_lossy()).collect();
             let workspace = derive_touched_workspace(local_paths).await;
-            let repo_paths: Vec<_> = workspace.repos.iter().map(|r| r.git_root.clone()).collect();
-            let upload_result = upload_snapshot_for_handoff(
-                repo_paths,
-                workspace.orphan_files.clone(),
-                ai_client,
-                http.as_ref(),
+            (
+                workspace,
+                Err(anyhow::anyhow!(
+                    "Local handoff snapshot upload is not supported"
+                )),
             )
-            .await;
-            let result = match upload_result {
-                Ok(Some(token)) => Ok(HandoffUploadResult::Uploaded(token)),
-                Ok(None) => Ok(HandoffUploadResult::EmptyWorkspace),
-                Err(e) => Err(e),
-            };
-            (workspace, result)
         }
     }
 }
@@ -158,12 +145,6 @@ pub(crate) fn resolve_upload_target(
         Some(host_id) => SnapshotUploadTarget::Remote {
             handle: RemoteServerManager::as_ref(ctx).host_request_handle(&host_id),
         },
-        None => {
-            let server_api_provider = ServerApiProvider::as_ref(ctx);
-            SnapshotUploadTarget::Local {
-                ai_client: server_api_provider.get_ai_client(),
-                http: server_api_provider.get_http_client(),
-            }
-        }
+        None => SnapshotUploadTarget::Local,
     }
 }

@@ -70,31 +70,6 @@ pub enum OrchestrationEventServiceEvent {
     EventsReady { conversation_id: AIConversationId },
 }
 
-/// Thread-safe handle that commits a conversation's ambient run as exiting from any thread,
-/// without needing model access — including from an idle-timeout's background timer thread, at
-/// the exact moment it decides to fire, before anything (including the timer's own completion
-/// signal) can make that decision observable elsewhere (QUALITY-1801). This is the only writer
-/// of the exiting flag; queued-event cleanup (`drop_pending_events_for_exiting_conversation`)
-/// runs later, once model access is available, and never needs to touch it.
-///
-/// Gated to `not(target_family = "wasm")`: nothing compiled into a wasm build ever needs to
-/// commit off the model thread this way, so an unguarded `pub` item here would be dead code
-/// under the wasm lint's `-D warnings`.
-#[cfg(not(target_family = "wasm"))]
-#[derive(Clone)]
-pub struct ExitCommitHandle(Arc<Mutex<HashSet<AIConversationId>>>);
-
-#[cfg(not(target_family = "wasm"))]
-impl ExitCommitHandle {
-    /// Commits `conversation_id` as exiting. Safe to call from any thread, including
-    /// concurrently with a model-thread read of `is_conversation_exiting`.
-    pub fn commit(&self, conversation_id: AIConversationId) {
-        if let Ok(mut exiting) = self.0.lock() {
-            exiting.insert(conversation_id);
-        }
-    }
-}
-
 /// Synchronous state manager for orchestration event queuing, delivery tracking, and readiness detection.
 pub struct OrchestrationEventService {
     pending_events: HashMap<AIConversationId, Vec<PendingEvent>>,
@@ -124,19 +99,12 @@ impl OrchestrationEventService {
         }
     }
 
-    /// Vends a thread-safe handle that can commit conversations as exiting from any thread. See
-    /// [`ExitCommitHandle`].
-    #[cfg(not(target_family = "wasm"))]
-    pub fn exit_commit_handle(&self) -> ExitCommitHandle {
-        ExitCommitHandle(Arc::clone(&self.exiting_conversations))
-    }
-
     /// Drops any orchestration events still queued for `conversation_id`, since its ambient
     /// run's exit is now being finalized and they arrived too late to ever be delivered
     /// (QUALITY-1801). Assumes [`ExitCommitHandle::commit`] already committed the exiting flag
     /// for this conversation — by the time this runs, on the model thread, it always has — so
     /// this only does the part that needs model access: the flag itself is not touched here.
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(test)]
     pub fn drop_pending_events_for_exiting_conversation(
         &mut self,
         conversation_id: AIConversationId,
@@ -308,7 +276,7 @@ impl OrchestrationEventService {
         ctx.emit(OrchestrationEventServiceEvent::EventsReady { conversation_id });
     }
 
-    #[cfg(any(test, not(target_family = "wasm")))]
+    #[cfg(test)]
     pub fn has_pending_events(&self, conversation_id: AIConversationId) -> bool {
         self.pending_events
             .get(&conversation_id)

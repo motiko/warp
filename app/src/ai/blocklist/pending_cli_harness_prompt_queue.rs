@@ -10,7 +10,7 @@ use crate::ai::ambient_agents::AmbientAgentTaskId;
 /// File attachments are not supported here — see `PendingCliHarnessPromptQueue::queue`.
 ///
 /// CLI-harness sessions only exist on local/native builds, so this whole type is unread on wasm.
-#[cfg_attr(target_family = "wasm", allow(dead_code))]
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug)]
 pub(crate) struct QueuedCliHarnessPrompt {
     pub(crate) prompt: String,
@@ -55,14 +55,14 @@ impl PendingCliHarnessPromptQueue {
 
     /// Removes and returns any prompts queued for `task_id`, in FIFO order. Called once the
     /// task's CLI-harness session starts.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn drain(&mut self, task_id: AmbientAgentTaskId) -> Vec<QueuedCliHarnessPrompt> {
         self.pending.remove(&task_id).unwrap_or_default()
     }
 
     /// Drops any prompts queued for `task_id` without delivering them, e.g. when its CLI
     /// session's driver run ends before the harness ever started.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn clear(&mut self, task_id: AmbientAgentTaskId) {
         self.pending.remove(&task_id);
     }

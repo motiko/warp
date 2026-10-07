@@ -1,18 +1,16 @@
 //! `AppContext`-backed catalog lookups, default resolution, and
 //! persistence helpers for orchestration edit flows. No GUI types.
 
-use ai::agent::action::RunAgentsRequest;
 use settings::Setting;
 use warp_cli::agent::Harness;
 use warp_errors::report_if_error;
 use warpui::{AppContext, SingletonEntity};
 
 use crate::LLMPreferences;
-use crate::ai::auth_secret_types::auth_secret_types_for_harness;
 use crate::ai::cloud_agent_settings::{AuthSecretPreference, CloudAgentSettings};
 use crate::ai::cloud_environments::CloudEnvironmentCatalog;
 use crate::ai::connected_self_hosted_workers::WARP_WORKER_HOST;
-use crate::ai::harness_availability::{AuthSecretFetchState, HarnessAvailabilityModel};
+use crate::ai::harness_availability::HarnessAvailabilityModel;
 use crate::ai::llms::LLMInfo;
 use crate::ai::orchestration::config_state::AuthSecretSelection;
 use crate::workspaces::user_workspaces::{TeamScope, UserWorkspaces};
@@ -193,24 +191,9 @@ pub fn resolve_default_auth_secret_for_harness<S: TeamScope + ?Sized>(
     if harness == Harness::Oz {
         return None;
     }
-    let persisted = match CloudAgentSettings::as_ref(ctx)
-        .auth_secret_preference(team_scope, harness)
-    {
+    match CloudAgentSettings::as_ref(ctx).auth_secret_preference(team_scope, harness) {
         Some(AuthSecretPreference::Named(name)) if !name.trim().is_empty() => Some(name),
         Some(AuthSecretPreference::Named(_)) | Some(AuthSecretPreference::Inherit) | None => None,
-    };
-
-    let availability = HarnessAvailabilityModel::as_ref(ctx);
-    match availability.auth_secrets_for(team_scope, harness) {
-        AuthSecretFetchState::Loaded(secrets) => {
-            // Drop the persisted name if the secret was deleted server-side.
-            persisted.filter(|name| secrets.iter().any(|s| s.name == *name))
-        }
-        // Pre-fetch: optimistically show the persisted name; the
-        // `AuthSecretsChanged` subscription will re-resolve.
-        AuthSecretFetchState::NotFetched
-        | AuthSecretFetchState::Loading
-        | AuthSecretFetchState::Failed(_) => persisted,
     }
 }
 
@@ -259,77 +242,9 @@ pub(crate) fn persist_auth_secret_selection<S: TeamScope + ?Sized>(
     let preference = match selection {
         AuthSecretSelection::Named(name) => Some(AuthSecretPreference::Named(name.clone())),
         AuthSecretSelection::Inherit => Some(AuthSecretPreference::Inherit),
-        AuthSecretSelection::Unset | AuthSecretSelection::CreatingNew => None,
+        AuthSecretSelection::Unset => None,
     };
     CloudAgentSettings::handle(ctx).update(ctx, |settings, ctx| {
         settings.persist_auth_secret_preference(team_scope, harness, preference, ctx);
     });
-}
-
-/// Whether Remote execution of `request` requires a managed auth secret
-/// (non-Oz cloud harness with at least one supported secret type).
-fn requires_default_auth_secret_for_execution(request: &RunAgentsRequest) -> bool {
-    if !request.execution_mode.is_remote() {
-        return false;
-    }
-    let Some(harness) = Harness::parse_orchestration_harness(&request.harness_type) else {
-        return false;
-    };
-    harness != Harness::Oz && !auth_secret_types_for_harness(harness).is_empty()
-}
-
-/// Whether the request can execute as-is: either it doesn't need a
-/// managed auth secret, already carries one, or a persisted default
-/// exists for the harness.
-pub(crate) fn can_execute_with_auth_secret<S: TeamScope + ?Sized>(
-    request: &RunAgentsRequest,
-    team_scope: &S,
-    ctx: &AppContext,
-) -> bool {
-    if !requires_default_auth_secret_for_execution(request) {
-        return true;
-    }
-    if request
-        .harness_auth_secret_name
-        .as_deref()
-        .is_some_and(|name| !name.trim().is_empty())
-    {
-        return true;
-    }
-    default_auth_secret_name_for_harness(team_scope, &request.harness_type, ctx).is_some()
-}
-
-/// Returns the persisted default managed-secret name for a harness, if any.
-pub(crate) fn default_auth_secret_name_for_harness<S: TeamScope + ?Sized>(
-    team_scope: &S,
-    harness_type: &str,
-    ctx: &AppContext,
-) -> Option<String> {
-    let harness = Harness::parse_orchestration_harness(harness_type)?;
-    if harness == Harness::Oz {
-        return None;
-    }
-    match CloudAgentSettings::as_ref(ctx).auth_secret_preference(team_scope, harness) {
-        Some(AuthSecretPreference::Named(name)) if !name.trim().is_empty() => Some(name),
-        Some(AuthSecretPreference::Named(_)) | Some(AuthSecretPreference::Inherit) | None => None,
-    }
-}
-
-/// Fills `harness_auth_secret_name` from the persisted scoped harness default
-/// when the request needs one and doesn't already carry a name.
-pub(crate) fn populate_default_auth_secret_for_execution<S: TeamScope + ?Sized>(
-    request: &mut RunAgentsRequest,
-    team_scope: &S,
-    ctx: &AppContext,
-) {
-    if !requires_default_auth_secret_for_execution(request)
-        || request
-            .harness_auth_secret_name
-            .as_deref()
-            .is_some_and(|name| !name.trim().is_empty())
-    {
-        return;
-    }
-    request.harness_auth_secret_name =
-        default_auth_secret_name_for_harness(team_scope, &request.harness_type, ctx);
 }

@@ -931,7 +931,7 @@ impl ServerModel {
                         self.handle_resync_codebase(m, &request_id, conn_id, ctx)
                     }
                     Some(host_scoped_request::Message::UploadHandoffSnapshot(m)) => {
-                        self.handle_upload_handoff_snapshot(m, &request_id, conn_id, ctx)
+                        self.handle_upload_handoff_snapshot(m, &request_id)
                     }
                     Some(host_scoped_request::Message::GitCommitChain(m)) => {
                         self.handle_git_commit_chain(m, &request_id, conn_id, ctx)
@@ -2867,50 +2867,17 @@ impl ServerModel {
         &mut self,
         msg: UploadHandoffSnapshot,
         request_id: &RequestId,
-        conn_id: ConnectionId,
-        ctx: &mut ModelContext<Self>,
     ) -> HandlerOutcome {
         log::info!(
-            "Handling UploadHandoffSnapshot ({} paths, request_id={request_id})",
+            "Rejecting UploadHandoffSnapshot ({} paths, request_id={request_id}): snapshot upload is not supported",
             msg.paths.len(),
         );
-
-        let server_api = ServerApiProvider::handle(ctx);
-        let ai_client = server_api.as_ref(ctx).get_ai_client();
-        let http = server_api.as_ref(ctx).get_http_client();
-
-        // Convert proto strings → StandardizedPath at the boundary; invalid
-        // entries are logged and dropped.
-        let paths: Vec<StandardizedPath> = msg
-            .paths
-            .into_iter()
-            .filter_map(|raw| match StandardizedPath::try_new(&raw) {
-                Ok(sp) => Some(sp),
-                Err(e) => {
-                    log::warn!("UploadHandoffSnapshot: skipping invalid path: {e}");
-                    None
-                }
-            })
-            .collect();
-        let request_id_for_response = request_id.clone();
-
-        let handle = self.spawn_request_handler(
-            request_id.clone(),
-            async move {
-                super::handoff_snapshot::gather_and_upload_handoff_snapshot(paths, ai_client, &http)
-                    .await
-            },
-            move |me, result, _ctx| {
-                let response = upload_result_to_proto(result);
-                me.send_server_message(
-                    Some(conn_id),
-                    Some(&request_id_for_response),
-                    server_message::Message::UploadHandoffSnapshotResponse(response),
-                );
-            },
-            ctx,
-        );
-        HandlerOutcome::Async(Some(handle))
+        let response = upload_result_to_proto(Err(anyhow::anyhow!(
+            "Handoff snapshot upload is not supported by this server"
+        )));
+        HandlerOutcome::Sync(server_message::Message::UploadHandoffSnapshotResponse(
+            response,
+        ))
     }
 
     /// Handles `GetBranches` — request/response.

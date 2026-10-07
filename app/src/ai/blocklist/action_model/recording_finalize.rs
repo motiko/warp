@@ -14,7 +14,7 @@ use super::recording_controller::{
 };
 use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::agent_sdk::artifact_upload::{FileArtifactUploadRequest, FileArtifactUploader};
+use crate::ai::artifact_upload::{FileArtifactUploadRequest, FileArtifactUploader};
 use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::server::server_api::ServerApiProvider;
 

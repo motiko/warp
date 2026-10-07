@@ -47,18 +47,6 @@ impl Channel {
         }
     }
 
-    /// Returns the CLI command name corresponding to this channel.
-    pub fn cli_command_name(&self) -> &'static str {
-        match self {
-            Channel::Stable => "oz",
-            Channel::Dev => "oz-dev",
-            Channel::Preview => "oz-preview",
-            Channel::Local => "oz-local",
-            Channel::Integration => "oz-integration",
-            Channel::Oss => "alefbet-cli",
-        }
-    }
-
     /// Returns the Warp Control CLI command name corresponding to this channel.
     pub fn warpctrl_command_name(&self) -> &'static str {
         match self {

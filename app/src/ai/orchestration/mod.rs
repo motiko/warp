@@ -20,10 +20,6 @@ pub use providers::{
     resolve_auth_secret_selection_for_harness, resolve_default_environment_id,
     resolve_default_host_slug,
 };
-pub(crate) use providers::{
-    can_execute_with_auth_secret, persist_auth_secret_selection,
-    populate_default_auth_secret_for_execution,
-};
 pub(crate) use remote_child::should_disable_snapshot;
 pub use remote_child::{
     CloudAgentStartupBlocker, CloudAgentStartupFailure, CloudAgentStartupIssue,
@@ -32,7 +28,7 @@ pub use remote_child::{
 };
 pub(crate) use snapshots::AUTH_SECRET_INHERIT_LABEL;
 pub use snapshots::{
-    OptionBadge, OptionFooter, OptionRow, OptionSnapshot, OptionSourceStatus, api_key_snapshot,
+    OptionBadge, OptionRow, OptionSnapshot, OptionSourceStatus, api_key_snapshot,
     build_runner_snapshot, environment_snapshot, harness_snapshot, host_snapshot, model_snapshot,
 };
 pub use validation::{

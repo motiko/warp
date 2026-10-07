@@ -10,7 +10,6 @@ use parking_lot::RwLock;
 use pathfinder_color::ColorU;
 use pathfinder_geometry::vector::vec2f;
 use warp_cli::agent::Harness;
-use warp_cli::skill::SkillSpec;
 use warp_core::channel::ChannelState;
 use warp_core::ui::color::coloru_with_opacity;
 use warp_graphql::queries::get_runners::Runner;
@@ -32,8 +31,6 @@ use warpui::{
 };
 
 use crate::ai::agent::api::ServerConversationToken;
-#[cfg(not(target_family = "wasm"))]
-use crate::ai::agent::conversation::AIAgentHarness;
 use crate::ai::agent::conversation::{
     AIConversation, AIConversationId, ConversationStatus, StatusColorStyle,
 };
@@ -54,6 +51,7 @@ use crate::ai::cloud_environments::{AmbientAgentEnvironment, CloudAmbientAgentEn
 use crate::ai::harness_availability::HarnessAvailabilityModel;
 use crate::ai::harness_display;
 use crate::ai::runner_display::{self, RunnerPlatform};
+use crate::ai::skills::SkillSpec;
 use crate::appearance::Appearance;
 use crate::auth::UserUid;
 use crate::cloud_object::CloudObjectLookup as _;
@@ -680,10 +678,6 @@ pub enum ConversationDetailsPanelAction {
 #[derive(Debug)]
 enum DetailsPanelLocalContinuationInfo {
     Conversation(AIConversationId),
-    ThirdPartyTask {
-        task_id: AmbientAgentTaskId,
-        harness: AIAgentHarness,
-    },
 }
 
 pub fn init(app: &mut AppContext) {
@@ -903,7 +897,6 @@ impl ConversationDetailsPanel {
                 ))
             }
             PanelMode::Task {
-                task_id,
                 display_status,
                 conversation_id,
                 ..
@@ -914,18 +907,6 @@ impl ConversationDetailsPanel {
                 }
 
                 match self.data.harness {
-                    Some(Harness::Claude) => {
-                        Some(DetailsPanelLocalContinuationInfo::ThirdPartyTask {
-                            task_id: *task_id.as_ref()?,
-                            harness: AIAgentHarness::ClaudeCode,
-                        })
-                    }
-                    Some(Harness::Codex) => {
-                        Some(DetailsPanelLocalContinuationInfo::ThirdPartyTask {
-                            task_id: *task_id.as_ref()?,
-                            harness: AIAgentHarness::Codex,
-                        })
-                    }
                     Some(Harness::Oz) | None => {
                         let server_token =
                             ServerConversationToken::new(conversation_id.as_ref()?.clone());
@@ -933,7 +914,13 @@ impl ConversationDetailsPanel {
                             .find_conversation_id_by_server_token(&server_token)
                             .map(DetailsPanelLocalContinuationInfo::Conversation)
                     }
-                    Some(Harness::Gemini | Harness::OpenCode | Harness::Unknown) => None,
+                    Some(
+                        Harness::Claude
+                        | Harness::Codex
+                        | Harness::Gemini
+                        | Harness::OpenCode
+                        | Harness::Unknown,
+                    ) => None,
                 }
             }
         }
@@ -2563,14 +2550,6 @@ impl TypedActionView for ConversationDetailsPanel {
                         DetailsPanelLocalContinuationInfo::Conversation(conversation_id) => {
                             ctx.dispatch_typed_action(
                                 &WorkspaceAction::ContinueConversationLocally { conversation_id },
-                            );
-                        }
-                        DetailsPanelLocalContinuationInfo::ThirdPartyTask { task_id, harness } => {
-                            ctx.dispatch_typed_action(
-                                &WorkspaceAction::ContinueThirdPartyConversationLocally {
-                                    task_id,
-                                    harness,
-                                },
                             );
                         }
                     }

@@ -8,7 +8,7 @@
 # be distributed, one of which is asynchronous and requires apple to process
 # our binary.
 #
-# The exact steps depend on which artifact we are building, the desktop app or the CLI. Overall,
+# The exact steps depend on which artifact we are building, the desktop app or warpctrl. Overall,
 # the steps are:
 #
 # 1) Create the binary or mac bundle by running `cargo`.
@@ -338,8 +338,8 @@ while (( "$#" )); do
       ;;
     --artifact)
       if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
-        if [[ "$2" != "app" && "$2" != "cli" && "$2" != "warpctrl" ]]; then
-          echo "Error: --artifact must be 'app', 'cli', or 'warpctrl', got '$2'" >&2
+        if [[ "$2" != "app" && "$2" != "warpctrl" ]]; then
+          echo "Error: --artifact must be 'app' or 'warpctrl', got '$2'" >&2
           exit 1
         fi
         ARTIFACT="$2"
@@ -365,13 +365,13 @@ elif [[ $RELEASE_CHANNEL = "local" || $RELEASE_CHANNEL = "dev" ]]; then
   # For dev bundles, we want to enable debug assertions to
   # catch violations that would otherwise silently pass in
   # a normal release build (e.g. in stable).
-  if [[ "$ARTIFACT" == "cli" || "$ARTIFACT" == "warpctrl" ]]; then
+  if [[ "$ARTIFACT" == "warpctrl" ]]; then
     CARGO_PROFILE="release-cli-debug_assertions"
   else
     CARGO_PROFILE="release-lto-debug_assertions"
   fi
 else
-  if [[ "$ARTIFACT" == "cli" || "$ARTIFACT" == "warpctrl" ]]; then
+  if [[ "$ARTIFACT" == "warpctrl" ]]; then
     CARGO_PROFILE="release-cli"
   else
     CARGO_PROFILE="release-lto"
@@ -489,7 +489,7 @@ else
 fi
 
 # Set artifact-specific configuration.
-if [[ "$ARTIFACT" == cli || "$ARTIFACT" == warpctrl ]]; then
+if [[ "$ARTIFACT" == warpctrl ]]; then
   UNIVERSAL_BINARY=false
   OPEN_AFTER_BUNDLE=false
   FEATURES="$FEATURES,standalone"
@@ -501,7 +501,7 @@ fi
 # A universal binary always has a native slice, so it is unaffected by the
 # host/target mismatch below. This must run after the artifact-specific
 # configuration above, since that's what gives UNIVERSAL_BINARY its final
-# value (e.g. cli/warpctrl always force it to false).
+# value (e.g. warpctrl always forces it to false).
 CAN_EXECUTE_DEFAULT_TARGET=true
 if [[ "$UNIVERSAL_BINARY" != true && "$HOST_ARCH" == "x86_64" && "$DEFAULT_TARGET" == "$ARM_TARGET" ]]; then
   CAN_EXECUTE_DEFAULT_TARGET=false
@@ -517,7 +517,7 @@ fi
 # using the same feature flags and profile that we would be using in production.
 if [[ "$CHECK_ONLY" == "true" ]]; then
   cargo check --profile "$CARGO_PROFILE" --bin "$WARP_BIN" --target "$DEFAULT_TARGET" --features "$FEATURES"
-  if [[ $UNIVERSAL_BINARY = true && "$ARTIFACT" != "cli" && "$ARTIFACT" != "warpctrl" ]]; then
+  if [[ $UNIVERSAL_BINARY = true && "$ARTIFACT" != "warpctrl" ]]; then
     cargo check --profile "$CARGO_PROFILE" --bin "$WARP_BIN" --target "$ADDITIONAL_TARGET" --features "$FEATURES"
   fi
   exit 0
@@ -691,31 +691,6 @@ if [[ "$ARTIFACT" == "app" ]]; then
     "$WORKSPACE_ROOT_DIR/script/prepare_bundled_pprof" "$HELPERS_DIR"
   fi
 
-  # Determine CLI wrapper script path based on release channel.  Each channel's
-  # value here must match `Channel::cli_command_name` in the Rust source.
-  if [[ $RELEASE_CHANNEL = "stable" ]]; then
-    CLI_SCRIPT_PATH="$BUNDLED_RESOURCES_DIR/bin/oz"
-  elif [[ $RELEASE_CHANNEL = "oss" ]]; then
-    CLI_SCRIPT_PATH="$BUNDLED_RESOURCES_DIR/bin/alefbet-cli"
-  else
-    CLI_SCRIPT_PATH="$BUNDLED_RESOURCES_DIR/bin/oz-$RELEASE_CHANNEL"
-  fi
-
-  echo "Creating Resources/bin directory and CLI wrapper script..."
-  mkdir -p "$BUNDLED_RESOURCES_DIR/bin"
-  
-  cat > "$CLI_SCRIPT_PATH" << 'EOF'
-#!/bin/bash
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec -a "$0" "$script_dir/../../MacOS/WARP_BIN_PLACEHOLDER" "$@"
-EOF
-  
-  # Replace the placeholder with the actual binary name
-  sed -i '' "s/WARP_BIN_PLACEHOLDER/$WARP_BIN/" "$CLI_SCRIPT_PATH"
-  
-  # Make the script executable
-  chmod +x "$CLI_SCRIPT_PATH"
-
   if [[ ",$FEATURES," =~ ",warp_control_cli," ]]; then
     # Each value must match `Channel::warpctrl_command_name` in the Rust source.
     if [[ $RELEASE_CHANNEL = "stable" ]]; then
@@ -735,7 +710,7 @@ EOF
   # Store the built artifact locations for GitHub Actions outputs.
   BINARY_PATH="target/$DEFAULT_TARGET/$TARGET_PROFILE_DIR/$WARP_BIN"
   DMG_PATH="$OUT_DIR/$FINAL_DMG_NAME"
-elif [[ "$ARTIFACT" == "cli" || "$ARTIFACT" == "warpctrl" ]]; then
+elif [[ "$ARTIFACT" == "warpctrl" ]]; then
   if [[ $BUILD_BINARY == true ]]; then
     # Create Info.plist before building the app, since it's embedded at build time.
     # Apple's codesigning tools will detect Info.plist files in the same directory as an executable.
@@ -867,7 +842,7 @@ if [[ $SELFSIGN = true ]]; then
   if [[ "$ARTIFACT" == app ]]; then
     echo "Self-signing $BUNDLE_DIR/$WARP_APP_NAME.app with ${SIGNING_CERT}..."
     codesign --force --deep --options runtime --sign "$SIGNING_CERT" "$BUNDLE_DIR/$WARP_APP_NAME.app" --entitlements script/Debug-Entitlements.plist
-  elif [[ "$ARTIFACT" == cli || "$ARTIFACT" == warpctrl ]]; then
+  elif [[ "$ARTIFACT" == warpctrl ]]; then
     echo "Self-signing $OUT_DIR/$WARP_BIN with ${SIGNING_CERT}..."
     codesign --force --options runtime --sign "$SIGNING_CERT" "$OUT_DIR/$WARP_BIN" --entitlements script/Debug-Entitlements.plist
   fi
@@ -876,7 +851,7 @@ elif [[ $CODESIGN = true ]]; then
     echo "Codesigning $BUNDLE_DIR/$WARP_APP_NAME.app..."
     # Use --deep so we sign bundled frameworks as well
     codesign_with_retry --deep -f -o runtime --timestamp -s "$APPLE_TEAM_ID" "$BUNDLE_DIR/$WARP_APP_NAME.app" --entitlements script/Entitlements.plist
-  elif [[ "$ARTIFACT" == cli || "$ARTIFACT" == warpctrl ]]; then
+  elif [[ "$ARTIFACT" == warpctrl ]]; then
     echo "Codesigning $OUT_DIR/$WARP_BIN..."
     codesign_with_retry -f -o runtime --timestamp -s "$APPLE_TEAM_ID" "$OUT_DIR/$WARP_BIN" --entitlements script/Entitlements.plist
 
@@ -982,7 +957,7 @@ if [[ $CODESIGN = true ]]; then
   echo "Verifying notarization ticket..."
   if [[ "$ARTIFACT" = app ]]; then
     xcrun stapler validate "$DMG_DIR/$DMG_NAME"
-  elif [[ "$ARTIFACT" = cli || "$ARTIFACT" = warpctrl ]]; then
+  elif [[ "$ARTIFACT" = warpctrl ]]; then
     spctl -a -t open --context context:primary-signature -vv "$OUT_DIR/$WARP_BIN"
   fi
 fi

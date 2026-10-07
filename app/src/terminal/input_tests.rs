@@ -14,8 +14,6 @@ use repo_metadata::watcher::DirectoryWatcher;
 use session_sharing_protocol::common::Role;
 use smol_str::SmolStr;
 use unindent::Unindent;
-#[cfg(feature = "voice_input")]
-use voice_input::VoiceInputToggledFrom;
 use warp_completer::completer::{
     EngineFileType, Match, MatchStrategy, MatchedSuggestion, PathSeparators, Priority, Suggestion,
     SuggestionResults, SuggestionType,
@@ -39,7 +37,6 @@ use crate::ai::agent::{
 };
 use crate::ai::agent_conversations_model::AgentConversationsModel;
 use crate::ai::blocklist::{AIQueryHistory, BlocklistAIPermissions, ResponseStreamId};
-use crate::ai::cloud_agent_settings::{AuthSecretPreference, CloudAgentSettings};
 use crate::ai::connected_self_hosted_workers::ConnectedSelfHostedWorkersModel;
 use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
 use crate::ai::harness_availability::HarnessAvailabilityModel;
@@ -112,11 +109,9 @@ use crate::test_util::settings::{enable_ai_for_tests, initialize_settings_for_te
 use crate::themes::theme::AnsiColorIdentifier;
 use crate::warp_managed_paths_watcher::WarpManagedPathsWatcher;
 use crate::workspace::{ActiveSession, OneTimeModalModel, ToastStack, WorkspaceRegistry};
-use crate::workspaces::team::Team;
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_workspaces::{TeamContextForOperation, UserWorkspaces};
-use crate::workspaces::workspace::Workspace;
 use crate::{
     AgentNotificationsModel, GlobalResourceHandles, GlobalResourceHandlesProvider,
     ReferralThemeStatus, experiments,
@@ -347,8 +342,6 @@ pub fn initialize_app(app: &mut App) {
     app.add_singleton_model(RepoMetadataModel::new);
     app.add_singleton_model(FileSearchModel::new);
     app.add_singleton_model(RepoOutlines::new_for_test);
-    #[cfg(feature = "voice_input")]
-    app.add_singleton_model(voice_input::VoiceInput::new);
     app.add_singleton_model(|ctx| {
         CodebaseIndexManager::new_for_test(ServerApiProvider::as_ref(ctx).get(), ctx)
     });
@@ -1620,14 +1613,6 @@ fn attach_ambient_view_model_builds_composer_selectors_for_fresh_cloud_pane_in_v
                 input.host_selector().is_some(),
                 "the initial cloud composer state must build the host selector"
             );
-            assert!(
-                input.auth_secret_selector().is_some(),
-                "the initial cloud composer state must build the auth-secret selector"
-            );
-            assert!(
-                input.auth_secret_ftux_view().is_some(),
-                "the initial cloud composer state must build the auth-secret FTUX view"
-            );
         });
     });
 }
@@ -1665,181 +1650,6 @@ fn attach_ambient_view_model_skips_composer_selectors_for_actual_shared_session_
             assert!(
                 input.host_selector().is_none(),
                 "an actual shared-session viewer must not build the host selector"
-            );
-            assert!(
-                input.auth_secret_selector().is_none(),
-                "an actual shared-session viewer must not build the auth-secret selector"
-            );
-            assert!(
-                input.auth_secret_ftux_view().is_none(),
-                "an actual shared-session viewer must not build the auth-secret FTUX view"
-            );
-        });
-    });
-}
-
-#[test]
-fn auth_secret_selectors_follow_their_own_window_team() {
-    App::test((), |mut app| async move {
-        let _cloud_mode_input_v2 = FeatureFlag::CloudModeInputV2.override_enabled(true);
-        initialize_app(&mut app);
-
-        let team_a = Team::from_local_cache(1.into(), "Team A".to_string(), None, None, None, None);
-        let team_b = Team::from_local_cache(2.into(), "Team B".to_string(), None, None, None, None);
-        let workspace = Workspace::from_local_cache(
-            "workspace_uid123456789".to_string().into(),
-            "Workspace".to_string(),
-            Some(vec![team_a.clone(), team_b.clone()]),
-            None,
-        );
-        let workspace_uid = workspace.uid;
-        app.update(|ctx| {
-            UserWorkspaces::handle(ctx).update(ctx, |workspaces, ctx| {
-                workspaces.update_workspaces(vec![workspace], ctx);
-                workspaces.set_current_workspace_uid(workspace_uid, ctx);
-            });
-            CloudAgentSettings::handle(ctx).update(ctx, |settings, ctx| {
-                settings.persist_auth_secret_preference(
-                    &TeamContextForOperation::new_for_test(team_a.uid),
-                    Harness::Claude,
-                    Some(AuthSecretPreference::Named("team-a-key".to_string())),
-                    ctx,
-                );
-                settings.persist_auth_secret_preference(
-                    &TeamContextForOperation::new_for_test(team_b.uid),
-                    Harness::Claude,
-                    Some(AuthSecretPreference::Named("team-b-key".to_string())),
-                    ctx,
-                );
-            });
-        });
-
-        let tips_a = app.add_model(|_| TipsCompleted::default());
-        let (window_a, terminal_a) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_a, None, ctx)
-        });
-        let tips_b = app.add_model(|_| TipsCompleted::default());
-        let (window_b, terminal_b) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_b, None, ctx)
-        });
-        terminal_a.update(&mut app, |view, _| {
-            view.model.lock().set_is_dummy_cloud_mode_session(true);
-        });
-        terminal_b.update(&mut app, |view, _| {
-            view.model.lock().set_is_dummy_cloud_mode_session(true);
-        });
-        UserWorkspaces::handle(&app).update(&mut app, |workspaces, ctx| {
-            workspaces.switch_window_to_team(window_a, team_a.uid, ctx);
-            workspaces.switch_window_to_team(window_b, team_a.uid, ctx);
-        });
-
-        let input_a = terminal_a.read(&app, |view, _| view.input().clone());
-        let terminal_a_id = terminal_a.read(&app, |view, _| view.id());
-        let weak_terminal_a = terminal_a.downgrade();
-        let view_model_a = input_a.update(&mut app, |input, ctx| {
-            let view_model = ctx
-                .add_model(|ctx| AmbientAgentViewModel::new(terminal_a_id, weak_terminal_a, ctx));
-            view_model.update(ctx, |model, ctx| model.set_harness(Harness::Claude, ctx));
-            input.attach_ambient_agent_view_model(view_model.clone(), ctx);
-            view_model
-        });
-
-        let input_b = terminal_b.read(&app, |view, _| view.input().clone());
-        let terminal_b_id = terminal_b.read(&app, |view, _| view.id());
-        let weak_terminal_b = terminal_b.downgrade();
-        let view_model_b = input_b.update(&mut app, |input, ctx| {
-            let view_model = ctx
-                .add_model(|ctx| AmbientAgentViewModel::new(terminal_b_id, weak_terminal_b, ctx));
-            view_model.update(ctx, |model, ctx| model.set_harness(Harness::Claude, ctx));
-            input.attach_ambient_agent_view_model(view_model.clone(), ctx);
-            view_model
-        });
-
-        assert_eq!(
-            view_model_a.read(&app, |model, _| {
-                model.selected_harness_auth_secret_name().map(str::to_owned)
-            }),
-            Some("team-a-key".to_string())
-        );
-        assert_eq!(
-            view_model_b.read(&app, |model, _| {
-                model.selected_harness_auth_secret_name().map(str::to_owned)
-            }),
-            Some("team-a-key".to_string())
-        );
-        let ftux_a = input_a.read(&app, |input, _| {
-            input
-                .auth_secret_ftux_view()
-                .cloned()
-                .expect("cloud composer should have an auth-secret FTUX view")
-        });
-        ftux_a.update(&mut app, |_, ctx| {
-            ctx.emit(AuthSecretFtuxViewEvent::SecretSelected {
-                harness: Harness::Claude,
-                name: "team-a-ftux-key".to_string(),
-            });
-        });
-        assert_eq!(
-            view_model_a.read(&app, |model, _| {
-                model.selected_harness_auth_secret_name().map(str::to_owned)
-            }),
-            Some("team-a-ftux-key".to_string())
-        );
-        app.read(|ctx| {
-            let settings = CloudAgentSettings::as_ref(ctx);
-            assert_eq!(
-                settings.auth_secret_preference(
-                    &TeamContextForOperation::new_for_test(team_a.uid),
-                    Harness::Claude,
-                ),
-                Some(AuthSecretPreference::Named("team-a-ftux-key".to_string()))
-            );
-            assert_eq!(
-                settings.auth_secret_preference(
-                    &TeamContextForOperation::new_for_test(team_b.uid),
-                    Harness::Claude,
-                ),
-                Some(AuthSecretPreference::Named("team-b-key".to_string()))
-            );
-        });
-
-        UserWorkspaces::handle(&app).update(&mut app, |workspaces, ctx| {
-            workspaces.switch_window_to_team(window_a, team_b.uid, ctx);
-        });
-
-        assert_eq!(
-            view_model_a.read(&app, |model, _| {
-                model.selected_harness_auth_secret_name().map(str::to_owned)
-            }),
-            Some("team-b-key".to_string())
-        );
-        assert_eq!(
-            view_model_b.read(&app, |model, _| {
-                model.selected_harness_auth_secret_name().map(str::to_owned)
-            }),
-            Some("team-a-key".to_string())
-        );
-
-        ftux_a.update(&mut app, |_, ctx| {
-            ctx.emit(AuthSecretFtuxViewEvent::Skipped {
-                harness: Harness::Claude,
-            });
-        });
-        app.read(|ctx| {
-            let settings = CloudAgentSettings::as_ref(ctx);
-            assert_eq!(
-                settings.auth_secret_preference(
-                    &TeamContextForOperation::new_for_test(team_a.uid),
-                    Harness::Claude,
-                ),
-                Some(AuthSecretPreference::Named("team-a-ftux-key".to_string()))
-            );
-            assert_eq!(
-                settings.auth_secret_preference(
-                    &TeamContextForOperation::new_for_test(team_b.uid),
-                    Harness::Claude,
-                ),
-                Some(AuthSecretPreference::Inherit)
             );
         });
     });
@@ -5693,39 +5503,6 @@ fn test_new_conversation_input_trigger_remains_single_step_in_non_empty_agent_vi
 }
 
 #[test]
-fn test_create_docker_sandbox_slash_command_executes_and_clears_buffer() {
-    App::test((), |mut app| async move {
-        let _docker_sandbox_flag = FeatureFlag::LocalDockerSandbox.override_enabled(true);
-        initialize_app(&mut app);
-
-        let terminal = add_window_with_bootstrapped_terminal(
-            &mut app, None, /* history_file_commands */
-            None,
-        )
-        .await;
-        let input = terminal.read(&app, |terminal, _| terminal.input().clone());
-
-        input.update(&mut app, |input, ctx| {
-            input.user_insert("draft text", ctx);
-            let handled = input.execute_slash_command(
-                &commands::CREATE_DOCKER_SANDBOX,
-                None,
-                SlashCommandTrigger::input(),
-                /*is_queued_prompt*/ false,
-                None,
-                None,
-                ctx,
-            );
-            assert!(handled);
-        });
-
-        input.read(&app, |input, ctx| {
-            assert!(input.buffer_text(ctx).is_empty());
-        });
-    });
-}
-
-#[test]
 fn test_agent_mode_set_when_block_attached() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
@@ -8208,104 +7985,6 @@ fn test_vim_escape_with_completions() {
 }
 
 #[test]
-#[cfg(feature = "voice_input")]
-fn test_voice_input_toggle_preserves_lock_state() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let terminal = add_window_with_bootstrapped_terminal(
-            &mut app, None, /* history_file_commands */
-            None,
-        )
-        .await;
-        let input = terminal.read(&app, |terminal, _| terminal.input().clone());
-
-        // Start in shell mode with input locked
-        input.update(&mut app, |input, ctx| {
-            input.ai_input_model().update(ctx, |ai_input, ctx| {
-                ai_input.set_input_config(
-                    InputConfig {
-                        input_type: InputType::Shell,
-                        is_locked: true,
-                    },
-                    true, /* is_input_buffer_empty */
-                    None,
-                    ctx,
-                );
-            });
-        });
-
-        // Verify we're in locked shell mode
-        let initial_config = input.read(&app, |input, _| {
-            app.read_model(input.ai_input_model(), |ai_input, _| {
-                ai_input.input_config()
-            })
-        });
-        assert_eq!(initial_config.input_type, InputType::Shell);
-        assert!(initial_config.is_locked);
-
-        // Toggle voice input (should switch to AI mode but preserve lock state)
-        input.update(&mut app, |input, ctx| {
-            input.handle_universal_developer_input_button_bar_event(
-                &UniversalDeveloperInputButtonBarEvent::ToggleVoiceInput(
-                    VoiceInputToggledFrom::Button,
-                ),
-                ctx,
-            );
-        });
-
-        // Verify we're now in AI mode but still locked
-        let after_voice_config = input.read(&app, |input, _| {
-            app.read_model(input.ai_input_model(), |ai_input, _| {
-                ai_input.input_config()
-            })
-        });
-        assert_eq!(after_voice_config.input_type, InputType::AI);
-        assert!(
-            after_voice_config.is_locked,
-            "Input mode lock state should be preserved when toggling voice input"
-        );
-
-        // Test the reverse: start unlocked and ensure it stays unlocked
-        input.update(&mut app, |input, ctx| {
-            input.ai_input_model().update(ctx, |ai_input, ctx| {
-                ai_input.set_input_config(
-                    InputConfig {
-                        input_type: InputType::Shell,
-                        is_locked: false, // Unlocked (auto-detection enabled)
-                    },
-                    true, /* is_input_buffer_empty */
-                    None,
-                    ctx,
-                );
-            });
-        });
-
-        // Toggle voice input again
-        input.update(&mut app, |input, ctx| {
-            input.handle_universal_developer_input_button_bar_event(
-                &UniversalDeveloperInputButtonBarEvent::ToggleVoiceInput(
-                    VoiceInputToggledFrom::Button,
-                ),
-                ctx,
-            );
-        });
-
-        // Verify we're in AI mode but still unlocked
-        let final_config = input.read(&app, |input, _| {
-            app.read_model(input.ai_input_model(), |ai_input, _| {
-                ai_input.input_config()
-            })
-        });
-        assert_eq!(final_config.input_type, InputType::AI);
-        assert!(
-            !final_config.is_locked,
-            "Input mode should remain unlocked (auto-detection) when toggling voice input"
-        );
-    });
-}
-
-#[test]
 fn test_input_type_button_explicit_lock() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
@@ -9351,88 +9030,6 @@ fn test_ai_context_menu_preserves_lock_state() {
         });
         assert_eq!(config_after_close.input_type, InputType::Shell);
         assert!(!config_after_close.is_locked);
-    });
-}
-
-#[test]
-#[cfg(feature = "voice_input")]
-fn test_input_config_transitions() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let terminal = add_window_with_bootstrapped_terminal(
-            &mut app, None, /* history_file_commands */
-            None,
-        )
-        .await;
-        let input = terminal.read(&app, |terminal, _| terminal.input().clone());
-
-        // Test sequence: Shell(locked) -> VoiceInput -> AutoDetection -> AgentMode(locked)
-
-        // Start in locked Shell mode
-        input.update(&mut app, |input, ctx| {
-            input.ai_input_model().update(ctx, |ai_input, ctx| {
-                ai_input.set_input_config(
-                    InputConfig {
-                        input_type: InputType::Shell,
-                        is_locked: true,
-                    },
-                    true, /* is_input_buffer_empty */
-                    None,
-                    ctx,
-                );
-            });
-        });
-
-        // Toggle voice input (should go to AI mode, preserve lock)
-        input.update(&mut app, |input, ctx| {
-            input.handle_universal_developer_input_button_bar_event(
-                &UniversalDeveloperInputButtonBarEvent::ToggleVoiceInput(
-                    VoiceInputToggledFrom::Button,
-                ),
-                ctx,
-            );
-        });
-
-        let config_after_voice = input.read(&app, |input, _| {
-            app.read_model(input.ai_input_model(), |ai_input, _| {
-                ai_input.input_config()
-            })
-        });
-        assert_eq!(config_after_voice.input_type, InputType::AI);
-        assert!(config_after_voice.is_locked);
-
-        // Toggle auto-detection (should unlock and switch to Shell mode for empty buffer)
-        input.update(&mut app, |input, ctx| {
-            input.handle_universal_developer_input_button_bar_event(
-                &UniversalDeveloperInputButtonBarEvent::EnableAutoDetection,
-                ctx,
-            );
-        });
-
-        let config_after_auto = input.read(&app, |input, _| {
-            app.read_model(input.ai_input_model(), |ai_input, _| {
-                ai_input.input_config()
-            })
-        });
-        assert_eq!(config_after_auto.input_type, InputType::Shell);
-        assert!(!config_after_auto.is_locked);
-
-        // Explicitly click AgentMode button (should lock in AI mode)
-        input.update(&mut app, |input, ctx| {
-            input.handle_universal_developer_input_button_bar_event(
-                &UniversalDeveloperInputButtonBarEvent::InputTypeSelected(InputType::AI),
-                ctx,
-            );
-        });
-
-        let final_config = input.read(&app, |input, _| {
-            app.read_model(input.ai_input_model(), |ai_input, _| {
-                ai_input.input_config()
-            })
-        });
-        assert_eq!(final_config.input_type, InputType::AI);
-        assert!(final_config.is_locked);
     });
 }
 

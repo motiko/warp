@@ -17,23 +17,16 @@ use std::sync::OnceLock;
 
 use regex::Regex;
 use settings::Setting;
-#[cfg(not(target_family = "wasm"))]
-use warp_cli::scope::{ObjectScope, TeamSelection};
 use warp_core::features::FeatureFlag;
 use warpui::{AppContext, Entity, SingletonEntity, ViewContext, WeakViewHandle, WindowId};
 
-#[cfg(not(target_family = "wasm"))]
-use super::SoleTeamError;
 use super::UserWorkspaces;
-#[cfg(not(target_family = "wasm"))]
-use crate::ai::ambient_agents::task::TaskScope;
 #[cfg(any(test, feature = "test-util"))]
 use crate::ai::llms::LLMInfo;
 use crate::ai::llms::{LLMId, LLMModelHost, LLMProvider, ModelsByFeature};
 use crate::auth::AuthStateProvider;
 use crate::server::ids::ServerId;
-use crate::settings::{AISettings, AgentModeCommandExecutionPredicate};
-use crate::workspaces::gql_convert::ToAgentModeCommandExecutionPredicates;
+use crate::settings::AISettings;
 use crate::workspaces::team::Team;
 use crate::workspaces::workspace::{
     AdminEnablementSetting, AiAutonomySettings, HostEnablementSetting, LlmHostSettings,
@@ -95,51 +88,6 @@ impl TeamScope for TeamContext<'_> {
     }
 }
 
-/// The team a headless invocation acts as, resolved without a window.
-///
-/// It has two minting roots. [`UserWorkspaces::team_scope_for_cli`] resolves the command-line
-/// selection against the user's memberships and rejects a team they are not on.
-/// [`Self::from_task_scope`] takes the server's record of which team owns a task and performs no
-/// membership check: a service-account worker resuming a run may belong to none of the task's
-/// teams, and the server has already decided the task's ownership.
-#[cfg(not(target_family = "wasm"))]
-pub enum HeadlessTeamScope {
-    Personal,
-    Team(ServerId),
-}
-
-#[cfg(not(target_family = "wasm"))]
-impl HeadlessTeamScope {
-    pub(crate) fn from_task_scope(scope: &TaskScope) -> Self {
-        if !scope.is_team() {
-            return Self::Personal;
-        }
-        match ServerId::try_from(scope.uid.as_str()) {
-            Ok(team_uid) => Self::Team(team_uid),
-            Err(err) => {
-                log::warn!(
-                    "Task reported an invalid team scope uid '{}': {err}",
-                    scope.uid
-                );
-                Self::Personal
-            }
-        }
-    }
-}
-
-#[cfg(not(target_family = "wasm"))]
-impl sealed::Sealed for HeadlessTeamScope {}
-
-#[cfg(not(target_family = "wasm"))]
-impl TeamScope for HeadlessTeamScope {
-    fn team_uid(&self) -> Option<ServerId> {
-        match self {
-            HeadlessTeamScope::Personal => None,
-            HeadlessTeamScope::Team(team_uid) => Some(*team_uid),
-        }
-    }
-}
-
 pub struct ResolvedTeamScope(Option<ServerId>);
 
 impl ResolvedTeamScope {
@@ -180,23 +128,6 @@ impl TeamScope for TeamlessScopeForTest {
 pub type TeamContextResolver = Rc<dyn for<'a> Fn(&'a AppContext) -> TeamContext<'a>>;
 pub(crate) type TeamContextForOperationResolver =
     Rc<dyn Fn(&AppContext) -> TeamContextForOperation>;
-
-#[cfg(not(target_family = "wasm"))]
-#[derive(Debug, thiserror::Error)]
-#[error("you are not on team {team_uid}")]
-pub struct NotATeamMemberError {
-    pub team_uid: ServerId,
-}
-#[cfg(not(target_family = "wasm"))]
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum TeamScopeForCliError {
-    #[error("Invalid --team '{team_uid}': {message}")]
-    InvalidTeamUid { team_uid: String, message: String },
-    #[error(transparent)]
-    NoSoleTeam(#[from] SoleTeamError),
-    #[error(transparent)]
-    NotAMember(#[from] NotATeamMemberError),
-}
 
 /// What windowless Gemini Enterprise credential minting should mint from. See
 /// [`UserWorkspaces::gemini_enterprise_host_for_any_enabling_team`].
@@ -239,51 +170,6 @@ impl UserWorkspaces {
     ) -> TeamContext<'a> {
         let team_uid = self.team_for_view_handle(view, app).map(|team| &team.uid);
         TeamContext { team_uid }
-    }
-
-    /// The scope a headless CLI invocation reads team policy through.
-    #[cfg(not(target_family = "wasm"))]
-    pub(crate) fn team_scope_for_cli(
-        &self,
-        team_selection: &TeamSelection,
-    ) -> Result<HeadlessTeamScope, TeamScopeForCliError> {
-        let team_uid = match &team_selection.team {
-            None => match self.sole_team_uid() {
-                Ok(team_uid) => Some(team_uid),
-                Err(SoleTeamError::NoTeam) => None,
-                Err(error @ SoleTeamError::MoreThanOneTeam { .. }) => {
-                    return Err(error.into());
-                }
-            },
-            Some(None) => Some(self.sole_team_uid()?),
-            Some(Some(team_uid)) => Some(ServerId::try_from(team_uid.as_str()).map_err(|err| {
-                TeamScopeForCliError::InvalidTeamUid {
-                    team_uid: team_uid.to_string(),
-                    message: err.to_string(),
-                }
-            })?),
-        };
-        if let Some(team_uid) = team_uid
-            && !self.is_member_of_team(team_uid)
-        {
-            return Err(NotATeamMemberError { team_uid }.into());
-        }
-        Ok(match team_uid {
-            Some(team_uid) => HeadlessTeamScope::Team(team_uid),
-            None => HeadlessTeamScope::Personal,
-        })
-    }
-
-    #[cfg(not(target_family = "wasm"))]
-    pub(crate) fn team_scope_for_cli_object(
-        &self,
-        object_scope: &ObjectScope,
-    ) -> Result<HeadlessTeamScope, TeamScopeForCliError> {
-        if object_scope.personal {
-            Ok(HeadlessTeamScope::Personal)
-        } else {
-            self.team_scope_for_cli(&object_scope.team_selection)
-        }
     }
 
     pub(crate) fn team_context_for_view<T: Entity>(&self, ctx: &ViewContext<T>) -> TeamContext<'_> {
@@ -856,36 +742,6 @@ impl UserWorkspaces {
                     .push_choice_for_test(llm),
             },
         }
-    }
-
-    /// The organization-managed command denylist a sandboxed agent must obey, for `scope`'s
-    /// team. An empty or unconfigured list is no constraint (a denylist blocks only what it
-    /// lists), so both lower to `None`. See [`Self::scoped_or_workspace_setting`] for the
-    /// no-team fallback.
-    pub(crate) fn sandboxed_agent_execute_commands_denylist_for_scope<S: TeamScope + ?Sized>(
-        &self,
-        scope: &S,
-    ) -> Option<Vec<AgentModeCommandExecutionPredicate>> {
-        self.scoped_or_workspace_setting(
-            scope,
-            |team| {
-                // A denylist blocks only what it lists, so an empty list is no constraint.
-                let values = &team
-                    .settings
-                    .sandboxed_agent
-                    .execute_commands_denylist
-                    .values;
-                (!values.is_empty()).then(|| values.clone().to_predicates())
-            },
-            |workspace| {
-                workspace
-                    .settings
-                    .sandboxed_agent_settings
-                    .clone()
-                    .and_then(|settings| settings.execute_commands_denylist)
-            },
-            None,
-        )
     }
 
     /// Returns true iff AI autonomy features are allowed for `scope`'s team.

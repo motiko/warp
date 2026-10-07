@@ -11,13 +11,12 @@ pub(crate) mod agent_tips;
 pub(crate) mod ai_document_view;
 pub mod ambient_agents;
 pub(crate) mod artifact_download;
+#[cfg(not(target_family = "wasm"))]
+pub(crate) mod artifact_upload;
 pub mod artifacts;
 pub(crate) mod attachment_utils;
-pub mod auth_secret_types;
 #[cfg(not(target_family = "wasm"))]
 pub mod aws_credentials;
-#[cfg(not(target_family = "wasm"))]
-pub(crate) mod bedrock_credentials;
 pub(crate) mod block_context;
 pub(crate) mod blocklist;
 pub mod chatgpt_subscription;
@@ -57,14 +56,10 @@ pub(crate) mod restored_conversations;
 pub(crate) mod runner_display;
 pub(crate) mod skills;
 pub(crate) mod stored_screenshots;
-#[cfg(not(target_family = "wasm"))]
-pub(crate) mod voice;
 pub use agent_tips::*;
 pub use credit_availability::*;
 pub use request_usage_model::*;
 use warpui::AppContext;
-#[cfg(not(target_family = "wasm"))]
-pub mod agent_sdk;
 pub mod cloud_agent_config;
 pub mod cloud_agent_settings;
 pub mod cloud_environments;

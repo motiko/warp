@@ -8,8 +8,6 @@ use cloud_objects::ids::GenericStringObjectId;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use warp_core::channel::ChannelState;
-use warp_core::features::FeatureFlag;
 
 use crate::{JsonModel, JsonSerializer};
 
@@ -445,62 +443,6 @@ impl AIExecutionProfile {
             computer_use_model: None,
             context_window_limit: None,
             autosync_plans_to_warp_drive: false,
-            web_search_enabled: true,
-        }
-    }
-
-    /// This creates a CLI-specific profile that will never ask the user for permission,
-    /// since we cannot do so in a non-interactive setting.
-    pub fn create_default_cli_profile(
-        is_sandboxed: bool,
-        computer_use_override: Option<bool>,
-    ) -> Self {
-        let command_denylist = if is_sandboxed {
-            Vec::new()
-        } else {
-            DEFAULT_COMMAND_EXECUTION_DENYLIST.to_vec()
-        };
-
-        let computer_use_permission = match computer_use_override {
-            Some(true) => {
-                if is_sandboxed || FeatureFlag::LocalComputerUse.is_enabled() {
-                    ComputerUsePermission::AlwaysAllow
-                } else {
-                    ComputerUsePermission::Never
-                }
-            }
-            Some(false) => ComputerUsePermission::Never,
-            None => {
-                if is_sandboxed && ChannelState::channel().is_dogfood() {
-                    ComputerUsePermission::AlwaysAllow
-                } else {
-                    ComputerUsePermission::Never
-                }
-            }
-        };
-
-        Self {
-            name: "Default (CLI)".to_owned(),
-            is_default_profile: true,
-            apply_code_diffs: ActionPermission::AlwaysAllow,
-            read_files: ActionPermission::AlwaysAllow,
-            execute_commands: ActionPermission::AlwaysAllow,
-            mcp_permissions: ActionPermission::AlwaysAllow,
-            write_to_pty: WriteToPtyPermission::AlwaysAllow,
-            ask_user_question: AskUserQuestionPermission::Never,
-            run_agents: RunAgentsPermission::AlwaysAllow,
-            command_denylist,
-            command_allowlist: DEFAULT_COMMAND_EXECUTION_ALLOWLIST.to_vec(),
-            directory_allowlist: Vec::new(),
-            mcp_allowlist: Vec::new(),
-            mcp_denylist: Vec::new(),
-            computer_use: computer_use_permission,
-            base_model: None,
-            coding_model: None,
-            cli_agent_model: None,
-            computer_use_model: None,
-            context_window_limit: None,
-            autosync_plans_to_warp_drive: FeatureFlag::SyncAmbientPlans.is_enabled(),
             web_search_enabled: true,
         }
     }

@@ -367,6 +367,7 @@ impl TemplatableMCPServerManager {
 pub enum TemplatableMCPServerManagerEvent {
     StateChanged {
         uuid: Uuid,
+        #[allow(dead_code)]
         state: MCPServerState,
     },
     /// A server managed by this shared runtime needs interactive OAuth.

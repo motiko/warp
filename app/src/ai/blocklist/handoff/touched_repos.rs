@@ -61,8 +61,6 @@ pub(crate) struct TouchedWorkspace {
 /// A single git repo touched by the local agent.
 #[derive(Clone, Debug)]
 pub(crate) struct TouchedRepo {
-    /// Absolute path to the working tree root (the directory containing `.git`).
-    pub git_root: PathBuf,
     /// `<owner>/<repo>` parsed from the `origin` remote URL, when discoverable.
     /// Drives env-overlap matching against `CloudAmbientAgentEnvironment.github_repos`
     /// and the modal's per-repo status row label.
@@ -110,7 +108,7 @@ pub(crate) async fn derive_touched_workspace(paths: Vec<PathBuf>) -> TouchedWork
             .await
             .as_deref()
             .and_then(parse_github_repo);
-        TouchedRepo { git_root, repo_id }
+        TouchedRepo { repo_id }
     });
     let repos: Vec<TouchedRepo> = join_all(metadata_futures).await;
 
@@ -201,7 +199,7 @@ pub(crate) async fn resolve_repo_for_path(path: &Path) -> Option<TouchedRepo> {
         .await
         .as_deref()
         .and_then(parse_github_repo);
-    Some(TouchedRepo { git_root, repo_id })
+    Some(TouchedRepo { repo_id })
 }
 
 /// Suggests the available environment whose configured repositories overlap

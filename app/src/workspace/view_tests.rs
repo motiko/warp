@@ -195,8 +195,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
         AIExecutionProfilesModel::new(&crate::LaunchMode::new_for_unit_test(), ctx)
     });
     app.add_singleton_model(RepoOutlines::new_for_test);
-    #[cfg(feature = "voice_input")]
-    app.add_singleton_model(voice_input::VoiceInput::new);
     app.add_singleton_model(BlocklistAIPermissions::new);
     app.add_singleton_model(|_| GPUState::new());
     // Register IapManager in a disabled state (no IapState). The settings
@@ -206,7 +204,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
         warp_server_client::iap::IapManager::new(
             None,
             Box::new(|_| futures::FutureExt::boxed(futures::future::ready(None::<String>))),
-            None,
             ctx,
         )
     });

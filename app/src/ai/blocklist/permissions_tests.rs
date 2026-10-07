@@ -49,24 +49,14 @@ struct PermissionsTestState {
 }
 
 fn initialize_permissions_test(app: &mut App) -> PermissionsTestState {
-    initialize_permissions_test_with_mode(app, ExecutionMode::App, false)
-}
-
-fn initialize_permissions_test_sandboxed(app: &mut App) -> PermissionsTestState {
-    let state = initialize_permissions_test_with_mode(app, ExecutionMode::Sdk, true);
-    state.profile_model.update(app, |model, ctx| {
-        let profile_id = model.default_profile(ctx).id().clone();
-        model.apply_cli_profile_defaults_for_test(&profile_id, true, ctx);
-    });
-    state
+    initialize_permissions_test_with_mode(app, ExecutionMode::App)
 }
 
 fn initialize_permissions_test_with_mode(
     app: &mut App,
     mode: ExecutionMode,
-    is_sandboxed: bool,
 ) -> PermissionsTestState {
-    initialize_settings_for_tests_with_mode(app, mode, is_sandboxed);
+    initialize_settings_for_tests_with_mode(app, mode);
     let global_resource_handles = GlobalResourceHandles::mock(app);
     app.add_singleton_model(|_| GlobalResourceHandlesProvider::new(global_resource_handles));
     let history = app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
@@ -1383,154 +1373,6 @@ fn test_can_use_mcp_server_agent_decides_denylist_overrides_allowlist() {
                 Some(terminal_view_id),
                 ctx
             ));
-        });
-    })
-}
-
-#[test]
-fn test_sandboxed_mode_allows_read_write_files() {
-    App::test((), |mut app| async move {
-        let PermissionsTestState {
-            convo_id,
-            permissions,
-            user_workspaces,
-            terminal_view_id,
-            ..
-        } = initialize_permissions_test_sandboxed(&mut app);
-
-        // Set workspace to AlwaysAsk
-        user_workspaces.update(&mut app, |model, ctx| {
-            model.setup_test_workspace(ctx);
-            model.update_ai_autonomy_settings(
-                |settings| {
-                    settings.apply_code_diffs_setting = Some(ActionPermission::AlwaysAsk);
-                    settings.read_files_setting = Some(ActionPermission::AlwaysAsk);
-                },
-                ctx,
-            );
-        });
-
-        // In sandboxed mode the workspace read/write restrictions are bypassed,
-        // so the profile's AlwaysAllow setting takes effect.
-        permissions.read(&app, |model, ctx| {
-            let result =
-                model.can_write_files(&convo_id, &[], Some(terminal_view_id), &test_scope(), ctx);
-            assert!(
-                result.is_allowed(),
-                "write files should be allowed in sandboxed mode (workspace restriction bypassed)"
-            );
-            assert!(matches!(
-                result,
-                FileWritePermission::Allowed(
-                    FileWritePermissionAllowedReason::AutowriteSettingEnabled
-                )
-            ));
-
-            let result = model.can_read_files_with_conversation(
-                &convo_id,
-                vec![PathBuf::from("/test/file.txt")],
-                Some(terminal_view_id),
-                &test_scope(),
-                ctx,
-            );
-            assert!(
-                result.is_allowed(),
-                "read files should be allowed in sandboxed mode (workspace restriction bypassed)"
-            );
-            assert!(matches!(
-                result,
-                FileReadPermission::Allowed(
-                    FileReadPermissionAllowedReason::AutoreadSettingEnabled
-                )
-            ));
-        });
-    })
-}
-
-#[test]
-fn test_sandboxed_denylist_used_in_sandboxed_mode() {
-    App::test((), |mut app| async move {
-        let PermissionsTestState {
-            convo_id,
-            history,
-            permissions,
-            user_workspaces,
-            terminal_view_id,
-            ..
-        } = initialize_permissions_test_sandboxed(&mut app);
-
-        user_workspaces.update(&mut app, |model, ctx| {
-            model.setup_test_workspace(ctx);
-            // Regular workspace denylist blocks "git .*".
-            model.update_ai_autonomy_settings(
-                |settings| {
-                    settings.execute_commands_denylist = Some(vec![
-                        AgentModeCommandExecutionPredicate::new_regex("git .*").unwrap(),
-                    ]);
-                },
-                ctx,
-            );
-            // The team's sandboxed denylist blocks "rm .*" instead.
-            model.update_team_sandboxed_agent_denylist(
-                |denylist| {
-                    denylist.values = vec!["rm .*".to_string()];
-                },
-                ctx,
-            );
-        });
-
-        history.update(&mut app, |history, ctx| {
-            history.toggle_autoexecute_override(&convo_id, terminal_view_id, ctx);
-        });
-        app.update(|ctx| {
-            AISettings::handle(ctx).update(ctx, |settings, ctx| {
-                settings
-                    .auto_approve_bypasses_command_denylist
-                    .set_value(false, ctx)
-                    .expect("setting should update");
-            });
-        });
-        permissions.read(&app, |model, ctx| {
-            // "git status" should be allowed: the regular denylist is not consulted in
-            // sandboxed mode, so only the sandboxed denylist ("rm .*") applies.
-            let result = model.can_autoexecute_command(
-                &convo_id,
-                "git status",
-                EscapeChar::Backslash,
-                false,
-                None,
-                Some(terminal_view_id),
-                &test_scope(),
-                ctx,
-            );
-            assert!(matches!(
-                result,
-                CommandExecutionPermission::Allowed(
-                    CommandExecutionPermissionAllowedReason::RunToCompletion
-                )
-            ));
-
-            // "rm file.txt" should be denied by the sandboxed denylist.
-            let result = model.can_autoexecute_command(
-                &convo_id,
-                "rm file.txt",
-                EscapeChar::Backslash,
-                false,
-                None,
-                Some(terminal_view_id),
-                &test_scope(),
-                ctx,
-            );
-            assert!(!result.is_allowed());
-            assert!(
-                matches!(
-                    result,
-                    CommandExecutionPermission::Denied(
-                        CommandExecutionPermissionDeniedReason::ExplicitlyDenylisted
-                    )
-                ),
-                "rm file.txt should be denied by the sandboxed denylist"
-            );
         });
     })
 }
