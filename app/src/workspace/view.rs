@@ -217,7 +217,6 @@ use crate::ai::facts::{AIFactManager, AIFactView, AIFactViewEvent};
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 use crate::ai::llms::LLMId as HandoffLLMId;
 use crate::ai::llms::LLMPreferences;
-use crate::ai::persisted_workspace::PersistedWorkspace;
 use crate::ai_assistant::execution_context::execution_context_for_session;
 use crate::ai_assistant::panel::{AIAssistantPanelEvent, AIAssistantPanelView};
 use crate::ai_assistant::{AI_ASSISTANT_FEATURE_NAME, AI_ASSISTANT_LOGO_COLOR, AskAIType};
@@ -265,7 +264,6 @@ use crate::drive::export::ExportManager;
 use crate::drive::import::modal::{ImportModal, ImportModalEvent};
 use crate::drive::items::WarpDriveItemId;
 use crate::drive::settings::{WarpDriveSettings, WarpDriveSettingsChangedEvent};
-use crate::drive::workflows::arguments::ArgumentsState;
 use crate::drive::workflows::modal::{WorkflowModal, WorkflowModalEvent};
 use crate::drive::{
     CloudObjectTypeAndId, DriveObjectType, DrivePanel, DrivePanelEvent, OpenWarpDriveObjectSettings,
@@ -300,6 +298,7 @@ use crate::pane_group::{
 };
 use crate::persistence::ModelEvent;
 use crate::projects::ProjectManagementModel;
+use crate::projects::persisted_workspace::PersistedWorkspace;
 use crate::prompt::editor_modal::{
     EditorModal as PromptEditorModal, EditorModalEvent as PromptEditorModalEvent,
     OpenSource as PromptEditorOpenSource,
@@ -475,6 +474,7 @@ use crate::view_components::{
 #[cfg(target_family = "wasm")]
 use crate::wasm_nux_dialog::WasmNUXDialog;
 use crate::window_settings::{WindowSettings, WindowSettingsChangedEvent, ZoomLevel};
+use crate::workflows::arguments::ArgumentsState;
 use crate::workflows::manager::{WorkflowManager, WorkflowOpenSource};
 use crate::workflows::workflow::Workflow;
 use crate::workflows::{
@@ -16210,58 +16210,6 @@ impl Workspace {
                 space,
             } => {
                 self.move_to_drive_space(*cloud_object_type_and_id, *space, ctx);
-            }
-            pane_group::Event::OpenWarpDriveLink {
-                open_warp_drive_args,
-            } => {
-                let object_found = CloudModel::as_ref(ctx)
-                    .get_by_uid(&open_warp_drive_args.server_id.uid())
-                    .is_some();
-
-                if !object_found {
-                    self.toast_stack.update(ctx, |toast_stack, ctx| {
-                        let toast = DismissibleToast::error(String::from(
-                            "Resource not found or access denied",
-                        ));
-                        toast_stack.add_ephemeral_toast(toast, ctx);
-                    });
-                    ctx.notify();
-                    return;
-                }
-
-                let server_id = open_warp_drive_args.server_id;
-                match open_warp_drive_args.object_type {
-                    ObjectType::Notebook => self.open_notebook(
-                        &NotebookSource::Existing(SyncId::ServerId(server_id)),
-                        &open_warp_drive_args.settings,
-                        ctx,
-                        true,
-                    ),
-                    ObjectType::Workflow => self.view_in_and_focus_warp_drive(
-                        WarpDriveItemId::Object(CloudObjectTypeAndId::Workflow(SyncId::ServerId(
-                            server_id,
-                        ))),
-                        ctx,
-                    ),
-                    ObjectType::GenericStringObject(GenericStringObjectFormat::Json(
-                        JsonObjectType::EnvVarCollection,
-                    )) => self.view_in_and_focus_warp_drive(
-                        WarpDriveItemId::Object(CloudObjectTypeAndId::from_generic_string_object(
-                            GenericStringObjectFormat::Json(JsonObjectType::EnvVarCollection),
-                            SyncId::ServerId(server_id),
-                        )),
-                        ctx,
-                    ),
-                    ObjectType::Folder => self.view_in_and_focus_warp_drive(
-                        WarpDriveItemId::Object(CloudObjectTypeAndId::Folder(SyncId::ServerId(
-                            server_id,
-                        ))),
-                        ctx,
-                    ),
-                    _ => {
-                        log::warn!("Attempted to open an unsupported Warp Drive link")
-                    }
-                }
             }
             #[cfg(feature = "local_fs")]
             pane_group::Event::OpenCodeInWarp {

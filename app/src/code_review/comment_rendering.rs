@@ -30,7 +30,7 @@ use crate::code_review::comments::{
     AttachedReviewComment, AttachedReviewCommentTarget, LineDiffContent,
 };
 use crate::editor::InteractionState;
-use crate::notebooks::editor::view::RichTextEditorView;
+use crate::rich_text::editor::view::RichTextEditorView;
 use crate::util::time_format::human_readable_approx_duration;
 
 /// Configuration for making the comment header clickable.

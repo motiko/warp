@@ -740,7 +740,9 @@ impl CodeReviewView {
             // UI after LSP installation succeeds or fails.
             #[cfg(feature = "local_fs")]
             {
-                use crate::ai::persisted_workspace::{PersistedWorkspace, PersistedWorkspaceEvent};
+                use crate::projects::persisted_workspace::{
+                    PersistedWorkspace, PersistedWorkspaceEvent,
+                };
 
                 // PersistedWorkspace handles spawning the server after install;
                 // we only subscribe to refresh the footer UI.
@@ -875,7 +877,7 @@ impl CodeReviewView {
         server_type: Option<lsp::supported_servers::LSPServerType>,
         ctx: &mut ViewContext<Self>,
     ) {
-        use crate::ai::persisted_workspace::{LspTask, PersistedWorkspace};
+        use crate::projects::persisted_workspace::{LspTask, PersistedWorkspace};
 
         let server_type =
             server_type.or_else(|| lsp::LanguageId::from_path(path).map(|id| id.server_type()));
@@ -920,7 +922,7 @@ impl CodeReviewView {
         server_type: Option<lsp::supported_servers::LSPServerType>,
         ctx: &mut ViewContext<Self>,
     ) {
-        use crate::ai::persisted_workspace::{LspTask, PersistedWorkspace};
+        use crate::projects::persisted_workspace::{LspTask, PersistedWorkspace};
 
         let server_type =
             server_type.or_else(|| lsp::LanguageId::from_path(path).map(|id| id.server_type()));
@@ -2936,7 +2938,7 @@ impl CodeReviewView {
     }
 
     /// Converts GitDiffData hunks to DiffDelta format for CodeEditorView.apply_diffs
-    fn convert_hunks_to_diff_deltas(hunks: &[DiffHunk]) -> Vec<ai::diff_validation::DiffDelta> {
+    fn convert_hunks_to_diff_deltas(hunks: &[DiffHunk]) -> Vec<warp_editor::diff::DiffDelta> {
         let mut diff_deltas = Vec::new();
 
         for hunk in hunks {
@@ -2966,7 +2968,7 @@ impl CodeReviewView {
                         if let Some(start) = current_replacement_start.take() {
                             let end = if has_removals { old_line } else { start };
 
-                            diff_deltas.push(ai::diff_validation::DiffDelta {
+                            diff_deltas.push(warp_editor::diff::DiffDelta {
                                 replacement_line_range: start..end,
                                 insertion: current_insertion.clone(),
                             });
@@ -2983,7 +2985,7 @@ impl CodeReviewView {
 
             if let Some(start) = current_replacement_start.take() {
                 let end = if has_removals { old_line } else { start };
-                diff_deltas.push(ai::diff_validation::DiffDelta {
+                diff_deltas.push(warp_editor::diff::DiffDelta {
                     replacement_line_range: start..end,
                     insertion: current_insertion,
                 });

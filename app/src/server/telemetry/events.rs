@@ -44,11 +44,11 @@ use crate::code::editor_management::CodeSource;
 use crate::drive::{CloudObjectTypeAndId, DriveSortOrder};
 use crate::features::FeatureFlag;
 use crate::launch_configs::save_modal::SaveState;
-use crate::notebooks::telemetry::NotebookTelemetryAction;
 use crate::notebooks::{NotebookId, NotebookLocation};
 use crate::palette::PaletteMode;
 use crate::pane_group::PaneDragDropLocation;
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
+use crate::rich_text::telemetry::NotebookTelemetryAction;
 use crate::search::QueryFilter;
 use crate::search::command_search::searcher::CommandSearchItemAction;
 use crate::server::block::DisplaySetting;
@@ -2487,7 +2487,7 @@ pub enum TelemetryEvent {
         action: AgentModeSetupCreateEnvironmentActionType,
     },
     InputBufferSubmitted {
-        input_type: input_classifier::InputType,
+        input_type: warp_core::input_type::InputType,
         is_locked: bool,
         input_type_decision_source: Option<InputTypeAutoDetectionSource>,
         was_lock_set_with_empty_buffer: bool,

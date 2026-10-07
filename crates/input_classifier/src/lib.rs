@@ -1,5 +1,4 @@
 mod heuristic_classifier;
-mod input_type;
 #[cfg(feature = "onnx")]
 mod onnx;
 mod parser;
@@ -8,10 +7,10 @@ pub mod util;
 
 use async_trait::async_trait;
 pub use heuristic_classifier::HeuristicClassifier;
-pub use input_type::InputType;
 #[cfg(feature = "onnx")]
 pub use onnx::{Model as OnnxModel, OnnxClassifier};
 use serde::{Deserialize, Serialize};
+pub use warp_core::input_type::InputType;
 
 /// Sources produced by the input classifier pipeline.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -9,7 +9,7 @@ use repo_metadata::repositories::DetectedRepositories;
 use warp_util::local_or_remote_path::LocalOrRemotePath;
 use warpui::{Entity, ModelContext, SingletonEntity as _};
 
-use crate::ai::persisted_workspace::PersistedWorkspace;
+use crate::projects::persisted_workspace::PersistedWorkspace;
 use crate::settings::CodeSettings;
 use crate::terminal::view::init_project::lsp_server_selector::LSPServerInfo;
 use crate::terminal::view::init_project::{

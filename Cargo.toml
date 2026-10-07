@@ -102,6 +102,7 @@ warpui_core = { path = "crates/warpui_core" }
 warpui_extras = { path = "crates/warpui_extras", default-features = false }
 watcher = { path = "crates/watcher" }
 websocket = { path = "crates/websocket" }
+workflow_types = { path = "crates/workflow_types" }
 
 # Workspace-level dependencies used by multiple crates. Prefer adding dependencies
 # here to copying-and-pasting versions.

@@ -7,7 +7,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{cmp, mem};
 
-use ai::diff_validation::DiffDelta;
 use itertools::Itertools;
 use languages::{Language, language_by_filename, language_by_local_filename, language_by_name};
 use line_ending::LineEnding;
@@ -43,6 +42,7 @@ use warp_editor::content::selection_model::BufferSelectionModel;
 use warp_editor::content::text::{BufferBlockStyle, IndentBehavior, IndentUnit};
 use warp_editor::content::version::BufferVersion;
 use warp_editor::decoration::DecorationLayer;
+use warp_editor::diff::DiffDelta;
 use warp_editor::editor::TextDecoration;
 use warp_editor::model::{CoreEditorModel, PlainTextEditorModel};
 use warp_editor::multiline::{AnyMultilineString, LF, MultilineString};
@@ -71,7 +71,7 @@ use crate::appearance::Appearance;
 use crate::code::editor::line_iterator::LineIterator;
 use crate::code_review::comments::{CommentId, CommentOrigin, LineDiffContent};
 use crate::editor::InteractionState;
-use crate::notebooks::editor::model::word_unit;
+use crate::rich_text::editor::model::word_unit;
 use crate::themes::theme::AnsiColorIdentifier;
 use crate::util::link_detection::get_word_range_at_offset;
 

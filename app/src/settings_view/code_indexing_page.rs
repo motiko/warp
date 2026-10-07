@@ -8,10 +8,10 @@ use ai::index::full_source_code_embedding::manager::{
     CodebaseIndexStatus, CodebaseIndexingError,
 };
 use ai::project_context::model::{ProjectContextModel, ProjectContextModelEvent};
-use ai::workspace::WorkspaceMetadata;
 use lsp::supported_servers::LSPServerType;
 use lsp::{LspManagerModel, LspManagerModelEvent, LspServerModel, LspState};
 use pathfinder_color::ColorU;
+use persistence::workspace_metadata::WorkspaceMetadata;
 #[cfg(not(target_family = "wasm"))]
 use remote_server::codebase_index_proto::{RemoteCodebaseIndexState, RemoteCodebaseIndexStatus};
 use warp_core::features::FeatureFlag;
@@ -44,12 +44,12 @@ use super::{
     LocalOnlyIconState, SettingsAction, SettingsSection, ToggleSettingActionPair, ToggleState,
     flags,
 };
-use crate::ai::persisted_workspace::{
-    EnablementState, LspRepoStatus, PersistedWorkspace, PersistedWorkspaceEvent,
-};
 use crate::appearance::Appearance;
 use crate::code::buffer_location::LocalOrRemotePath;
 use crate::code::lsp_telemetry::{LspControlActionType, LspEnablementSource, LspTelemetryEvent};
+use crate::projects::persisted_workspace::{
+    EnablementState, LspRepoStatus, PersistedWorkspace, PersistedWorkspaceEvent,
+};
 #[cfg(not(target_family = "wasm"))]
 use crate::remote_server::codebase_index_model::{
     RemoteCodebaseIndexModel, RemoteCodebaseIndexModelEvent, RemoteCodebaseIndexSettingsEntry,
@@ -605,7 +605,7 @@ impl TypedActionView for CodeIndexingPageView {
                         workspace.enable_lsp_server_for_path(&workspace_path, *server_type);
                         #[cfg(feature = "local_fs")]
                         workspace.execute_lsp_task(
-                            crate::ai::persisted_workspace::LspTask::Spawn {
+                            crate::projects::persisted_workspace::LspTask::Spawn {
                                 file_path: workspace_path,
                             },
                             _ctx,
@@ -662,7 +662,7 @@ impl TypedActionView for CodeIndexingPageView {
                     let server_type = *server_type;
                     PersistedWorkspace::handle(ctx).update(ctx, |workspace, _ctx| {
                         workspace.execute_lsp_task(
-                            crate::ai::persisted_workspace::LspTask::Install {
+                            crate::projects::persisted_workspace::LspTask::Install {
                                 file_path: workspace_path.clone(),
                                 repo_root: workspace_path,
                                 server_type,
@@ -693,7 +693,7 @@ impl TypedActionView for CodeIndexingPageView {
                     workspace.enable_lsp_server_for_path(&workspace_path, server_type);
                     #[cfg(feature = "local_fs")]
                     workspace.execute_lsp_task(
-                        crate::ai::persisted_workspace::LspTask::Spawn {
+                        crate::projects::persisted_workspace::LspTask::Spawn {
                             file_path: workspace_path,
                         },
                         _ctx,

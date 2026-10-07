@@ -33,16 +33,8 @@ use self::details_bar::DetailsBar;
 use super::active_notebook_data::{
     ActiveNotebook, ActiveNotebookData, ActiveNotebookDataEvent, Mode, SavingStatus, TrashStatus,
 };
-use super::context_menu::{
-    ContextMenuAction, ContextMenuState, show_rich_editor_context_menu,
-    show_text_editor_context_menu,
-};
-use super::editor::NotebookWorkflow;
-use super::editor::view::{EditorViewEvent, RichTextEditorConfig, RichTextEditorView};
-use super::link::{NotebookLinks, SessionSource};
 use super::manager::NotebookManager;
-use super::telemetry::NotebookTelemetryAction;
-use super::{CloudNotebookModel, NotebookId, NotebookLocation, styles};
+use super::{CloudNotebookModel, NotebookId, NotebookLocation};
 use crate::ai::blocklist::secret_redaction::find_secrets_in_text;
 use crate::ai::document::ai_document_model::AIDocumentId;
 use crate::appearance::Appearance;
@@ -63,11 +55,19 @@ use crate::features::FeatureFlag;
 use crate::menu::{MenuItem, MenuItemFields};
 use crate::network::{NetworkStatus, NetworkStatusEvent};
 use crate::notebooks::CloudNotebook;
-use crate::notebooks::editor::model::NotebooksEditorModel;
-use crate::notebooks::editor::rich_text_styles;
 use crate::pane_group::focus_state::{PaneFocusHandle, PaneGroupFocusEvent};
 use crate::pane_group::pane::view;
 use crate::pane_group::{BackingView, PaneConfiguration, PaneEvent};
+use crate::rich_text::context_menu::{
+    ContextMenuAction, ContextMenuState, show_rich_editor_context_menu,
+    show_text_editor_context_menu,
+};
+use crate::rich_text::editor::model::NotebooksEditorModel;
+use crate::rich_text::editor::view::{EditorViewEvent, RichTextEditorConfig, RichTextEditorView};
+use crate::rich_text::editor::{NotebookWorkflow, rich_text_styles};
+use crate::rich_text::link::{NotebookLinks, SessionSource};
+use crate::rich_text::styles;
+use crate::rich_text::telemetry::NotebookTelemetryAction;
 use crate::server::cloud_objects::update_manager::{FetchSingleObjectOption, UpdateManager};
 use crate::server::ids::{ClientId, ServerId, SyncId};
 use crate::server::telemetry::{
@@ -247,7 +247,6 @@ pub enum NotebookEvent {
         workflow: Arc<WorkflowType>,
         source: WorkflowSource,
     },
-    EditWorkflow(SyncId),
     ViewInWarpDrive(WarpDriveItemId),
     Pane(PaneEvent),
     MoveToSpace {
@@ -759,14 +758,7 @@ impl NotebookView {
                     ctx.notify();
                 }
             }
-            CloudModelEvent::ObjectMoved { type_and_id, .. } => {
-                if self.as_active_notebook_id(type_and_id, ctx).is_some()
-                    && let Some(space) = self.active_notebook_data.as_ref(ctx).space(ctx)
-                {
-                    self.input
-                        .update(ctx, |editor, ctx| editor.set_space(space, ctx));
-                }
-            }
+            CloudModelEvent::ObjectMoved { .. } => (),
             CloudModelEvent::ObjectCreated { type_and_id, .. } => {
                 if self.as_active_notebook_id(type_and_id, ctx).is_some() {
                     // Re-render to update the status bar.
@@ -966,21 +958,13 @@ impl NotebookView {
             }
             EditorViewEvent::Navigate(_) => (),
             EditorViewEvent::RunWorkflow(workflow) => self.run_notebook_workflow(workflow, ctx),
-            EditorViewEvent::EditWorkflow(workflow_id) => {
-                ctx.emit(NotebookEvent::EditWorkflow(*workflow_id))
-            }
             EditorViewEvent::OpenedBlockInsertionMenu(source) => self.send_telemetry_action(
                 NotebookTelemetryAction::OpenBlockInsertionMenu { source: *source },
                 ctx,
             ),
-            EditorViewEvent::OpenedEmbeddedObjectSearch => {
-                self.send_telemetry_action(NotebookTelemetryAction::OpenEmbeddedObjectSearch, ctx)
-            }
             EditorViewEvent::OpenedFindBar => {
                 self.send_telemetry_action(NotebookTelemetryAction::OpenFindBar, ctx)
             }
-            EditorViewEvent::InsertedEmbeddedObject(info) => self
-                .send_telemetry_action(NotebookTelemetryAction::InsertEmbeddedObject(*info), ctx),
             EditorViewEvent::CopiedBlock { block, entrypoint } => self.send_telemetry_action(
                 NotebookTelemetryAction::CopyBlock {
                     block: *block,
@@ -1604,11 +1588,6 @@ impl NotebookView {
         self.active_notebook_data.update(ctx, |data, ctx| {
             data.open_existing(notebook.id, ctx);
         });
-        self.input.update(ctx, |editor, ctx| {
-            // TODO(ben): This is used for filtering in the embed UI, and should also probably be
-            // owner-based.
-            editor.set_space(notebook.space(ctx), ctx);
-        });
 
         send_telemetry_from_ctx!(
             TelemetryEvent::OpenNotebook(self.open_telemetry_metadata(ctx)),
@@ -1697,8 +1676,6 @@ impl NotebookView {
         });
         self.input.update(ctx, |input_editor, ctx| {
             input_editor.system_clear_buffer(ctx);
-            let space = UserWorkspaces::as_ref(ctx).owner_to_space(owner, ctx);
-            input_editor.set_space(space, ctx);
         });
 
         if let Some(title) = title {

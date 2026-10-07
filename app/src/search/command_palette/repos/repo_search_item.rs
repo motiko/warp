@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use ai::workspace::WorkspaceMetadata;
 use fuzzy_match::FuzzyMatchResult;
 use ordered_float::OrderedFloat;
+use persistence::workspace_metadata::WorkspaceMetadata;
 use warp_core::ui::theme::Fill;
 use warpui::elements::{Align, ConstrainedBox, Flex, Highlight, ParentElement, Shrinkable, Text};
 use warpui::fonts::{Properties, Weight};

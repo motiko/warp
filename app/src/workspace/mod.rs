@@ -52,7 +52,7 @@ use crate::server::telemetry::{AgentModeEntrypoint, PaletteSource};
 use crate::settings_view::{self, SettingsSection, flags};
 use crate::tab::{NewSessionMenuItem, uses_vertical_tabs};
 use crate::util::bindings::{self, CustomAction, cmd_or_ctrl_shift, is_binding_pty_compliant};
-use crate::{code, modal, notebooks, tab_configs};
+use crate::{code, modal, notebooks, rich_text, tab_configs};
 
 // Helper function to access panel header corner radius from other modules
 pub fn panel_header_corner_radius() -> warpui::elements::CornerRadius {
@@ -108,6 +108,7 @@ pub fn init(app: &mut AppContext) {
     });
     global_actions::init_global_actions(app);
     notebooks::init(app);
+    rich_text::init(app);
     code::init(app);
     sync_inputs::init(app);
     lsp::init(app);

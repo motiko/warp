@@ -1,0 +1,13 @@
+[package]
+name = "workflow_types"
+version = "0.1.0"
+edition = "2024"
+authors.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+cloud_objects.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+warp-workflows.workspace = true

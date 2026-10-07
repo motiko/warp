@@ -14,7 +14,7 @@ use warpui::{Element, Entity, ModelHandle, View, ViewContext, ViewHandle};
 
 use crate::ai::blocklist::agent_view::AgentViewController;
 #[cfg(feature = "local_fs")]
-use crate::ai::persisted_workspace::PersistedWorkspace;
+use crate::projects::persisted_workspace::PersistedWorkspace;
 use crate::search::data_source::{Query, QueryFilter};
 use crate::search::mixer::{AddAsyncSourceOptions, SearchMixer};
 use crate::terminal::input::buffer_model::{InputBufferModel, InputBufferUpdateEvent};

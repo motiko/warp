@@ -20,7 +20,7 @@ fn notebook_editor(
     window_id: WindowId,
     tab_index: usize,
     pane_index: usize,
-) -> ViewHandle<crate::notebooks::editor::view::RichTextEditorView> {
+) -> ViewHandle<crate::rich_text::editor::view::RichTextEditorView> {
     notebook_view(app, window_id, tab_index, pane_index)
         .read(app, |notebook, _ctx| notebook.input_editor())
 }

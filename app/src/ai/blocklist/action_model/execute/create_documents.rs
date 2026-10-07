@@ -12,7 +12,7 @@ use crate::ai::artifacts::Artifact;
 use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::ai::document::ai_document_model::{AIDocumentModel, AIDocumentVersion};
 use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
-use crate::notebooks::editor::model::FileLinkResolutionContext;
+use crate::rich_text::editor::model::FileLinkResolutionContext;
 use crate::terminal::model::session::active_session::ActiveSession;
 
 pub struct CreateDocumentsExecutor {

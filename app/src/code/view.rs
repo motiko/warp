@@ -45,7 +45,6 @@ use crate::code::{EditorTabBarDropTargetData, ImmediateSaveError, SaveOutcome, S
 use crate::editor::InteractionState;
 use crate::input::Vector2F;
 use crate::menu::{MenuItem, MenuItemFields};
-use crate::notebooks::file::{MarkdownDisplayMode, renders_in_warp_notebook_viewer};
 use crate::pane_group::focus_state::PaneFocusHandle;
 use crate::pane_group::pane::view::header::components::{
     CenteredHeaderEdgeWidth, render_pane_header_buttons, render_pane_header_title_text,
@@ -58,6 +57,7 @@ use crate::pane_group::{
     PaneEvent, TabBarAxis,
 };
 use crate::quit_warning::UnsavedStateSummary;
+use crate::rich_text::file::{MarkdownDisplayMode, renders_in_warp_notebook_viewer};
 use crate::search::ItemHighlightState;
 use crate::search::files::icon::icon_from_file_path;
 use crate::server::telemetry::CodeContextDestination;

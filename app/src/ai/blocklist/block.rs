@@ -171,8 +171,8 @@ use crate::code_review::comments::{
 };
 use crate::code_review::telemetry_event::CodeReviewPaneEntrypoint;
 use crate::editor::InteractionState;
-use crate::notebooks::editor::model::FileLinkResolutionContext;
-use crate::notebooks::editor::view::{EditorViewEvent, RichTextEditorView};
+use crate::rich_text::editor::model::FileLinkResolutionContext;
+use crate::rich_text::editor::view::{EditorViewEvent, RichTextEditorView};
 use crate::server::ids::SyncId;
 use crate::server::server_api::ServerApiProvider;
 use crate::server::telemetry::{

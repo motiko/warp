@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use ai::diff_validation::DiffType;
 use warp_core::ui::appearance::Appearance;
 use warp_editor::content::buffer::InitialBufferState;
+use warp_editor::diff::DiffType;
 use warp_editor::render::model::LineCount;
 use warp_util::file::{FileLoadError, FileSaveError};
 use warpui::elements::MouseStateHandle;

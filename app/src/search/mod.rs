@@ -9,7 +9,6 @@ mod env_var_collections;
 pub mod external_secrets;
 pub mod files;
 mod filter_chip_renderer;
-pub mod notebook_embedding;
 mod notebooks;
 mod palette_styles;
 mod search_bar;

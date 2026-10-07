@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use std::ops::Range;
 use std::path::Path;
 
-use ai::diff_validation::DiffDelta;
 use lazy_static::lazy_static;
 use num_traits::SaturatingSub;
 use pathfinder_geometry::vector::vec2f;
@@ -20,6 +19,7 @@ use warp_editor::content::buffer::{
 };
 use warp_editor::content::text::IndentUnit;
 use warp_editor::content::version::BufferVersion;
+use warp_editor::diff::DiffDelta;
 use warp_editor::model::{CoreEditorModel, PlainTextEditorModel};
 use warp_editor::multiline::AnyMultilineString;
 use warp_editor::render::element::lens_element::RichTextElementLens;
@@ -76,7 +76,7 @@ use crate::code::{
 use crate::code_review::comments::{CommentId, CommentOrigin};
 use crate::editor::InteractionState;
 use crate::features::FeatureFlag;
-use crate::notebooks::editor::rich_text_styles;
+use crate::rich_text::editor::rich_text_styles;
 use crate::settings::{AppEditorSettings, CodeEditorLineNumberMode, FontSettings};
 use crate::view_components::find::FindDirection;
 

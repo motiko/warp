@@ -5,12 +5,12 @@ use warp_graphql::mutations::generate_metadata_for_command::{
 };
 use warpui::{SingletonEntity, ViewContext};
 
-use super::arguments::ArgumentsState;
 use super::modal::{AiAssistState, WorkflowModal, WorkflowModalEvent};
 use crate::ai::AIRequestUsageModel;
 use crate::auth::AuthStateProvider;
 use crate::send_telemetry_from_ctx;
 use crate::server::telemetry::TelemetryEvent;
+use crate::workflows::arguments::ArgumentsState;
 use crate::workflows::workflow::{Argument, Workflow};
 use crate::workspaces::user_workspaces::UserWorkspaces;
 

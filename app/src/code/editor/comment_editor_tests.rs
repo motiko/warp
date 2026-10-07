@@ -10,9 +10,9 @@ use super::{create_editable_comment_markdown_editor, create_readonly_comment_mar
 use crate::appearance::Appearance;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::persistence::CloudModel;
-use crate::notebooks::editor::keys::NotebookKeybindings;
-use crate::notebooks::editor::view::RichTextEditorView;
-use crate::notebooks::link::{NotebookLinks, SessionSource};
+use crate::rich_text::editor::keys::NotebookKeybindings;
+use crate::rich_text::editor::view::RichTextEditorView;
+use crate::rich_text::link::{NotebookLinks, SessionSource};
 use crate::search::files::model::FileSearchModel;
 use crate::server::server_api::team::MockTeamClient;
 use crate::server::server_api::workspace::MockWorkspaceClient;

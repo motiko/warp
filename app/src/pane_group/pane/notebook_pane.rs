@@ -14,9 +14,9 @@ use crate::app_state::{LeafContents, NotebookPaneSnapshot};
 use crate::cloud_object::Space;
 use crate::drive::items::WarpDriveItemId;
 use crate::drive::{CloudObjectTypeAndId, OpenWarpDriveObjectSettings};
-use crate::notebooks::link::{LinkEvent, NotebookLinks};
 use crate::notebooks::manager::{NotebookManager, NotebookSource};
 use crate::notebooks::notebook::{NotebookEvent, NotebookView};
+use crate::rich_text::link::{LinkEvent, NotebookLinks};
 use crate::server::ids::SyncId;
 use crate::workflows::{WorkflowSelectionSource, WorkflowSource, WorkflowType};
 use crate::workspaces::user_workspaces::UserWorkspaces;
@@ -179,11 +179,6 @@ pub(super) fn subscribe_to_link_model(
                 session: session.clone(),
             })
         }
-        LinkEvent::OpenWarpDriveLink {
-            open_warp_drive_args,
-        } => ctx.emit(crate::pane_group::Event::OpenWarpDriveLink {
-            open_warp_drive_args: open_warp_drive_args.clone(),
-        }),
         LinkEvent::StartLocalSession { path } => {
             pane_group.add_session_in_directory(
                 Direction::Right,
@@ -222,9 +217,6 @@ fn handle_notebook_event(
     match event {
         NotebookEvent::RunWorkflow { workflow, source } => {
             run_notebook_workflow(workflow.clone(), *source, ctx)
-        }
-        NotebookEvent::EditWorkflow(id) => {
-            ctx.emit(crate::pane_group::Event::OpenCloudWorkflowForEdit(*id))
         }
         NotebookEvent::ViewInWarpDrive(id) => view_in_warp_drive(*id, ctx),
         NotebookEvent::MoveToSpace {

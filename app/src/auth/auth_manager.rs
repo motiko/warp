@@ -9,7 +9,6 @@ use uuid::Uuid;
 use warp_core::channel::ChannelState;
 use warp_core::features::FeatureFlag;
 use warp_errors::{report_error, report_if_error};
-use warp_server_auth::API_KEY_PREFIX;
 use warp_server_auth::user::persistence::PersistedUser;
 use warpui::clipboard::ClipboardContent;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity, UpdateModel};
@@ -22,7 +21,6 @@ use super::user_properties::UserProperties;
 use super::{AuthStateProvider, UserUid};
 use crate::ai::AIRequestUsageModel;
 use crate::ai::llms::LLMPreferences;
-use crate::ai::persisted_workspace::PersistedWorkspace;
 use crate::autoupdate::AutoupdateState;
 use crate::persistence::ModelEvent;
 use crate::server::cloud_objects::update_manager::UpdateManager;
@@ -236,47 +234,6 @@ impl AuthManager {
         );
     }
 
-    /// Refreshes the user's auth state using their existing credentials.
-    pub fn refresh_user(&self, ctx: &mut ModelContext<Self>) {
-        let Some(credentials) = self.auth_state.credentials() else {
-            log::warn!("Attempted to refresh user without credentials");
-            return;
-        };
-
-        let Some(token) = credentials.login_token() else {
-            log::info!("Attempted to refresh a user with no login token, skipping");
-            return;
-        };
-
-        let auth_client = self.auth_client.clone();
-        let _ = ctx.spawn(
-            async move { auth_client.fetch_user(token, true).await },
-            Self::on_user_fetched,
-        );
-    }
-    /// Validates a startup API key without exposing it through shared auth state.
-    ///
-    /// [`Self::on_user_fetched`] promotes the returned user and credentials only
-    /// after the server accepts the key. A failed request leaves the client
-    /// fully logged out.
-    pub fn authenticate_api_key(&self, api_key: String, ctx: &mut ModelContext<Self>) {
-        log::info!("Authenticating via pending API key");
-        let api_key = if api_key.starts_with(API_KEY_PREFIX) {
-            api_key
-        } else {
-            format!("{API_KEY_PREFIX}{api_key}")
-        };
-        let auth_client = self.auth_client.clone();
-        let _ = ctx.spawn(
-            async move {
-                auth_client
-                    .fetch_user(LoginToken::ApiKey(api_key), false)
-                    .await
-            },
-            Self::on_user_fetched,
-        );
-    }
-
     /// Callback for handling a successful fetch of a user from warp-server and Firebase.
     /// This does the heavy-lifting of setting up all components of the application that depend
     /// on a user's authenticated state, and emits events to subscribers that let them know
@@ -347,10 +304,6 @@ impl AuthManager {
 
                 LLMPreferences::handle(ctx).update(ctx, |prefs, ctx| {
                     prefs.update_feature_model_choices(Ok(llms), ctx);
-                });
-
-                PersistedWorkspace::handle(ctx).update(ctx, |index_manager_updater, ctx| {
-                    index_manager_updater.on_user_changed(ctx);
                 });
 
                 if !user.is_user_anonymous() {

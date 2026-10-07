@@ -1,19 +1,12 @@
 pub mod active_notebook_data;
-mod context_menu;
-pub mod editor;
-pub mod file;
-pub mod link;
 pub mod manager;
 pub mod notebook;
-mod styles;
-pub mod telemetry;
 
 use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
 pub use cloud_object_models::{CloudNotebook, CloudNotebookModel, NotebookId, SerializedNotebook};
-use serde::{Deserialize, Serialize};
 use warpui::AppContext;
 
 use crate::appearance::Appearance;
@@ -25,6 +18,7 @@ use crate::drive::CloudObjectTypeAndId;
 use crate::drive::items::WarpDriveItem;
 use crate::drive::items::notebook::WarpDriveNotebook;
 use crate::persistence::ModelEvent;
+pub use crate::rich_text::NotebookLocation;
 use crate::server::cloud_objects::update_manager::InitiatedBy;
 use crate::server::ids::{ServerId, SyncId};
 use crate::server::server_api::object::ObjectClient;
@@ -170,19 +164,6 @@ impl CloudModelType for CloudNotebookModel {
     }
 }
 
-/// A notebook location. Mainly, this lets us distinguish between cloud and file-based notebooks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
-pub enum NotebookLocation {
-    /// A cloud notebook in the user's personal space.
-    PersonalCloud,
-    /// A cloud notebook in a team space.
-    Team,
-    /// A notebook backed by a local file.
-    LocalFile,
-    /// A notebook backed by a remote file.
-    RemoteFile,
-}
-
 impl From<Owner> for NotebookLocation {
     fn from(owner: Owner) -> Self {
         // TODO(ben): Account for shared objects in notebook telemetry.
@@ -196,8 +177,6 @@ impl From<Owner> for NotebookLocation {
 /// Initialize notebooks-related keybindings.
 pub fn init(app: &mut AppContext) {
     self::notebook::init(app);
-    self::file::init(app);
-    self::editor::view::init(app);
 }
 
 /// Translate a notebook's Markdown content into an external Markdown format.
@@ -215,7 +194,7 @@ pub fn export_notebook(data: &str, ctx: &AppContext) -> anyhow::Result<String> {
     let parsed = markdown_parser::parse_markdown(data)?;
     Ok(Buffer::export_to_markdown(
         parsed,
-        Some(editor::notebook_embedded_item_conversion),
+        Some(crate::rich_text::editor::notebook_embedded_item_conversion),
         MarkdownStyle::Export {
             app_context: Some(ctx),
             should_not_escape_markdown_punctuation: false,

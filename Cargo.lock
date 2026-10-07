@@ -323,6 +323,7 @@ dependencies = [
  "uuid",
  "virtual-fs",
  "warp_core",
+ "warp_editor",
  "warp_errors",
  "warp_graphql",
  "warp_multi_agent_api",
@@ -2871,12 +2872,12 @@ dependencies = [
  "settings_value",
  "url",
  "uuid",
- "warp-workflows",
  "warp_cli",
  "warp_core",
  "warp_errors",
  "warp_graphql",
  "warp_util",
+ "workflow_types",
 ]
 
 [[package]]
@@ -6598,6 +6599,7 @@ dependencies = [
  "smol_str",
  "tokenizers",
  "warp_completer",
+ "warp_core",
  "warp_errors",
  "warp_features",
 ]
@@ -14309,6 +14311,7 @@ dependencies = [
  "windows-result 0.2.0",
  "winit",
  "winreg",
+ "workflow_types",
  "x11rb",
  "zbus",
 ]
@@ -16312,6 +16315,16 @@ checksum = "896174c6a4779d4d7d4523dd27aef7d46609eda2497e370f6c998325c6bf6971"
 dependencies = [
  "lazy_static",
  "regex",
+]
+
+[[package]]
+name = "workflow_types"
+version = "0.1.0"
+dependencies = [
+ "cloud_objects",
+ "serde",
+ "serde_json",
+ "warp-workflows",
 ]
 
 [[package]]

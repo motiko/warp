@@ -48,6 +48,7 @@ use vim::{
     vim_word_iterator_from_offset,
 };
 use warp_completer::completer::Description;
+use warp_core::input_type::InputType;
 use warp_core::semantic_selection::SemanticSelection;
 use warp_core::{safe_error, send_telemetry_from_ctx};
 use warp_editor::editor::NavigationKey;
@@ -92,7 +93,7 @@ use super::Point;
 use super::soft_wrap::{ClampDirection, DisplayPointAndClampDirection};
 use crate::BlocklistAIHistoryModel;
 use crate::ai::agent::ImageContext;
-use crate::ai::blocklist::{BlocklistAIContextModel, InputType, PendingAttachment, PendingFile};
+use crate::ai::blocklist::{BlocklistAIContextModel, PendingAttachment, PendingFile};
 use crate::ai::predict::next_command_model::{NextCommandModel, NextCommandSuggestionState};
 use crate::appearance::Appearance;
 use crate::channel::{Channel, ChannelState};

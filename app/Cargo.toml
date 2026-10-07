@@ -219,6 +219,7 @@ syntax_tree.workspace = true
 languages.workspace = true
 warp_terminal.workspace = true
 websocket.workspace = true
+workflow_types.workspace = true
 wgpu = { workspace = true, optional = true }
 natural_language_detection.workspace = true
 onboarding.workspace = true

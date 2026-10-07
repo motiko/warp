@@ -9,14 +9,12 @@ use crate::workspaces::user_workspaces::UserWorkspaces;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum CodebaseAutoIndexingSurface {
-    Local,
     Remote,
 }
 
 impl CodebaseAutoIndexingSurface {
     fn required_feature_enabled(self) -> bool {
         match self {
-            Self::Local => true,
             Self::Remote => FeatureFlag::RemoteCodebaseIndexing.is_enabled(),
         }
     }

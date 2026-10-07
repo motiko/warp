@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -16,14 +16,14 @@ use repo_metadata::{
 };
 use settings::Setting as _;
 use warp_errors::report_error;
-use warpui::{Entity, ModelContext, ModelHandle, SingletonEntity};
+use warpui::{AppContext, Entity, ModelContext, ModelHandle, SingletonEntity};
 
 use super::OutlineStatus;
-use crate::ai::persisted_workspace::all_working_directories;
 use crate::settings::{
     AISettings, AISettingsChangedEvent, CodeSettings, CodeSettingsChangedEvent, InputSettings,
     InputSettingsChangedEvent,
 };
+use crate::terminal::TerminalView;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::{TelemetryEvent, safe_info, safe_warn, send_telemetry_from_ctx};
 
@@ -445,4 +445,22 @@ impl RepositorySubscriber for OutlineRepositorySubscriber {
             let _ = tx.send(update).await;
         })
     }
+}
+
+fn all_working_directories(app: &AppContext) -> HashSet<PathBuf> {
+    let mut working_directories = HashSet::new();
+    for window_id in app.window_ids() {
+        for terminal_view in app
+            .views_of_type::<TerminalView>(window_id)
+            .into_iter()
+            .flatten()
+            .map(|handle| handle.as_ref(app))
+        {
+            let working_directory = terminal_view.pwd();
+            if let Some(dir) = working_directory {
+                working_directories.insert(dir.into());
+            }
+        }
+    }
+    working_directories
 }

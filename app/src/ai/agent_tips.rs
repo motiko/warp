@@ -8,8 +8,8 @@ use warpui::r#async::{SpawnedFutureHandle, Timer};
 use warpui::keymap::Keystroke;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
-use crate::ai::persisted_workspace::PersistedWorkspace;
 use crate::palette::PaletteMode;
+use crate::projects::persisted_workspace::PersistedWorkspace;
 use crate::server::telemetry::PaletteSource;
 use crate::settings::AISettings;
 use crate::terminal::input::SET_INPUT_MODE_AGENT_ACTION_NAME;

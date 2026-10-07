@@ -2,10 +2,10 @@ use std::borrow::Cow;
 use std::fs::File;
 use std::path::PathBuf;
 
-use ai::workspace::WorkspaceMetadata;
 use csv::Writer;
 use enclose::enclose;
 use itertools::Itertools;
+use persistence::workspace_metadata::WorkspaceMetadata;
 use settings::Setting as _;
 use settings::manager::SettingsManager;
 use warp_core::context_flag::ContextFlag;
@@ -19,11 +19,11 @@ use warpui::platform::menu::{
 use warpui::windowing::WindowManager;
 use warpui::{AppContext, SingletonEntity};
 
-use crate::ai::persisted_workspace::PersistedWorkspace;
 use crate::auth;
 use crate::auth::AuthStateProvider;
 use crate::default_terminal::DefaultTerminal;
 use crate::features::{FeatureFlag, runtime_flags_menu_items};
+use crate::projects::persisted_workspace::PersistedWorkspace;
 use crate::root_view::OpenLaunchConfigArg;
 use crate::server::telemetry::LaunchConfigUiLocation;
 use crate::settings::{

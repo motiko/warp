@@ -1,5 +1,6 @@
 pub mod content;
 pub mod decoration;
+pub mod diff;
 pub mod editor;
 pub mod model;
 pub mod multiline;

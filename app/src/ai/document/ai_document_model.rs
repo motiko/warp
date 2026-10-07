@@ -31,13 +31,13 @@ use crate::cloud_object::{CloudObject, CloudObjectEventEntrypoint, Owner};
 use crate::drive::CloudObjectTypeAndId;
 use crate::drive::folders::CloudFolder;
 use crate::global_resource_handles::GlobalResourceHandlesProvider;
-use crate::notebooks::editor::model::{
-    FileLinkResolutionContext, NotebooksEditorModel, RichTextEditorModelEvent,
-};
-use crate::notebooks::editor::rich_text_styles;
-use crate::notebooks::file::MarkdownDisplayMode;
 use crate::notebooks::{CloudNotebookModel, NotebookId};
 use crate::persistence::ModelEvent;
+use crate::rich_text::editor::model::{
+    FileLinkResolutionContext, NotebooksEditorModel, RichTextEditorModelEvent,
+};
+use crate::rich_text::editor::rich_text_styles;
+use crate::rich_text::file::MarkdownDisplayMode;
 use crate::server::cloud_objects::update_manager::{
     InitiatedBy, ObjectOperation, OperationSuccessType, UpdateManager, UpdateManagerEvent,
 };

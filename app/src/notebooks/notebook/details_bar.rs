@@ -16,7 +16,7 @@ use crate::cloud_object::breadcrumbs::ContainingObject;
 use crate::cloud_object::model::view::{Editor, EditorState};
 use crate::drive::sharing::ContentEditability;
 use crate::notebooks::active_notebook_data::Mode;
-use crate::notebooks::styles;
+use crate::rich_text::styles;
 use crate::ui_components::breadcrumb::{BreadcrumbState, render_breadcrumbs};
 use crate::ui_components::buttons::{accent_icon_button, icon_button};
 use crate::ui_components::icons::Icon;

@@ -35,10 +35,6 @@ use crate::drive::items::WarpDriveItemId;
 use crate::drive::sharing::ShareableObject;
 use crate::editor::InteractionState;
 use crate::menu::{Menu, MenuItem, MenuItemFields};
-use crate::notebooks::editor::model::NotebooksEditorModel;
-use crate::notebooks::editor::rich_text_styles;
-use crate::notebooks::editor::view::{EditorViewEvent, RichTextEditorConfig, RichTextEditorView};
-use crate::notebooks::link::{NotebookLinks, SessionSource};
 use crate::pane_group::focus_state::PaneFocusHandle;
 use crate::pane_group::pane::view;
 use crate::pane_group::pane::view::header::components::{
@@ -47,6 +43,10 @@ use crate::pane_group::pane::view::header::components::{
 };
 use crate::pane_group::pane::view::header::{PaneHeaderAction, toolbelt_button_position_id};
 use crate::pane_group::{BackingView, PaneConfiguration, PaneEvent};
+use crate::rich_text::editor::model::NotebooksEditorModel;
+use crate::rich_text::editor::rich_text_styles;
+use crate::rich_text::editor::view::{EditorViewEvent, RichTextEditorConfig, RichTextEditorView};
+use crate::rich_text::link::{NotebookLinks, SessionSource};
 use crate::server::telemetry::TelemetryEvent;
 use crate::settings::FontSettings;
 use crate::terminal::input::MenuPositioning;
@@ -90,7 +90,7 @@ use warp_util::path::LineAndColumnArg;
 use crate::code::editor_management::CodeSource;
 // Import keybinding constants from code view to ensure consistency
 use crate::code::view::{SAVE_FILE_BINDING_DESCRIPTION, SAVE_FILE_BINDING_NAME};
-use crate::notebooks::file::MarkdownDisplayMode;
+use crate::rich_text::file::MarkdownDisplayMode;
 #[cfg(feature = "local_fs")]
 use crate::util::file::external_editor::settings::EditorLayout;
 #[cfg(feature = "local_fs")]

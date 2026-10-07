@@ -27,7 +27,7 @@ use crate::cloud_object::model::persistence::CloudModel;
 use crate::code::editor::find::view::CodeEditorFind;
 use crate::code::editor::view::{CodeEditorRenderOptions, CodeEditorView, CodeEditorViewAction};
 use crate::editor::{EditorAction, EditorView};
-use crate::notebooks::editor::keys::NotebookKeybindings;
+use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::server::server_api::team::MockTeamClient;
 use crate::server::server_api::workspace::MockWorkspaceClient;
 use crate::settings::AppEditorSettings;

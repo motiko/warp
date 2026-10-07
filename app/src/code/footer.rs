@@ -30,12 +30,12 @@ use warpui::{
     ViewHandle, WeakModelHandle,
 };
 
+use crate::code::lsp_telemetry::{LspControlActionType, LspEnablementSource, LspTelemetryEvent};
 #[cfg(feature = "local_fs")]
-use crate::ai::persisted_workspace::PersistedWorkspaceEvent;
-use crate::ai::persisted_workspace::{
+use crate::projects::persisted_workspace::PersistedWorkspaceEvent;
+use crate::projects::persisted_workspace::{
     LSPEnablementResultForFile, LspRepoStatus, PersistedWorkspace,
 };
-use crate::code::lsp_telemetry::{LspControlActionType, LspEnablementSource, LspTelemetryEvent};
 use crate::settings::AISettings;
 use crate::ui_components::blended_colors;
 #[cfg(feature = "local_fs")]

@@ -12,7 +12,7 @@ use super::{CodeEditorRenderOptions, CodeEditorView, CodeEditorViewAction};
 use crate::AuthStateProvider;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::editor::InteractionState;
-use crate::notebooks::editor::keys::NotebookKeybindings;
+use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::server::server_api::team::MockTeamClient;
 use crate::server::server_api::workspace::MockWorkspaceClient;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;

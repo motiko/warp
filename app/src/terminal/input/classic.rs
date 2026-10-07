@@ -1,5 +1,6 @@
 use pathfinder_geometry::vector::vec2f;
 use settings::Setting;
+use warp_core::input_type::InputType;
 use warpui::elements::{
     Border, ChildAnchor, ChildView, Clipped, Container, DropTarget, Element, Empty, Flex,
     Hoverable, OffsetPositioning, ParentAnchor, ParentElement, ParentOffsetBounds, SavePosition,
@@ -8,7 +9,6 @@ use warpui::elements::{
 use warpui::{AppContext, SingletonEntity};
 
 use super::{Input, SubshellRenderState, should_render_prompt_using_editor_decorator_elements};
-use crate::ai::blocklist::InputType;
 use crate::appearance::Appearance;
 use crate::context_chips::spacing;
 use crate::features::FeatureFlag;

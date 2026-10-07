@@ -66,6 +66,7 @@ mod referral_theme_status;
 mod remote_server;
 mod resource_limits;
 mod reward_view;
+mod rich_text;
 mod safe_triangle;
 mod search_bar;
 mod server;
@@ -142,13 +143,13 @@ use ai::chatgpt_subscription::ChatGPTSubscriptionModel;
 use ai::execution_profiles::editor::ExecutionProfileEditorManager;
 use ai::execution_profiles::profiles::AIExecutionProfilesModel;
 use ai::metadata_project_rules::read_project_rule_contents;
-use ai::persisted_workspace::PersistedWorkspace;
 use auth::auth_manager::{AuthManager, AuthManagerEvent};
 use auth::auth_state::{AuthState, AuthStateProvider};
 use code::editor_management::CodeManager;
 use code::opened_files::OpenedFilesModel;
 use code_review::GlobalCodeReviewModel;
 use code_review::git_repo_model::GitRepoModels;
+use projects::persisted_workspace::PersistedWorkspace;
 use quit_warning::UnsavedStateSummary;
 #[cfg(feature = "local_fs")]
 use repo_metadata::{
@@ -262,13 +263,13 @@ pub use crate::global_resource_handles::{GlobalResourceHandles, GlobalResourceHa
 use crate::gpu_state::GPUState;
 use crate::network::NetworkStatus;
 use crate::notebooks::CloudNotebook;
-use crate::notebooks::editor::keys::NotebookKeybindings;
 use crate::notebooks::manager::NotebookManager;
 use crate::notification::NotificationContext;
 use crate::palette::PaletteMode;
 use crate::persistence::PersistenceWriter;
 use crate::persistence::model::AgentConversationData;
 use crate::projects::ProjectManagementModel;
+use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::root_view::{
     OpenFromRestoredArg, OpenPath, quake_mode_window_id, quake_mode_window_is_open,
 };
@@ -279,7 +280,7 @@ use crate::server::sync_queue::{QueueItem, SyncQueue};
 pub use crate::server::telemetry::{
     AgentModeEntrypoint, AgentModeEntrypointSelectionType, TelemetryEvent,
 };
-use crate::server::telemetry::{AppStartupInfo, CloseTarget, PaletteSource, TelemetryCollector};
+use crate::server::telemetry::{AppStartupInfo, CloseTarget, PaletteSource};
 use crate::session_management::{RunningSessionSummary, SessionNavigationData};
 use crate::settings::cloud_preferences_syncer::{
     CloudPreferencesSyncerEvent, initialize_cloud_preferences_syncer,
@@ -345,11 +346,7 @@ fn daemon_codebase_index_snapshot_storage(launch_mode: &LaunchMode) -> Option<Sn
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum LaunchMode {
     /// Run the regular GUI application.
-    App {
-        args: warp_cli::AppArgs,
-        /// API key for server authentication, if provided via `--api-key` or `WARP_API_KEY`.
-        api_key: Option<String>,
-    },
+    App { args: warp_cli::AppArgs },
 
     /// Run a test - this may be an integration test or an eval.
     Test {
@@ -372,11 +369,6 @@ pub(crate) enum LaunchMode {
     },
 }
 
-enum AuthInitialization {
-    Persisted,
-    PendingApiKey(String),
-}
-
 impl LaunchMode {
     fn args(&self) -> Cow<'_, warp_cli::AppArgs> {
         match self {
@@ -384,22 +376,6 @@ impl LaunchMode {
             LaunchMode::Test { .. }
             | LaunchMode::RemoteServerProxy
             | LaunchMode::RemoteServerDaemon { .. } => Cow::Owned(warp_cli::AppArgs::default()),
-        }
-    }
-
-    fn api_key(&self) -> Option<String> {
-        match self {
-            LaunchMode::App { api_key, .. } => api_key.clone(),
-            LaunchMode::Test { .. }
-            | LaunchMode::RemoteServerProxy
-            | LaunchMode::RemoteServerDaemon { .. } => None,
-        }
-    }
-
-    fn auth_initialization(&self) -> AuthInitialization {
-        match self.api_key() {
-            Some(api_key) => AuthInitialization::PendingApiKey(api_key),
-            None => AuthInitialization::Persisted,
         }
     }
 
@@ -652,10 +628,8 @@ pub fn run() -> Result<()> {
         }
     }
 
-    let api_key = args.api_key().cloned();
     run_internal(LaunchMode::App {
         args: args.into_app_args(),
-        api_key,
     })
 }
 
@@ -1073,52 +1047,6 @@ pub struct UpdateQuakeModeEventArg {
     active_window_id: Option<WindowId>,
 }
 
-#[derive(Clone)]
-enum StartupUserAuthentication {
-    RefreshUser,
-    ApiKey(String),
-}
-
-impl StartupUserAuthentication {
-    fn start(self, ctx: &mut AppContext) {
-        AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| match self {
-            Self::RefreshUser => auth_manager.refresh_user(ctx),
-            Self::ApiKey(api_key) => auth_manager.authenticate_api_key(api_key, ctx),
-        });
-    }
-}
-
-fn authenticate_user_after_iap_access(
-    authentication: StartupUserAuthentication,
-    ctx: &mut AppContext,
-) {
-    let iap_manager = IapManager::handle(ctx);
-    if !iap_manager.as_ref(ctx).is_enabled() || iap_manager.as_ref(ctx).has_valid_token() {
-        authentication.start(ctx);
-        return;
-    }
-
-    let mut pending_authentication = Some(authentication);
-    ctx.subscribe_to_model(&iap_manager, move |iap_manager, event, ctx| match event {
-        IapManagerEvent::StateChanged => {
-            if !iap_manager.as_ref(ctx).has_valid_token() {
-                return;
-            }
-            if let Some(authentication) = pending_authentication.take() {
-                authentication.start(ctx);
-            }
-        }
-        IapManagerEvent::AccessUnavailable => {
-            report_error!("Staging IAP access unavailable before startup user authentication");
-        }
-        IapManagerEvent::RefreshFailed {
-            message: _,
-            is_first_failure_of_streak: _,
-        } => {}
-    });
-    iap_manager.update(ctx, |manager, ctx| manager.ensure_access(ctx));
-}
-
 #[::tracing::instrument(skip_all, fields(tags.cloud_agent = true))]
 pub(crate) fn initialize_app(
     launch_mode: &LaunchMode,
@@ -1171,14 +1099,7 @@ pub(crate) fn initialize_app(
         ctx.set_zoom_factor(WindowSettings::as_ref(ctx).zoom_level.as_zoom_factor());
     }
 
-    let (auth_state, pending_api_key) = match launch_mode.auth_initialization() {
-        AuthInitialization::Persisted => (AuthState::initialize(ctx), None),
-        AuthInitialization::PendingApiKey(api_key) => (
-            AuthState::initialize_for_credential_validation(ctx),
-            Some(api_key),
-        ),
-    };
-    let auth_state = Arc::new(auth_state);
+    let auth_state = Arc::new(AuthState::initialize_logged_out(ctx));
     timer.mark_interval_end("AUTH_MANAGER_SET_USER");
 
     let agent_source = determine_agent_source(launch_mode);
@@ -1684,15 +1605,6 @@ pub(crate) fn initialize_app(
 
     ctx.add_singleton_model(CustomSecretRegexUpdater::new);
 
-    // Register the `TelemetryCollection` singleton model.
-    let server_api_clone = server_api.clone();
-    ctx.add_singleton_model(|ctx| {
-        let telemetry_collector = TelemetryCollector::new(server_api_clone);
-        telemetry_collector.initialize_telemetry_collection(ctx);
-        telemetry_collector
-    });
-    timer.mark_interval_end("INITIALIZE_TELEMETRY_COLLECTION");
-
     // Register initial keybindings prior to creating menus
     ai::init(ctx);
     app_services::init(ctx);
@@ -2043,15 +1955,6 @@ pub(crate) fn initialize_app(
         };
     });
 
-    // Interactive clients gate startup user authentication on IAP here, since the request
-    // itself calls the IAP-gated warp-server.
-    let startup_authentication = pending_api_key
-        .map(StartupUserAuthentication::ApiKey)
-        .or_else(|| user_is_logged_in.then_some(StartupUserAuthentication::RefreshUser));
-    if let Some(authentication) = startup_authentication {
-        authenticate_user_after_iap_access(authentication, ctx);
-    }
-
     // Add a singleton model that holds the current prompt configuration.
     ctx.add_singleton_model(Prompt::new);
 
@@ -2166,11 +2069,13 @@ pub(crate) fn initialize_app(
         ctx.add_singleton_model(ai::remote_agent_context::RemoteAgentContext::new);
     }
 
+    let lsp_http_client = server_api_provider.as_ref(ctx).get_http_client();
     ctx.add_singleton_model(|ctx| {
         PersistedWorkspace::new(
             persisted_workspaces,
             workspace_language_servers,
             persistence_writer.sender(),
+            lsp_http_client,
             ctx,
         )
     });
@@ -2215,13 +2120,7 @@ pub(crate) fn app_callbacks(is_integration_test: bool) -> warpui::platform::AppC
             NetworkStatus::handle(ctx)
                 .update(ctx, move |me, ctx| me.reachability_changed(reachable, ctx));
         })),
-        on_become_active: Some(Box::new(move |ctx| {
-            let auth_state = AuthStateProvider::as_ref(ctx).get();
-            ctx.record_app_focus(
-                auth_state.user_id().map(|uid| uid.as_string()),
-                auth_state.anonymous_id(),
-            );
-        })),
+        on_become_active: None,
         on_screen_changed: Some(Box::new(move |ctx| {
             ctx.dispatch_global_action(
                 "root_view:move_quake_mode_window_from_screen_change",
@@ -2254,12 +2153,6 @@ pub(crate) fn app_callbacks(is_integration_test: bool) -> warpui::platform::AppC
             let update_quake_mode_arg = UpdateQuakeModeEventArg { active_window_id };
 
             ctx.dispatch_global_action("root_view:update_quake_mode_state", &update_quake_mode_arg);
-
-            let auth_state = AuthStateProvider::as_ref(ctx).get();
-            ctx.record_app_blur(
-                auth_state.user_id().map(|uid| uid.as_string()),
-                auth_state.anonymous_id(),
-            );
         })),
         on_will_terminate: Some(Box::new(move |ctx| {
             NotebookManager::handle(ctx).update(ctx, |manager, ctx| {
@@ -2270,15 +2163,6 @@ pub(crate) fn app_callbacks(is_integration_test: bool) -> warpui::platform::AppC
 
             PersistenceWriter::handle(ctx).update(ctx, |writer, _ctx| {
                 writer.terminate();
-            });
-
-            let auth_state = AuthStateProvider::as_ref(ctx).get();
-            ctx.try_record_daily_app_focus_duration(
-                auth_state.user_id().map(|uid| uid.as_string()),
-                auth_state.anonymous_id(),
-            );
-            TelemetryCollector::handle(ctx).update(ctx, |telemetry_collector, ctx| {
-                telemetry_collector.flush_telemetry_events_for_shutdown(ctx);
             });
 
             // Shutdown all LSP servers gracefully before app termination

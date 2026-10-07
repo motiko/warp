@@ -1,12 +1,12 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use input_classifier::InputType;
 use session_sharing_protocol::common::{
     CLIAgentSessionState, InputMode, InputType as ProtocolInputType, SelectedAgentModel,
     SelectedConversation, ServerConversationToken, UniversalDeveloperInputContextUpdate,
 };
 use warp_core::features::FeatureFlag;
+use warp_core::input_type::InputType;
 use warpui::{AppContext, ModelHandle, SingletonEntity, WeakViewHandle};
 
 use crate::ai::blocklist::agent_view::{AgentViewController, AgentViewEntryOrigin};

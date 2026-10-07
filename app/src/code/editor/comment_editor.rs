@@ -21,10 +21,10 @@ use crate::code::editor::comments::{EditorCommentsModel, PendingCommentEvent};
 use crate::code::editor::line::EditorLineLocation;
 use crate::code_review::comments::{CommentId, CommentOrigin};
 use crate::editor::InteractionState;
-use crate::notebooks::editor::model::NotebooksEditorModel;
-use crate::notebooks::editor::rich_text_styles;
-use crate::notebooks::editor::view::{EditorViewEvent, RichTextEditorConfig, RichTextEditorView};
-use crate::notebooks::link::{NotebookLinks, SessionSource};
+use crate::rich_text::editor::model::NotebooksEditorModel;
+use crate::rich_text::editor::rich_text_styles;
+use crate::rich_text::editor::view::{EditorViewEvent, RichTextEditorConfig, RichTextEditorView};
+use crate::rich_text::link::{NotebookLinks, SessionSource};
 use crate::settings::FontSettings;
 use crate::ui_components::blended_colors;
 use crate::ui_components::icons::Icon;
@@ -541,7 +541,6 @@ where
             links,
             RichTextEditorConfig {
                 gutter_width: Some(0.0),
-                embedded_objects_enabled: Some(false),
                 vertical_expansion_behavior: Some(VerticalExpansionBehavior::GrowToMaxHeight),
                 max_width,
                 can_execute_shell_commands: Some(false),

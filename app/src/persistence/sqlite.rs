@@ -71,7 +71,6 @@ use crate::ai::agent::conversation::AIConversationId;
 use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::mcp::templatable_installation::VariableValue;
 use crate::ai::mcp::{TemplatableMCPServer, TemplatableMCPServerInstallation};
-use crate::ai::persisted_workspace::EnablementState;
 use crate::app_state::{
     AIFactPaneSnapshot, AmbientAgentPaneSnapshot, AppState, BranchSnapshot, CodePaneSnapShot,
     CodePaneTabSnapshot, CodeReviewPaneSnapshot, EnvVarCollectionPaneSnapshot, LeafContents,
@@ -98,6 +97,7 @@ use crate::persistence::model::{
     CODE_REVIEW_PANE_KIND, GET_STARTED_PANE_KIND, NewPersistedObjectAction, NewTeamSettings,
     ProjectRules, UserProfile,
 };
+use crate::projects::persisted_workspace::EnablementState;
 use crate::server::experiments::ServerExperiment;
 use crate::server::ids::{ClientId, HashableId, ServerId, SyncId};
 use crate::server::telemetry::TelemetryEvent;
@@ -1506,7 +1506,7 @@ fn decode_path(bytes: Vec<u8>) -> PathBuf {
 
 fn save_codebase_index_metadata(
     conn: &mut SqliteConnection,
-    index_metadata: ai::workspace::WorkspaceMetadata,
+    index_metadata: persistence::workspace_metadata::WorkspaceMetadata,
 ) -> Result<()> {
     use schema::workspace_metadata::dsl::*;
 
@@ -1524,12 +1524,15 @@ fn save_codebase_index_metadata(
 
 fn get_all_codebase_index_metadata(
     conn: &mut SqliteConnection,
-) -> Result<Vec<ai::workspace::WorkspaceMetadata>, diesel::result::Error> {
+) -> Result<Vec<persistence::workspace_metadata::WorkspaceMetadata>, diesel::result::Error> {
     use schema::workspace_metadata::dsl::*;
 
     Ok(workspace_metadata
         .load_iter::<WorkspaceMetadataModel, DefaultLoadingMode>(conn)?
-        .filter_map(|item| item.ok().map(ai::workspace::WorkspaceMetadata::from))
+        .filter_map(|item| {
+            item.ok()
+                .map(persistence::workspace_metadata::WorkspaceMetadata::from)
+        })
         .collect_vec())
 }
 

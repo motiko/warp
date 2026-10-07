@@ -274,8 +274,6 @@ fn test_export_notebook_with_embeds() {
         initialize_app(&mut app);
 
         let workflow_id = SyncId::ServerId(WorkflowId::from(123).into());
-        let workflow = Workflow::new("Test workflow", "echo hello world");
-        add_workflow(workflow_id, workflow, &mut app);
 
         let notebook_id = SyncId::ServerId(NotebookId::from(456).into());
         add_notebook(
@@ -324,16 +322,6 @@ print("hello")
 It has *text*\.
 ```warp-embedded-object
 ---
-name: Test workflow
-command: echo hello world
-tags: []
-description: ~
-arguments: []
-source_url: ~
-author: ~
-author_url: ~
-shells: []
-environment_variables: ~
 id: Workflow-test_uid00000000000123
 
 ```

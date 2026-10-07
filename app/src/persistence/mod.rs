@@ -23,10 +23,10 @@ use std::sync::{Arc, OnceLock};
 use std::thread::JoinHandle;
 
 use ai::project_context::model::ProjectRulePath;
-use ai::workspace::WorkspaceMetadata as CodeWorkspaceMetadata;
 use chrono::{DateTime, Local, Utc};
 use instant::Instant;
 use lsp::supported_servers::LSPServerType;
+use persistence::workspace_metadata::WorkspaceMetadata as CodeWorkspaceMetadata;
 #[cfg(any(feature = "local_fs", feature = "integration_tests"))]
 pub use sqlite::database_file_path_for_current_scope;
 // Only re-exported for integration tests (via `integration_testing::persistence`);
@@ -46,7 +46,6 @@ use warpui::{AppContext, Entity, SingletonEntity};
 use self::model::{AgentConversation, AgentConversationData, Project};
 use crate::ai::blocklist::PersistedAIInput;
 use crate::ai::mcp::TemplatableMCPServerInstallation;
-use crate::ai::persisted_workspace::EnablementState;
 use crate::app_state::AppState;
 use crate::auth::auth_manager::PersistedCurrentUserInformation;
 use crate::cloud_object::model::actions::ObjectAction;
@@ -56,6 +55,7 @@ use crate::cloud_object::{
 };
 use crate::drive::folders::CloudFolder;
 use crate::notebooks::CloudNotebook;
+use crate::projects::persisted_workspace::EnablementState;
 use crate::server::experiments::ServerExperiment;
 use crate::server::ids::SyncId;
 use crate::suggestions::ignored_suggestions_model::SuggestionType;

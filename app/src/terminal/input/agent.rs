@@ -1,3 +1,4 @@
+use warp_core::input_type::InputType;
 use warp_core::settings::Setting;
 use warp_core::ui::theme::color::internal_colors;
 use warpui::elements::{
@@ -16,7 +17,6 @@ use super::common::{
 };
 use super::{Input, InputAction, InputDropTargetData};
 use crate::BlocklistAIHistoryModel;
-use crate::ai::blocklist::InputType;
 use crate::ai::blocklist::agent_view::AgentViewState;
 use crate::ai::blocklist::agent_view::shortcuts::{
     AgentShortcutsViewContext, render_agent_shortcuts_view,
