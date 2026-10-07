@@ -50,7 +50,7 @@ use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGIST
 use crate::search::slash_command_menu::static_commands::{Availability, SlashCommandKind};
 use crate::search::slash_command_menu::{SlashCommandId, StaticCommand};
 use crate::server::ids::SyncId;
-use crate::server::telemetry::{AgentModeAutoDetectionSettingOrigin, SlashCommandAcceptedDetails};
+use crate::server::telemetry::SlashCommandAcceptedDetails;
 use crate::settings::AISettings;
 use crate::tab::SelectedTabColor;
 use crate::terminal::input::decorations::InputBackgroundJobOptions;
@@ -98,10 +98,9 @@ pub enum SlashCommandSelectionBehavior {
 
 /// Shared menu-selection policy for static slash commands.
 ///
-/// GUI and TUI both first decide whether accepting a menu row should insert the
-/// slash command text for further argument entry, or execute the command
-/// immediately. Surface-specific execution remains in `Input::execute_slash_command`
-/// for GUI and in `TuiTerminalSessionView::execute_tui_slash_command` for TUI.
+/// Decides whether accepting a menu row should insert the slash command text for further
+/// argument entry, or execute the command immediately. Execution itself lives in
+/// `Input::execute_slash_command`.
 pub fn slash_command_selection_behavior(command: &StaticCommand) -> SlashCommandSelectionBehavior {
     if command
         .argument
@@ -126,7 +125,7 @@ pub fn should_close_slash_command_menu_for_exact_match(
     result_count < 2 || argument_started
 }
 
-/// Records a static slash command accepted from either the GUI or TUI surface.
+/// Records a static slash command accepted from the slash menu.
 pub fn record_static_slash_command_accepted(
     command_name: &str,
     is_in_agent_view: bool,
@@ -143,25 +142,7 @@ pub fn record_static_slash_command_accepted(
     );
 }
 
-/// Records an input auto-detection setting toggle triggered from a TUI slash
-/// command (`/natural-language-detection`).
-///
-/// Mirrors the `SettingsPage` and `Banner` origins used by the GUI toggle paths,
-/// but reports the toggle as originating from a TUI slash command.
-pub fn record_autodetection_toggle_from_slash_command(
-    is_autodetection_enabled: bool,
-    ctx: &mut AppContext,
-) {
-    send_telemetry_from_ctx!(
-        TelemetryEvent::AgentModeToggleAutoDetectionSetting {
-            is_autodetection_enabled,
-            origin: AgentModeAutoDetectionSettingOrigin::SlashCommand,
-        },
-        ctx
-    );
-}
-
-/// Records a saved prompt accepted from either the GUI or TUI slash menu.
+/// Records a saved prompt accepted from the slash menu.
 pub fn record_saved_prompt_accepted(is_in_agent_view: bool, ctx: &mut AppContext) {
     send_telemetry_from_ctx!(
         TelemetryEvent::SlashCommandAccepted {
@@ -908,7 +889,7 @@ impl Input {
                     entrypoint: CodeReviewPaneEntrypoint::SlashCommand,
                 });
             }
-            SlashCommandKind::OpenMcpServers | SlashCommandKind::Mcp => {
+            SlashCommandKind::OpenMcpServers => {
                 ctx.dispatch_typed_action(&TerminalAction::OpenViewMCPPane);
             }
             SlashCommandKind::OpenSettingsFile => {
@@ -1330,30 +1311,6 @@ impl Input {
                 // These slash commands just send AI requests with the slash command text as a
                 // prefix, and special handling is done downstream as an implementation detail
                 // of handling user queries with specific slash command prefixes.
-                return false;
-            }
-            SlashCommandKind::AutoApprove
-            | SlashCommandKind::Statusline
-            | SlashCommandKind::ResetStatusline
-            | SlashCommandKind::ApiKeys
-            | SlashCommandKind::ConnectGrok
-            | SlashCommandKind::Upgrade
-            | SlashCommandKind::ManageBilling
-            | SlashCommandKind::ViewLogs
-            | SlashCommandKind::Voice
-            | SlashCommandKind::NaturalLanguageDetection
-            | SlashCommandKind::Theme
-            | SlashCommandKind::VimMode
-            | SlashCommandKind::Exit
-            | SlashCommandKind::Logout
-            | SlashCommandKind::Clear
-            | SlashCommandKind::Team
-            | SlashCommandKind::Status => {
-                debug_assert!(
-                    false,
-                    "Attempted to execute TUI-only slash command in the GUI: {}",
-                    command.name
-                );
                 return false;
             }
             #[cfg(any(not(feature = "local_fs"), target_family = "wasm"))]

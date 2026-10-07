@@ -36,13 +36,6 @@ pub struct FileBasedMCPManager {
     /// consumer can query the current config health. A successful parse or
     /// removal clears the diagnostic for that path.
     config_diagnostics_by_path: HashMap<PathBuf, FileMCPConfigDiagnostic>,
-    /// The TUI scans its global config before login so it can render config
-    /// health immediately, but starting servers before authentication would
-    /// expose tools and begin OAuth before the session is ready. Hold global
-    /// Warp servers until the TUI login flow explicitly activates them.
-    defer_global_warp_autostart: bool,
-    /// Whether deferred global Warp servers may now be started.
-    global_warp_servers_activated: bool,
     /// Readiness latch exposed through [`Self::initial_global_scan_result`].
     initial_global_scan_state: InitialGlobalMcpScanState,
 }
@@ -64,7 +57,6 @@ impl Default for InitialGlobalMcpScanState {
 
 impl FileBasedMCPManager {
     pub fn new(ctx: &mut ModelContext<Self>) -> Self {
-        let defer_global_warp_autostart = settings::settings_mode() == settings::SettingsMode::Tui;
         if FeatureFlag::FileBasedMcp.is_enabled() {
             ctx.subscribe_to_model(&FileMCPWatcher::handle(ctx), |me, _, event, ctx| {
                 me.handle_watcher_event(event, ctx);
@@ -82,8 +74,6 @@ impl FileBasedMCPManager {
             file_based_servers_by_root: Default::default(),
             pending_scan_auto_started_servers_by_root: Default::default(),
             config_diagnostics_by_path: Default::default(),
-            defer_global_warp_autostart,
-            global_warp_servers_activated: !defer_global_warp_autostart,
             initial_global_scan_state: Default::default(),
         }
     }
@@ -403,9 +393,7 @@ impl FileBasedMCPManager {
         };
         let should_autostart = match server_type {
             FileBasedMCPServerType::GlobalWarp => true,
-            FileBasedMCPServerType::GlobalThirdParty => {
-                !self.defer_global_warp_autostart && file_based_mcp_enabled
-            }
+            FileBasedMCPServerType::GlobalThirdParty => file_based_mcp_enabled,
             FileBasedMCPServerType::ProjectScoped => false,
         };
 
@@ -440,15 +428,9 @@ impl FileBasedMCPManager {
             let installation_uuid = installation.uuid();
             let server_name = installation.templatable_mcp_server().name.clone();
             let AutoStartDecision {
-                mut should_autostart,
+                should_autostart,
                 server_type,
             } = self.auto_start_decision(hash, mcp_enabled);
-            if server_type == FileBasedMCPServerType::GlobalWarp
-                && self.defer_global_warp_autostart
-                && !self.global_warp_servers_activated
-            {
-                should_autostart = false;
-            }
             if should_autostart {
                 log::info!(
                     "Auto-spawning file-based MCP server '{server_name}' ({installation_uuid})"
@@ -534,12 +516,6 @@ impl FileBasedMCPManager {
     }
 
     fn handle_file_based_mcp_enabled_change(&mut self, ctx: &mut ModelContext<Self>) {
-        // The setting is GUI-only. TUI-discovered third-party servers always
-        // require an explicit start action, even if a value is loaded into the
-        // shared model by tests or future settings migrations.
-        if self.defer_global_warp_autostart {
-            return;
-        }
         // Only global third-party servers are affected by the toggle:
         // - Global Warp servers always spawn regardless of the toggle.
         // - Project-scoped servers (any provider) are never auto-spawned and their
@@ -578,7 +554,7 @@ impl FileBasedMCPManager {
             .map(|(hash, _)| *hash)
     }
     /// Returns owned snapshots of every current file-config diagnostic.
-    #[cfg(any(feature = "tui", test))]
+    #[cfg(test)]
     pub fn config_diagnostics(&self) -> Vec<FileMCPConfigDiagnostic> {
         self.config_diagnostics_by_path
             .values()
@@ -591,7 +567,7 @@ impl FileBasedMCPManager {
             .collect()
     }
 
-    #[cfg(any(feature = "tui", test))]
+    #[cfg(test)]
     pub fn global_warp_servers(&self) -> Vec<&TemplatableMCPServerInstallation> {
         self.file_based_servers
             .iter()
@@ -600,29 +576,13 @@ impl FileBasedMCPManager {
             .collect()
     }
 
-    #[cfg(any(feature = "tui", test))]
-    pub fn activate_global_warp_servers(&mut self, ctx: &mut ModelContext<Self>) {
-        if self.global_warp_servers_activated {
-            return;
-        }
-        self.global_warp_servers_activated = true;
-        let installations = self
-            .global_warp_servers()
-            .into_iter()
-            .cloned()
-            .collect_vec();
-        if !installations.is_empty() {
-            ctx.emit(FileBasedMCPManagerEvent::SpawnServers { installations });
-        }
-    }
-
     /// Returns all detected file-based MCP server installations.
     pub fn file_based_servers(&self) -> Vec<&TemplatableMCPServerInstallation> {
         self.file_based_servers.values().collect()
     }
     /// Returns owned file-based installations with every config source that
     /// currently references each installation.
-    #[cfg(any(feature = "tui", test))]
+    #[cfg(test)]
     pub fn file_based_servers_with_sources(&self) -> Vec<FileBasedMCPServerWithSources> {
         self.file_based_servers
             .iter()
@@ -656,7 +616,7 @@ impl FileBasedMCPManager {
     }
 
     /// Returns a file-based installation by its stable content hash.
-    #[cfg(any(feature = "tui", test))]
+    #[cfg(test)]
     pub fn installation_by_hash(&self, hash: u64) -> Option<&TemplatableMCPServerInstallation> {
         self.file_based_servers.get(&hash)
     }
@@ -727,7 +687,7 @@ impl FileBasedMCPManager {
     }
 }
 
-#[cfg(any(feature = "tui", test))]
+#[cfg(test)]
 fn provider_sort_key(provider: MCPProvider) -> u8 {
     match provider {
         MCPProvider::Warp => 0,
@@ -743,7 +703,7 @@ pub enum FileBasedMCPServerScope {
     Project,
 }
 
-#[cfg(any(feature = "tui", test))]
+#[cfg(test)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FileBasedMCPServerSource {
     pub provider: MCPProvider,
@@ -751,7 +711,7 @@ pub struct FileBasedMCPServerSource {
     pub scope: FileBasedMCPServerScope,
 }
 
-#[cfg(any(feature = "tui", test))]
+#[cfg(test)]
 #[derive(Clone, Debug)]
 pub struct FileBasedMCPServerWithSources {
     pub installation: TemplatableMCPServerInstallation,

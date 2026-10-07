@@ -39,8 +39,7 @@ pub enum RepoDetectionSessionType {
 /// The caller is responsible for registering remote repo roots in
 /// `DetectedRepositories` and triggering downstream side effects (git status,
 /// code review, etc.) in the spawn callback. Callers that only need the
-/// `DetectedGitRepo` event side effect (e.g. the TUI front-end's project
-/// rules/skills indexing) may drop the returned future: detection runs on a
+/// `DetectedGitRepo` event side effect may drop the returned future: detection runs on a
 /// task spawned inside [`DetectedRepositories`], so it completes regardless.
 #[cfg(not(target_family = "wasm"))]
 pub fn detect_possible_git_repo(

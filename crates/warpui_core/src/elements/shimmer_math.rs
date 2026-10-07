@@ -2,9 +2,8 @@
 //! sweeps across a run of glyphs, lerping each glyph from a base color toward
 //! a shimmer color based on its distance from the band's center.
 //!
-//! Both the GUI [`ShimmeringTextElement`](crate::elements::shimmering_text)
-//! and the TUI shimmering text render with this math; only glyph mapping and
-//! painting differ per backend.
+//! [`ShimmeringTextElement`](crate::elements::shimmering_text) renders with this math; glyph
+//! mapping and painting live in the element.
 
 use std::f32::consts::PI;
 use std::time::Duration;

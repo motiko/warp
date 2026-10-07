@@ -2539,8 +2539,7 @@ impl BlockList {
         self.update_rich_content_heights_in_lines(&updated_heights);
     }
 
-    /// Updates rich-content heights already measured in the canonical line unit
-    /// (used by the TUI, whose layout is row-based).
+    /// Updates rich-content heights already measured in the canonical line unit.
     pub fn update_rich_content_heights_in_lines(
         &mut self,
         updated_heights: &HashMap<EntityId, BlockHeight>,

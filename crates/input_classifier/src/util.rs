@@ -19,7 +19,7 @@ lazy_static! {
     /// to use claude code, codex CLI, gemini CLI, or the Warp Agent CLI) suck, because the user
     /// often thinks we're intentionally trying to push them away from those CLIs into Agent Mode,
     /// so we mitigate the risk by always treating as shell. `warp` is the command that launches the
-    /// Warp Agent CLI / TUI, so bare `warp` (and `warp …` invocations) should classify as shell.
+    /// Warp Agent CLI, so bare `warp` (and `warp …` invocations) should classify as shell.
     static ref ONE_OFF_SHELL_COMMAND_KEYWORDS: HashSet<&'static str> = HashSet::from(["#", "echo", "man", "sudo", "claude", "codex", "gemini", "agy", "omp", "warp"]);
 
     static ref ONE_OFF_NATURAL_LANGUAGE_WORDS: HashSet<&'static str> = HashSet::from(["hello", "hi", "hey", "hola", "thanks", "explain", "yes", "no", "what", "nice", "1. "]);

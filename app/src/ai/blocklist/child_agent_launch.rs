@@ -26,8 +26,7 @@ pub struct PreparedLocalOzChildLaunch {
     pub conversation_name: String,
 }
 
-/// Creates the server task row shared by the GUI hidden-pane and TUI
-/// background-session launch paths.
+/// Creates the server task row for the GUI hidden-pane launch path.
 #[cfg(not(target_family = "wasm"))]
 pub fn prepare_local_oz_child_launch(
     name: &str,

@@ -310,7 +310,7 @@ impl PersistedWorkspace {
         // Registered regardless of whether codebase indexing is enabled:
         // `index_repo` also drives project-rules (and, transitively, project
         // skills) discovery, which must work in modes that keep codebase
-        // indexing off (e.g. the TUI front-end). The embedding half of
+        // indexing off. The embedding half of
         // `index_repo` stays behind its own gates, and
         // `CodebaseIndexManager::index_directory` no-ops when indexing is
         // disabled.

@@ -48,9 +48,8 @@ impl warpui::Entity for Box<dyn TerminalManager> {
 /// reserve a footer row for the debug memory-stats overlay.
 ///
 /// [`Self::for_gui`] derives the GUI blocklist's spacing from the user's
-/// settings; frontends whose rendering differs (e.g. the row-based TUI
-/// transcript) define their own spacing and pass it when creating the
-/// terminal model.
+/// settings; frontends whose rendering differs define their own spacing and
+/// pass it when creating the terminal model.
 pub struct BlockSpacing {
     pub block_padding: BlockPadding,
     pub warp_prompt_height_lines: f32,

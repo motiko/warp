@@ -114,8 +114,6 @@ pub enum FeatureFlag {
     SettingsFile,
 
     /// Stores GUI execution profiles in the shared settings collection.
-    ///
-    /// TUI builds use the collection on every channel independently of this flag.
     FileBackedExecutionProfiles,
 
     /// Enables rect selection.
@@ -949,15 +947,9 @@ pub enum FeatureFlag {
     FactoryMcp,
 
     /// Gates client-side display of the real dollar cost (from `RequestCost.cost_in_cents`)
-    /// alongside credits in the GUI footer and TUI. Mirrors the server-side
+    /// alongside credits in the GUI footer. Mirrors the server-side
     /// `PricingTransparencyEnabled` flag in warp-server, but is a fully independent
-    /// flag — the two do not sync automatically. Consolidated from the former
-    /// `TuiCostTransparency` flag: when enabled (dogfood/staging and local/dev
-    /// builds), the TUI footer usage entry follows the persisted
-    /// `agents.usage_display_mode` setting and is click-to-toggleable between
-    /// credits and dollars; when disabled (prod/stable), it falls back to a
-    /// static, non-interactive credits total. Will also gate the GUI footer's
-    /// dollar display once that's built.
+    /// flag — the two do not sync automatically.
     PricingTransparency,
 
     /// Enables periodic workspace-handoff checkpoints during a cloud agent run,

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use warpui::{App, ModelHandle};
 
 use super::*;
+use crate::LaunchMode;
 use crate::ai::aws_credentials::AwsCredentialRefresher;
 use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
 use crate::ai::mcp::TemplatableMCPServerManager;
@@ -26,7 +27,6 @@ use crate::workspaces::user_workspaces::{
     TeamContextForOperation, TeamlessScopeForTest, UserWorkspaces,
 };
 use crate::workspaces::workspace::Workspace;
-use crate::{LaunchMode, TuiEntryPoint};
 
 // -- DisableReason::should_clear_preference tests --
 
@@ -1478,15 +1478,7 @@ fn updating_active_profile_base_model_persists_and_updates_resolution() {
         app.add_singleton_model(UpdateManager::mock);
         app.add_singleton_model(|_| TemplatableMCPServerManager::default());
         let profiles = app.add_singleton_model(|ctx| {
-            AIExecutionProfilesModel::new(
-                &LaunchMode::Tui {
-                    entrypoint: TuiEntryPoint::Interactive {
-                        mount: Box::new(|_| {}),
-                        api_key: None,
-                    },
-                },
-                ctx,
-            )
+            AIExecutionProfilesModel::new(&LaunchMode::new_for_unit_test(), ctx)
         });
         let preferences = app.add_singleton_model(preferences_for_profile_model_tests);
         let surface_id = EntityId::new();

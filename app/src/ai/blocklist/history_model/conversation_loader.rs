@@ -36,7 +36,7 @@ use crate::terminal::model::block::SerializedBlock;
 pub struct CLIAgentConversation {
     /// Server metadata about this conversation.
     pub metadata: ServerAIConversationMetadata,
-    /// A snapshot of the final agent TUI state.
+    /// A snapshot of the final agent block state.
     pub block: SerializedBlock,
 }
 

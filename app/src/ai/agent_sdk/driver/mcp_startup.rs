@@ -397,7 +397,7 @@ impl AgentDriver {
     /// Returns the built-in Factory MCP server installation to attach to this
     /// run, or `None` when it should not be attached.
     ///
-    /// Interactive clients (GUI/TUI) attach built-in Warp-hosted servers via
+    /// Interactive clients attach built-in Warp-hosted servers via
     /// [`TemplatableMCPServerManager::sync_builtin_servers`], which skips CLI
     /// agent runs. The driver mirrors the same eligibility rules for its
     /// run-scoped ephemeral startup path: the `FactoryMcp` feature flag, a
@@ -583,7 +583,7 @@ impl AgentDriver {
                         manager.is_server_active_or_pending(builtin::FACTORY_MCP_INSTALLATION_UUID);
                     (local_names, builtin_already_active)
                 };
-                // Interactive clients (GUI/TUI) attach built-ins through `sync_builtin_servers`,
+                // Interactive clients attach built-ins through `sync_builtin_servers`,
                 // under the same stable installation UUID. The driver currently only runs in SDK
                 // mode, where that path never spawns, but guard anyway so this injection can
                 // never double-spawn the built-in if the driver is ever hosted in an interactive

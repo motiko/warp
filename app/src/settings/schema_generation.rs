@@ -4,8 +4,8 @@ use std::path::Path;
 use anyhow::{Context as _, Result};
 use schemars::SchemaGenerator;
 use serde_json::{Map, Value};
+use settings::SettingSurfaces;
 use settings::schema::SettingSchemaEntry;
-use settings::{SettingSurfaces, SettingsMode};
 use tempfile::NamedTempFile;
 use warp_core::channel::ChannelState;
 use warp_core::features::FeatureFlag;
@@ -109,10 +109,10 @@ fn settings_schema_json(is_flag_enabled: impl Fn(FeatureFlag) -> bool) -> Result
 }
 
 fn setting_surface_names(surfaces: SettingSurfaces) -> Vec<Value> {
-    [(SettingsMode::Gui, "gui"), (SettingsMode::Tui, "tui")]
+    surfaces
+        .includes_gui()
+        .then(|| Value::String("gui".to_owned()))
         .into_iter()
-        .filter(|(mode, _)| surfaces.includes(*mode))
-        .map(|(_, name)| Value::String(name.to_owned()))
         .collect()
 }
 

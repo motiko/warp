@@ -3,7 +3,6 @@
 
 use std::collections::HashMap;
 use std::ops::Range;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use futures::stream::AbortHandle;
@@ -86,7 +85,7 @@ pub(crate) fn remove_inline_overlay_color(appearance: &Appearance) -> ColorU {
 
 pub enum DiffModelEvent {
     DiffUpdated { version: BufferVersion },
-    UnifiedDiffComputed(Rc<DiffResult>),
+    UnifiedDiffComputed,
 }
 
 /// Computes the unified diff (3 context lines, git style) and line stats
@@ -647,8 +646,8 @@ impl DiffModel {
                 let new = new.to_format();
                 compute_unified_diff(&base_text, new.as_ref(), file_name.as_str()).await
             },
-            |_, unified_diff, ctx| {
-                ctx.emit(DiffModelEvent::UnifiedDiffComputed(Rc::new(unified_diff)));
+            |_, _, ctx| {
+                ctx.emit(DiffModelEvent::UnifiedDiffComputed);
             },
         );
     }

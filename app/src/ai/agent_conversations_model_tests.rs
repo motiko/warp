@@ -770,15 +770,6 @@ fn local_conversation_sync_finishes_initial_load_without_starting_cloud_load() {
 }
 
 #[test]
-fn cloud_conversation_metadata_reports_failed_load() {
-    let mut model = create_test_model();
-    assert!(!model.cloud_conversation_metadata_load_failed());
-
-    model.initial_load_state = InitialConversationLoadState::CloudFailed;
-    assert!(model.cloud_conversation_metadata_load_failed());
-}
-
-#[test]
 fn conversation_query_caps_recent_entries_and_places_newest_last() {
     App::test((), |mut app| async move {
         add_entry_projection_test_models(&mut app);

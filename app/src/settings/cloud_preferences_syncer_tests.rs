@@ -746,7 +746,7 @@ fn test_sync_cloud_pref_to_local_on_initial_load_or_collab_update() {
         enable_settings_sync(&mut app);
 
         app.add_singleton_model(|ctx| {
-            let syncer = CloudPreferencesSyncer::new(false, std::path::PathBuf::new(), true, ctx);
+            let syncer = CloudPreferencesSyncer::new(false, std::path::PathBuf::new(), ctx);
             // This should sync the cloud preferences at this point
             syncer.sync(ForceCloudToMatchLocal::No, ctx);
             syncer
@@ -976,7 +976,7 @@ fn test_sync_local_pref_to_cloud_doesnt_update_equal_pref() {
 
         enable_settings_sync(&mut app);
         app.add_singleton_model(|ctx| {
-            let syncer = CloudPreferencesSyncer::new(false, std::path::PathBuf::new(), true, ctx);
+            let syncer = CloudPreferencesSyncer::new(false, std::path::PathBuf::new(), ctx);
             // This should sync the cloud preferences at this point
             syncer.sync(ForceCloudToMatchLocal::No, ctx);
             syncer
@@ -1057,7 +1057,7 @@ fn test_cloud_preferences_setting_enabling_setting_syncs_prefs() {
         // Now enable settings sync
         enable_settings_sync(&mut app);
         app.add_singleton_model(|ctx| {
-            let syncer = CloudPreferencesSyncer::new(false, std::path::PathBuf::new(), true, ctx);
+            let syncer = CloudPreferencesSyncer::new(false, std::path::PathBuf::new(), ctx);
             // This should sync the cloud preferences at this point
             syncer.sync(ForceCloudToMatchLocal::No, ctx);
             syncer
@@ -1136,7 +1136,7 @@ fn test_cloud_pref_not_synced_when_current_value_not_syncable() {
 
         // Add the syncer and trigger sync
         app.add_singleton_model(|ctx| {
-            let syncer = CloudPreferencesSyncer::new(false, std::path::PathBuf::new(), true, ctx);
+            let syncer = CloudPreferencesSyncer::new(false, std::path::PathBuf::new(), ctx);
             // This should sync the cloud preferences at this point
             syncer.sync(ForceCloudToMatchLocal::No, ctx);
             syncer

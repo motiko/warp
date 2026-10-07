@@ -138,7 +138,7 @@ fn model_specs_width(app: &AppContext) -> f32 {
         appearance.monospace_font_size(),
     ) * 34.
 }
-/// Frontend-neutral model picker result shared by GUI and TUI surfaces.
+/// Frontend-neutral model picker result.
 #[derive(Clone, Debug)]
 pub struct ModelPickerChoice {
     pub llm: LLMInfo,

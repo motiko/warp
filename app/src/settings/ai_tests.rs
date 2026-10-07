@@ -1,6 +1,6 @@
 use chrono::Utc;
 use settings::schema::SettingSchemaEntry;
-use settings::{Setting, SettingSurfaces, SettingsMode};
+use settings::{Setting, SettingSurfaces};
 use warp_graphql::scalars::time::ServerTimestamp;
 use warpui::{App, SingletonEntity};
 
@@ -34,7 +34,7 @@ fn create_test_request_limit_info(
 }
 
 #[test]
-fn auto_approve_denylist_bypass_defaults_on_and_is_available_in_gui_and_tui_settings() {
+fn auto_approve_denylist_bypass_defaults_on_and_is_available_in_gui_settings() {
     let setting = AutoApproveBypassesCommandDenylist::new(None);
     assert!(*setting.value());
     assert_eq!(
@@ -50,8 +50,7 @@ fn auto_approve_denylist_bypass_defaults_on_and_is_available_in_gui_and_tui_sett
         })
         .expect("expected auto-approve denylist bypass schema entry");
     let surfaces: SettingSurfaces = (entry.surfaces_fn)();
-    assert!(surfaces.includes(SettingsMode::Gui));
-    assert!(surfaces.includes(SettingsMode::Tui));
+    assert!(surfaces.includes_gui());
 }
 
 fn add_ai_enablement_dependencies_for_test(app: &mut App) {
@@ -67,86 +66,6 @@ fn focused_terminal_for_test(app: &mut App) -> WeakViewHandle<TerminalView> {
     crate::test_util::add_window_with_terminal(app, None).downgrade()
 }
 
-#[test]
-fn tui_statusline_default_matches_figma() {
-    let config = TuiStatuslineConfig::default();
-    assert_eq!(config.order, TuiStatuslineItem::ALL);
-    assert_eq!(
-        config.enabled,
-        vec![
-            TuiStatuslineItem::AutoApprove,
-            TuiStatuslineItem::VimModeIndicator,
-            TuiStatuslineItem::Model,
-            TuiStatuslineItem::WorkingDirectory,
-            TuiStatuslineItem::GitBranch,
-            TuiStatuslineItem::GitDiffStatus,
-        ]
-    );
-}
-
-#[test]
-fn tui_statusline_normalization_preserves_custom_order_and_appends_missing_items() {
-    let config = TuiStatuslineConfig {
-        order: vec![
-            TuiStatuslineItem::GitBranch,
-            TuiStatuslineItem::Model,
-            TuiStatuslineItem::GitBranch,
-        ],
-        enabled: vec![
-            TuiStatuslineItem::Model,
-            TuiStatuslineItem::Model,
-            TuiStatuslineItem::ContextWindowUsage,
-        ],
-    }
-    .normalized();
-
-    assert_eq!(
-        config.order,
-        vec![
-            TuiStatuslineItem::GitBranch,
-            TuiStatuslineItem::Model,
-            TuiStatuslineItem::AutoApprove,
-            TuiStatuslineItem::VimModeIndicator,
-            TuiStatuslineItem::Team,
-            TuiStatuslineItem::WorkingDirectory,
-            TuiStatuslineItem::GitBranchStatus,
-            TuiStatuslineItem::GitDiffStatus,
-            TuiStatuslineItem::GitHubPullRequest,
-            TuiStatuslineItem::CreditUsage,
-            TuiStatuslineItem::ContextWindowUsage,
-            TuiStatuslineItem::Date,
-            TuiStatuslineItem::Time12Hour,
-            TuiStatuslineItem::Time24Hour,
-            TuiStatuslineItem::AgentTodoList,
-            TuiStatuslineItem::VoiceInput,
-        ]
-    );
-    assert_eq!(
-        config.enabled,
-        vec![
-            TuiStatuslineItem::VimModeIndicator,
-            TuiStatuslineItem::Model,
-            TuiStatuslineItem::ContextWindowUsage,
-        ]
-    );
-}
-
-#[test]
-fn tui_statusline_normalization_preserves_explicitly_disabled_vim_indicator() {
-    let mut config = TuiStatuslineConfig::default();
-    config
-        .enabled
-        .retain(|item| *item != TuiStatuslineItem::VimModeIndicator);
-
-    let normalized = config.normalized();
-
-    assert!(
-        normalized
-            .order
-            .contains(&TuiStatuslineItem::VimModeIndicator)
-    );
-    assert!(!normalized.is_enabled(TuiStatuslineItem::VimModeIndicator));
-}
 // FocusedTerminalInfo Tests
 
 #[test]
@@ -1002,7 +921,6 @@ fn ai_autodetection_setting_can_be_toggled_on_and_off() {
             settings.is_any_ai_enabled.set_value(true, ctx).unwrap();
         });
 
-        // Mirrors what `/enable-natural-language-detection` does in the TUI.
         AISettings::handle(&app).update(&mut app, |settings, ctx| {
             settings
                 .ai_autodetection_enabled_internal
@@ -1014,7 +932,6 @@ fn ai_autodetection_setting_can_be_toggled_on_and_off() {
             assert!(settings.is_ai_autodetection_enabled(ctx));
         });
 
-        // Mirrors what `/disable-natural-language-detection` does in the TUI.
         AISettings::handle(&app).update(&mut app, |settings, ctx| {
             settings
                 .ai_autodetection_enabled_internal

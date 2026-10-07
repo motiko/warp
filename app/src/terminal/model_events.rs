@@ -25,8 +25,6 @@ use crate::terminal::shell::ShellType;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SshRemoteServerSupport {
     Enabled,
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    Disabled,
 }
 
 impl SshRemoteServerSupport {

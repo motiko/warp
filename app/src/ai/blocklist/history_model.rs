@@ -2080,9 +2080,8 @@ impl BlocklistAIHistoryModel {
     ) {
         // Track whether this update changes any state derived by
         // `BlocklistAIHistoryEvent::ConversationUsageMetadataUpdated`
-        // subscribers (e.g. the orchestration credit rollup or the TUI
-        // footer's usage entry). We emit the event only when there's actual
-        // data to react to.
+        // subscribers (e.g. the orchestration credit rollup). We emit the event
+        // only when there's actual data to react to.
         let emits_usage_event = request_cost.is_some()
             || request_charges.is_some()
             || usage_metadata.is_some()

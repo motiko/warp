@@ -1,5 +1,5 @@
 //! Run-wide orchestration edit state shared by the GUI confirmation
-//! card / plan-card config block and the TUI orchestration card.
+//! card and plan-card config block.
 
 use ai::agent::action::RunAgentsExecutionMode;
 use ai::agent::orchestration_config::{OrchestrationConfig, OrchestrationExecutionMode};

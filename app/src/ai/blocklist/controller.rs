@@ -660,8 +660,7 @@ impl BlocklistAIController {
             }
             // Viewer-mode events are handled by `OrchestrationViewerModel`.
             OrchestrationEventStreamerEvent::ChildSpawned { .. }
-            | OrchestrationEventStreamerEvent::ChildStatusChanged { .. }
-            | OrchestrationEventStreamerEvent::WatchedRunStatusChanged { .. } => {}
+            | OrchestrationEventStreamerEvent::ChildStatusChanged { .. } => {}
         });
         Self {
             input_model,

@@ -254,7 +254,9 @@ fn build_test_context_model(app: &mut App) -> ModelHandle<BlocklistAIContextMode
 }
 
 /// Builds context state for a TUI conversation surface.
-fn build_tui_context_model(app: &mut App) -> (ModelHandle<BlocklistAIContextModel>, EntityId) {
+fn build_terminal_surface_context_model(
+    app: &mut App,
+) -> (ModelHandle<BlocklistAIContextModel>, EntityId) {
     initialize_history_persistence_for_tests(app);
     app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
     let terminal_model = Arc::new(FairMutex::new(TerminalModel::new_for_test(
@@ -284,9 +286,9 @@ fn build_tui_context_model(app: &mut App) -> (ModelHandle<BlocklistAIContextMode
 }
 
 #[test]
-fn tui_context_tracks_selected_conversation() {
+fn context_tracks_selected_conversation() {
     App::test((), |mut app| async move {
-        let (model, _) = build_tui_context_model(&mut app);
+        let (model, _) = build_terminal_surface_context_model(&mut app);
         let conversation_id = AIConversationId::new();
 
         model.update(&mut app, |model, ctx| {
@@ -310,16 +312,16 @@ fn tui_context_tracks_selected_conversation() {
 }
 
 #[test]
-fn tui_new_conversation_is_selected_and_terminal_surface_scoped() {
+fn new_conversation_is_selected_and_terminal_surface_scoped() {
     App::test((), |mut app| async move {
-        let (model, terminal_surface_id) = build_tui_context_model(&mut app);
+        let (model, terminal_surface_id) = build_terminal_surface_context_model(&mut app);
         let history = BlocklistAIHistoryModel::handle(&app);
 
         let conversation_id = model
             .update(&mut app, |model, ctx| {
                 model.try_start_new_conversation(AgentViewEntryOrigin::Cli, ctx)
             })
-            .expect("TUI conversation creation should succeed");
+            .expect("conversation creation should succeed");
 
         model.read(&app, |model, ctx| {
             assert_eq!(model.selected_conversation_id(ctx), Some(conversation_id));

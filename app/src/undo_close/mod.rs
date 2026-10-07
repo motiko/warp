@@ -21,7 +21,5 @@ pub fn init(ctx: &mut AppContext) {
         WorkspaceAction::ReopenClosedSession,
     )
     .with_custom_action(CustomAction::ReopenClosedSession)
-    // Scope to the GUI `Workspace` context so this binding doesn't leak into the
-    // headless TUI's keymap contexts (mirrors the sibling `workspace:*` bindings).
     .with_context_predicate(id!("Workspace"))]);
 }

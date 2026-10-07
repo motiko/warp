@@ -1,9 +1,9 @@
 //! Surface-owned storage and the shared persistence flow for `RequestFileEdits`
 //! diffs.
 //!
-//! Every surface that stores pending diffs — the GUI `CodeDiffView` and the
-//! up-stack TUI diff storage — implements [`DiffStorage`], a required-methods-
-//! only contract: an accept-time snapshot of per-file state plus the
+//! Every surface that stores pending diffs (e.g. the GUI `CodeDiffView`)
+//! implements [`DiffStorage`], a required-methods-only contract: an
+//! accept-time snapshot of per-file state plus the
 //! surface-specific write kickoff. The shared save-completion flow is
 //! [`DiffStorageHelper`], blanket-implemented for every `DiffStorage` so no
 //! surface can override it: it joins the per-file save futures, computes each

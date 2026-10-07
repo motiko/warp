@@ -775,8 +775,8 @@ impl TemplatableMCPServerManager {
     pub fn sync_builtin_servers(&mut self, force_respawn: bool, ctx: &mut ModelContext<Self>) {
         let installation_uuid = builtin::FACTORY_MCP_INSTALLATION_UUID;
         let auth_state = AuthStateProvider::as_ref(ctx).get().clone();
-        // Built-ins attach only in interactive clients (GUI and TUI); CLI
-        // agent runs manage their MCP servers explicitly.
+        // Built-ins attach only in interactive clients; CLI agent runs manage
+        // their MCP servers explicitly.
         let eligible = FeatureFlag::FactoryMcp.is_enabled()
             && AppExecutionMode::as_ref(ctx).can_autostart_mcp_servers()
             && !auth_state.is_anonymous_or_logged_out();
@@ -827,7 +827,7 @@ impl TemplatableMCPServerManager {
         log::info!("Spawning the built-in Factory MCP server");
         self.builtin_server_uuids.insert(installation_uuid);
         self.builtin_server_token = Some(token.clone());
-        // No ambient headers here: this path only ever runs for interactive (GUI/TUI)
+        // No ambient headers here: this path only ever runs for interactive
         // clients, which have no active ambient task. CLI/cloud agent runs attach their
         // own run-scoped installation instead (see AgentDriver::builtin_factory_mcp_for_run).
         self.spawn_ephemeral_server(builtin::factory_mcp_installation(&token, &[]), ctx);
@@ -1011,7 +1011,6 @@ impl TemplatableMCPServerManager {
         let (oauth_result_tx, oauth_result_rx) = async_channel::unbounded();
 
         let is_headless = AppExecutionMode::as_ref(ctx).is_autonomous();
-        let use_tui_loopback = settings::settings_mode() == settings::SettingsMode::Tui;
 
         let mut persisted_credentials = self.server_credentials.get(&template_uuid).cloned();
         if persisted_credentials.is_none() && FeatureFlag::FileBasedMcp.is_enabled() {
@@ -1031,16 +1030,9 @@ impl TemplatableMCPServerManager {
             let persist_spawner = ctx.spawner();
             let requires_authentication_spawner = ctx.spawner();
             let authenticated_spawner = ctx.spawner();
-            let callback_mode = if use_tui_loopback {
-                OAuthCallbackMode::Loopback
-            } else {
-                OAuthCallbackMode::CustomScheme {
-                    redirect_uri: format!(
-                        "{}://mcp/oauth2callback",
-                        ChannelState::url_scheme()
-                    ),
-                    result_rx: oauth_result_rx,
-                }
+            let callback_mode = OAuthCallbackMode::CustomScheme {
+                redirect_uri: format!("{}://mcp/oauth2callback", ChannelState::url_scheme()),
+                result_rx: oauth_result_rx,
             };
 
             AuthContext {
@@ -1074,7 +1066,7 @@ impl TemplatableMCPServerManager {
                     Box::pin(async move {
                         spawner
                             .spawn(move |manager, ctx| {
-                                if !use_tui_loopback && !csrf_state.is_empty() {
+                                if !csrf_state.is_empty() {
                                     manager.pending_oauth_csrf.insert(csrf_state, uuid);
                                 }
                                 manager.authorization_urls.insert(uuid, auth_url.clone());

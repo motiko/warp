@@ -1,6 +1,6 @@
 //! [`OrchestrationEditState`] and the logic for applying user edits to
-//! the orchestration config, shared by the GUI pickers and the TUI
-//! configuration pages. Changing one field (harness, execution mode,
+//! the orchestration config, shared by the GUI pickers. Changing one
+//! field (harness, execution mode,
 //! auth secret) cascades into dependent fields — model fallback,
 //! environment pre-fill, auth re-resolution — so those updates live here
 //! as `apply_*` methods rather than in each frontend. Each public method

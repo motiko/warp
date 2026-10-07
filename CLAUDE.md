@@ -13,9 +13,7 @@ supplementary and must not contradict it.
 - Run a single test: `cargo nextest run -p <package> <test_name_substring>` or with a filter
   expression, e.g. `cargo nextest run -p warp -E 'test(prefix_tests)'`. `-p warp` is the GUI app crate
   (`app/`).
-- `cargo check -p <package>` is the fastest feedback loop while editing. Note `cargo clippy -p warp`
-  lints the GUI configuration; `cargo clippy --workspace` additionally unifies the `tui` feature
-  through `warp_tui`, so both are run by presubmit.
+- `cargo check -p <package>` is the fastest feedback loop while editing.
 - `./script/format --check` verifies formatting. The formatter runs `cargo fmt` with
   `imports_granularity=Module` and `group_imports=StdExternalCrate` under `RUSTC_BOOTSTRAP=1`, so
   plain `cargo fmt` will not produce the same output.
@@ -31,8 +29,7 @@ supplementary and must not contradict it.
 `integration` (`integration.rs`, launched by the GUI integration test harness). Each `main` builds a
 `ChannelState` from an inline `ChannelConfig` (`WarpServerConfig::offline()` / `OzConfig::offline()`
 for `alefbet`, so the build has no server to talk to) and calls `warp::run()`. `./script/run` always
-builds `alefbet` / channel `oss`; `./script/run-tui` does the same for `warp-tui-oss` and always
-enables the `standalone` cargo feature so bundled resources resolve next to the binary.
+builds `alefbet` / channel `oss`.
 
 ## Architecture: how the pieces fit
 
@@ -66,8 +63,7 @@ enables the `standalone` cargo feature so bundled resources resolve next to the 
   `register_editable_bindings([EditableBinding::new("workspace:crash", desc, Action)
   .with_context_predicate(id!("Workspace"))])` and `register_fixed_bindings`. The matcher is
   `crates/warpui_core/src/keymap/`. User overrides come from a `keybindings.yaml` (binding name →
-  keystrokes or `"none"`) loaded by `app/src/keyboard.rs`. The TUI has its own table in
-  `crates/warp_tui/src/keybindings.rs`.
+  keystrokes or `"none"`) loaded by `app/src/keyboard.rs`.
 
 ### Terminal layers
 
@@ -92,7 +88,7 @@ enables the `standalone` cargo feature so bundled resources resolve next to the 
 
 - A setting is declared with `define_setting!` / `define_settings_group!` from `crates/settings`
   (`macros.rs`) in `app/src/settings/*.rs` and registered in `app/src/settings/init.rs`. Each
-  declaration names `type`, `default`, `supported_platforms`, `sync_to_cloud`, `surface` (GUI/TUI),
+  declaration names `type`, `default`, `supported_platforms`, `sync_to_cloud`, `surface`,
   `private`, `toml_path`, and `description`.
 - Values serialize through the `SettingsValue` trait (`crates/settings_value`, derive in
   `settings_value_derive`). Public settings persist to the user's `settings.toml`; private ones to

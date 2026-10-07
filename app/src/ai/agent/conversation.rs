@@ -210,11 +210,9 @@ fn footer_model_token_usage(
         .collect()
 }
 
-/// Conversation usage totals for compact displays (e.g. the TUI footer's
-/// usage entry).
+/// Conversation usage totals for compact displays.
 ///
-/// A projection computed on demand from existing conversation state — named
-/// so the underlying types don't leak through `tui_export`.
+/// A projection computed on demand from existing conversation state.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ConversationUsageTotals {
     /// Total credits spent (inference + platform), from the server's
@@ -4143,8 +4141,7 @@ impl AIConversation {
         self.total_token_usage_by_model.values().cloned().collect()
     }
 
-    /// Compact usage totals for lightweight displays (e.g. the TUI footer's
-    /// usage entry): the GUI-consistent credits total plus the server-seeded
+    /// Compact usage totals for lightweight displays: the credits total plus the server-seeded
     /// provider cost and any permitted live per-request deltas.
     pub fn usage_totals(&self) -> ConversationUsageTotals {
         ConversationUsageTotals {
@@ -4887,7 +4884,7 @@ pub enum AIAgentSerializedBlockFormat {
 pub struct AIAgentConversationFormat {
     /// Whether there is a Warp MAA task list available for this conversation.
     pub has_task_list: bool,
-    /// The format of the TUI serialized block, if available.
+    /// The format of the serialized block snapshot, if available.
     pub block_snapshot: Option<AIAgentSerializedBlockFormat>,
 }
 

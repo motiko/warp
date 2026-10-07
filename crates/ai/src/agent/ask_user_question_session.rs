@@ -145,7 +145,7 @@ pub enum AskUserQuestionEffect {
     Submit(Vec<AskUserQuestionAnswerItem>),
 }
 
-/// Frontend-neutral questionnaire state shared by the GUI and TUI.
+/// Frontend-neutral questionnaire state.
 pub struct AskUserQuestionSession {
     questions: Vec<AskUserQuestionItem>,
     state: AskUserQuestionState,

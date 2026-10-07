@@ -58,10 +58,8 @@ fn split_command_and_argument(buffer: &str) -> (&str, Option<&str>) {
         })
 }
 
-/// Command availability gates whose inputs are identical on every surface.
-///
-/// These do not depend on GUI-only concepts such as cloud mode or the agent view;
-/// they are computed once per recompute and shared by both surfaces.
+/// Command availability gates that do not depend on view concepts such as cloud mode or the
+/// agent view; they are computed once per recompute.
 pub struct CommonCommandGates {
     is_orchestration_enabled: bool,
     is_cloud_handoff_enabled: bool,
@@ -69,8 +67,8 @@ pub struct CommonCommandGates {
     is_cli_agent_input: bool,
 }
 
-/// Subscribe a concrete surface data source to dependencies that affect both GUI and TUI command
-/// availability. The callback remains concrete, so this helper does not require a surface trait.
+/// Subscribe a concrete data source to dependencies that affect command availability. The
+/// callback remains concrete, so this helper does not require a surface trait.
 pub(super) fn subscribe_to_shared_dependencies<T>(
     active_session: &ModelHandle<ActiveSession>,
     cli_subagent_controller: &ModelHandle<CLISubagentController>,
@@ -163,11 +161,11 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
     );
 }
 
-/// State shared by GUI and TUI slash command data sources.
+/// State shared by slash command data sources.
 ///
 /// Surface-neutral behavior is provided by [`SlashCommandDataSource`]. Surface-specific behavior
 /// such as agent view, cloud mode, compact rendering, recomputation, and event emission lives on
-/// the wrapping surface types.
+/// the wrapping data source types.
 pub struct SlashCommandDataSourceState {
     active_session: ModelHandle<ActiveSession>,
     cli_subagent_controller: ModelHandle<CLISubagentController>,
@@ -196,7 +194,7 @@ impl SlashCommandDataSourceState {
     }
 }
 
-/// Surface-neutral slash command behavior shared by GUI and TUI data sources.
+/// Surface-neutral slash command behavior shared by slash command data sources.
 ///
 /// Implementors provide access to their shared state. Default methods own the behavior whose
 /// meaning is identical across surfaces, while each concrete surface retains lifecycle wiring,
@@ -224,7 +222,7 @@ pub trait SlashCommandDataSource {
         self.state().active_commands_by_id.iter()
     }
 
-    /// Classifies slash command input consistently across GUI and TUI surfaces.
+    /// Classifies slash command input.
     fn parse_input(&self, buffer: &str, ctx: &AppContext) -> ParsedSlashCommandInput {
         if !buffer.starts_with('/') {
             return ParsedSlashCommandInput::None;
@@ -662,7 +660,7 @@ impl InlineItem {
         let appearance = Appearance::as_ref(app);
         Self {
             action: AcceptSlashCommandOrSavedPrompt::SlashCommand { id: *command_id },
-            icon_path: command.supported_surfaces.gui_icon_path(),
+            icon_path: Some(command.icon_path),
             name: command.name.to_owned(),
             description: Some(command.description.to_owned()),
             font_family: appearance.monospace_font_family(),
