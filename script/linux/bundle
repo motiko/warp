@@ -224,9 +224,9 @@ elif [[ $RELEASE_CHANNEL = "stable" ]]; then
   BINARY_NAME="warp"
   APP_NAME="Warp"
 elif [[ $RELEASE_CHANNEL = "oss" ]]; then
-  WARP_BIN="warp-oss"
-  BINARY_NAME="warp-oss"
-  APP_NAME="WarpOss"
+  WARP_BIN="alefbet"
+  BINARY_NAME="alefbet"
+  APP_NAME="Alefbet"
   # The OSS channel does not ship Sentry, so drop the crash_reporting feature
   # (which would otherwise pull in the Sentry SDK as a dependency).
   FEATURES="release_bundle"
@@ -235,9 +235,11 @@ fi
 # Artifact-specific binary naming
 if [[ "$ARTIFACT" == "cli" ]]; then
   # For CLI artifacts, use oz instead of warp as the binary name.  The OSS
-  # channel is an exception: its CLI command name is `warp-oss`, matching
+  # channel is an exception: its CLI command name is `alefbet-cli`, matching
   # `Channel::cli_command_name` in the Rust source.
-  if [[ $RELEASE_CHANNEL != "oss" ]]; then
+  if [[ $RELEASE_CHANNEL = "oss" ]]; then
+    BINARY_NAME="alefbet-cli"
+  else
     BINARY_NAME="${BINARY_NAME/warp/oz}"
   fi
 elif [[ "$ARTIFACT" == "warpctrl" ]]; then
@@ -280,7 +282,13 @@ if [[ -n "$EXTRA_FEATURES" ]]; then
   fi
 fi
 
-BUNDLE_ID="dev.warp.$APP_NAME"
+# The OSS channel ships under its own organization; see `gui_app_id_for_channel` in
+# crates/warp_core/src/paths.rs.
+if [[ $RELEASE_CHANNEL = "oss" && "$ARTIFACT" != "tui" ]]; then
+  BUNDLE_ID="dev.alefbet.$APP_NAME"
+else
+  BUNDLE_ID="dev.warp.$APP_NAME"
+fi
 EXECUTABLE_PATH="$CARGO_TARGET_OUTPUT_DIR/$WARP_BIN"
 DEBUG_EXECUTABLE_PATH="$EXECUTABLE_PATH.debug"
 

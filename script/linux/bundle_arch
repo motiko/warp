@@ -15,8 +15,11 @@
 
 set -e
 
-# Extract channel suffix from BINARY_NAME
-if [ "$ARTIFACT" = "cli" ]; then
+# Extract channel suffix from BINARY_NAME.  The OSS binaries are named after
+# Alefbet rather than warp/oz, so their suffix is fixed instead.
+if [ "$RELEASE_CHANNEL" = "oss" ]; then
+  CHANNEL_SUFFIX="-oss"
+elif [ "$ARTIFACT" = "cli" ]; then
   CHANNEL_SUFFIX="${BINARY_NAME#oz}"
 else
   CHANNEL_SUFFIX="${BINARY_NAME#warp}"

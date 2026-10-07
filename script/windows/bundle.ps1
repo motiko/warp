@@ -155,9 +155,9 @@ if ("$CHANNEL" -eq 'local') {
     $BINARY_NAME = 'warp.exe'
     $APP_NAME = 'Warp'
 } elseif ("$CHANNEL" -eq 'oss') {
-    $WARP_BIN = 'warp-oss'
-    $BINARY_NAME = 'warp-oss.exe'
-    $APP_NAME = 'WarpOss'
+    $WARP_BIN = 'alefbet'
+    $BINARY_NAME = 'alefbet.exe'
+    $APP_NAME = 'Alefbet'
     # The OSS channel does not ship Sentry, so drop the crash_reporting feature
     # (which would otherwise pull in the Sentry SDK as a dependency).
     $FEATURES = 'release_bundle,gui'
@@ -182,7 +182,7 @@ if ($IS_TUI) {
         'dev' { 'warp-dev' }
         'preview' { 'warp-preview' }
         'stable' { 'warp' }
-        'oss' { 'warp-oss' }
+        'oss' { 'alefbet' }
     }
     $INSTALL_DIR_NAME = switch ($CHANNEL) {
         'local' { 'tui-local' }
@@ -211,7 +211,13 @@ if ($IS_TUI) {
 }
 
 $BINARY_PATH = "$CARGO_TARGET_OUTPUT_DIR\$BINARY_NAME"
-$BUNDLE_ID = "dev.warp.$APP_NAME"
+# The OSS channel ships under its own organization; see `gui_app_id_for_channel` in
+# crates/warp_core/src/paths.rs.
+if (("$CHANNEL" -eq 'oss') -and (-not $IS_TUI)) {
+    $BUNDLE_ID = "dev.alefbet.$APP_NAME"
+} else {
+    $BUNDLE_ID = "dev.warp.$APP_NAME"
+}
 $INSTALLER_OUTPUT_DIR = "$WINDOWS_INSTALLER_DIR\Output"
 $INSTALLER_NAME = "$($APP_NAME)$($FILE_ENDING)"
 $INSTALLER_PATH = "$($INSTALLER_OUTPUT_DIR)\$($INSTALLER_NAME).exe"
