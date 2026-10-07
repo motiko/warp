@@ -24,7 +24,7 @@ use crate::inline_menu::{
 };
 use crate::input_mode_policy::AI_LOCKED_CONFIG;
 use crate::input_suggestions_mode::TuiInputSuggestionsModeModel;
-use crate::test_fixtures::add_test_semantic_selection;
+use crate::test_fixtures::{add_test_semantic_selection, enable_ai_for_tests};
 use crate::tui_builder::TuiUiBuilder;
 
 const W: u16 = 80;
@@ -83,6 +83,7 @@ fn setup(
     input_type: InputType,
 ) -> (MenuSetup, impl Future<Output = ()> + use<>) {
     register_tui_input_mode_test_settings(ctx);
+    enable_ai_for_tests(ctx);
     ctx.add_singleton_model(|_| Appearance::mock());
     add_test_semantic_selection(ctx);
     ctx.add_singleton_model(|_| {

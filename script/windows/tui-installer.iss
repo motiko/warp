@@ -1,7 +1,7 @@
 #include "environment.iss"
 
-#define MyAppPublisher "Denver Technologies, Inc."
-#define MyAppURL "https://www.warp.dev/"
+#define MyAppPublisher "Alefbet"
+#define MyAppURL "https://github.com/motiko/warp"
 #ifndef MyAppName
   #define MyAppName "WarpAgentCLIDev"
 #endif
@@ -27,10 +27,10 @@
   #define WindowsAssetsDir "..\..\app\assets\windows\x64"
 #endif
 
-#define ProductRegistryKey "SOFTWARE\Warp.dev\WarpAgentCLI\" + ReleaseChannel
+#define ProductRegistryKey "SOFTWARE\Alefbet\AgentCLI\" + ReleaseChannel
 
 [Setup]
-AppId=warp-agent-cli-{#ReleaseChannel}
+AppId=alefbet-agent-cli-{#ReleaseChannel}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -54,12 +54,12 @@ OutputBaseFilename={#OutputName}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
-WizardSmallImageFile="installer-images\warp-logo.bmp"
-WizardImageFile="installer-images\warp-banner.bmp"
+WizardSmallImageFile="installer-images\alefbet-logo.bmp"
+WizardImageFile="installer-images\alefbet-banner.bmp"
 SetupIconFile="..\..\app\channels\{#ReleaseChannel}\icon\no-padding\icon.ico"
 CloseApplications=no
 RestartApplications=no
-SetupMutex=Local\WarpAgentCLI{#ReleaseChannel}Setup
+SetupMutex=Local\AlefbetAgentCLI{#ReleaseChannel}Setup
 MinVersion=10.0.18362
 ChangesEnvironment=true
 RedirectionGuard=no
@@ -119,17 +119,17 @@ end;
 function GetDefaultInstallDir(Param: string): string;
 begin
   if IsAdminInstallMode then
-    Result := ExpandConstant('{commonappdata}\Warp\{#InstallDirName}')
+    Result := ExpandConstant('{commonappdata}\Alefbet\{#InstallDirName}')
   else
-    Result := ExpandConstant('{localappdata}\Warp\{#InstallDirName}');
+    Result := ExpandConstant('{localappdata}\Alefbet\{#InstallDirName}');
 end;
 
 function GetDefaultBinDir(): string;
 begin
   if IsAdminInstallMode then
-    Result := ExpandConstant('{commonappdata}\Warp\bin')
+    Result := ExpandConstant('{commonappdata}\Alefbet\bin')
   else
-    Result := ExpandConstant('{localappdata}\Warp\bin');
+    Result := ExpandConstant('{localappdata}\Alefbet\bin');
 end;
 function GetRegisteredBinDir(var BinDir: string): Boolean;
 begin
@@ -295,7 +295,7 @@ begin
     not AllowDowngrade() then
   begin
     Result :=
-      'Warp Agent CLI ' + CurrentVersion +
+      'Alefbet Agent CLI ' + CurrentVersion +
       ' is newer than {#MyAppVersion}. Pass /allow_downgrade=1 to install an older version.';
     exit;
   end;
@@ -322,7 +322,7 @@ begin
     exit;
 
   if not IsCompleteVersionDir(VersionDir(ExpandConstant('{app}'), '{#MyAppVersion}')) then
-    RaiseException('The installed Warp Agent CLI payload is incomplete');
+    RaiseException('The installed Alefbet Agent CLI payload is incomplete');
 
   BinDir := GetBinDir('');
   if (PreviousBinDir <> '') and

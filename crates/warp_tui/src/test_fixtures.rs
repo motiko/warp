@@ -4,7 +4,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use parking_lot::FairMutex;
-use warp::settings::SettingsFileError;
+use warp::settings::{AISettings, SettingsFileError};
 use warp::tui_export::{
     AIConversationAutoexecuteMode, ActiveSession, Appearance, BlocklistAIActionModel,
     BlocklistAIHistoryModel, ConversationSelection, ConversationSelectionHandle,
@@ -13,7 +13,8 @@ use warp::tui_export::{
 };
 use warp_core::execution_mode::{AppExecutionMode, ExecutionMode};
 use warp_core::semantic_selection::SemanticSelection;
-use warpui::{AddSingletonModel, App, EntityId, ModelHandle};
+use warp_core::settings::Setting as _;
+use warpui::{AddSingletonModel, App, EntityId, ModelHandle, SingletonEntity as _};
 use warpui_core::elements::tui::{TuiElement, TuiText};
 use warpui_core::{AppContext, Entity, TuiView, TypedActionView, ViewHandle, WindowId};
 
@@ -59,6 +60,16 @@ impl TuiView for TestHostView {
 impl TypedActionView for TestHostView {
     type Action = ();
 }
+/// Turns on `is_any_ai_enabled`, which defaults to off, for tests that exercise AI surfaces.
+pub(crate) fn enable_ai_for_tests(ctx: &mut AppContext) {
+    AISettings::handle(ctx).update(ctx, |settings, ctx| {
+        settings
+            .is_any_ai_enabled
+            .load_value(true, true, ctx)
+            .expect("enabling AI should succeed in tests");
+    });
+}
+
 /// Registers semantic-selection settings shared by selectable TUI test views.
 pub(crate) fn add_test_semantic_selection(ctx: &mut impl AddSingletonModel) {
     ctx.add_singleton_model(|_| SemanticSelection::mock(true, ""));

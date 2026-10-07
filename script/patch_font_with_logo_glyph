@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""Patches a TrueType font so that an SVG logo is available as a glyph at a Private Use Area
+codepoint. The outline is scaled to the font's cap height and sits on the baseline.
+
+If the codepoint is already mapped, that glyph's outline and metrics are replaced in place;
+otherwise a new glyph is appended. Everything else in the font (including the name table) is
+left untouched.
+
+Requires fontTools: `pip install fonttools`.
+"""
+import argparse
+import os
+import sys
+
+try:
+    from fontTools.pens.boundsPen import BoundsPen
+    from fontTools.pens.cu2quPen import Cu2QuPen
+    from fontTools.pens.recordingPen import RecordingPen
+    from fontTools.pens.transformPen import TransformPen
+    from fontTools.pens.ttGlyphPen import TTGlyphPen
+    from fontTools.svgLib import SVGPath
+    from fontTools.ttLib import TTFont
+except ImportError:
+    sys.exit("fontTools is required: pip install fonttools")
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_SVG_PATH = os.path.join(SCRIPT_DIR, "alefbet.svg")
+DEFAULT_CODEPOINT = 0xE500
+DEFAULT_GLYPH_NAME = "alefbetLogo"
+# Side bearing as a fraction of the em, applied on both sides of the outline.
+SIDE_BEARING_EM = 0.0625
+
+
+def parse_codepoint(value):
+    value = value.lower()
+    if value.startswith("0x") or value.startswith("u+"):
+        return int(value[2:], 16)
+    if any(c in value for c in "abcdef"):
+        return int(value, 16)
+    return int(value)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Patch a font so an SVG logo is available as a glyph.",
+        epilog="Requires fontTools (pip install fonttools).",
+    )
+    parser.add_argument("font", nargs="+", help="TrueType font file(s) to patch in place")
+    parser.add_argument("--svg", default=DEFAULT_SVG_PATH, help=f"default: {DEFAULT_SVG_PATH}")
+    parser.add_argument(
+        "--codepoint",
+        default=f"0x{DEFAULT_CODEPOINT:04X}",
+        help=f"hex (0xE500, U+E500, E500) or decimal; default: 0x{DEFAULT_CODEPOINT:04X}",
+    )
+    parser.add_argument(
+        "--name",
+        default=DEFAULT_GLYPH_NAME,
+        help=f"glyph name used when the codepoint is not yet mapped; default: {DEFAULT_GLYPH_NAME}",
+    )
+    return parser.parse_args()
+
+
+def svg_outline(svg_path):
+    recording = RecordingPen()
+    SVGPath(svg_path).draw(recording)
+    bounds = BoundsPen(None)
+    recording.replay(bounds)
+    if bounds.bounds is None:
+        sys.exit(f"No outlines found in {svg_path}")
+    return recording, bounds.bounds
+
+
+def build_glyph(font, outline, bounds):
+    upem = font["head"].unitsPerEm
+    cap_height = font["OS/2"].sCapHeight if "OS/2" in font else 0
+    if not cap_height:
+        cap_height = round(upem * 0.7)
+    xmin, ymin, xmax, ymax = bounds
+    scale = cap_height / (ymax - ymin)
+    side_bearing = round(upem * SIDE_BEARING_EM)
+    # SVG coordinates grow downwards, font coordinates upwards, so flip Y while scaling and
+    # move the outline so its bottom edge sits on the baseline.
+    transform = (scale, 0, 0, -scale, side_bearing - scale * xmin, cap_height + scale * ymin)
+
+    tt_pen = TTGlyphPen(None)
+    outline.replay(TransformPen(Cu2QuPen(tt_pen, max_err=upem / 1000), transform))
+    glyph = tt_pen.glyph()
+    advance = round(scale * (xmax - xmin) + 2 * side_bearing)
+    return glyph, advance, side_bearing
+
+
+def patch_font(font_path, svg_path, codepoint, glyph_name):
+    font = TTFont(font_path)
+    if "glyf" not in font:
+        sys.exit(f"{font_path}: only TrueType (glyf) fonts are supported")
+
+    outline, bounds = svg_outline(svg_path)
+    glyph, advance, side_bearing = build_glyph(font, outline, bounds)
+
+    existing = font.getBestCmap().get(codepoint)
+    if existing is not None:
+        glyph_name = existing
+    else:
+        order = font.getGlyphOrder()
+        if glyph_name in order:
+            sys.exit(f"{font_path}: glyph {glyph_name} already exists but is not mapped to U+{codepoint:04X}")
+        font.setGlyphOrder(order + [glyph_name])
+        font["glyf"].glyphOrder = font.getGlyphOrder()
+        for table in font["cmap"].tables:
+            if table.isUnicode():
+                table.cmap[codepoint] = glyph_name
+
+    font["glyf"][glyph_name] = glyph
+    font["hmtx"][glyph_name] = (advance, side_bearing)
+    font.save(font_path)
+    return glyph_name
+
+
+def main():
+    args = parse_args()
+    codepoint = parse_codepoint(args.codepoint)
+    if not os.path.exists(args.svg):
+        sys.exit(f"SVG not found: {args.svg}")
+    for font_path in args.font:
+        if not os.path.exists(font_path):
+            sys.exit(f"Font not found: {font_path}")
+        glyph_name = patch_font(font_path, args.svg, codepoint, args.name)
+        print(f"Patched {font_path} with U+{codepoint:04X} ({glyph_name})")
+
+
+if __name__ == "__main__":
+    main()

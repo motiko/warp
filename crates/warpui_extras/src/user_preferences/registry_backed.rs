@@ -12,7 +12,7 @@ pub struct RegistryBackedPreferences {
     app_key_path: String,
 }
 
-static WARP_REGISTRY_BASE_PATH: &str = "Software\\Warp.dev\\";
+static WARP_REGISTRY_BASE_PATH: &str = "Software\\Alefbet\\";
 pub const KEY_NOT_FOUND_ERR: HRESULT = HRESULT::from_win32(0x80070002);
 
 impl RegistryBackedPreferences {
@@ -23,12 +23,12 @@ impl RegistryBackedPreferences {
         }
     }
 
-    /// Gets Warp's registry key, creating it if it does not already exist.
+    /// Gets the app's registry key, creating it if it does not already exist.
     fn get_warp_registry(&self) -> Result<Key, super::Error> {
         CURRENT_USER.create(self.app_key_path.clone()).map_err(|e| {
             report_error!(
                 anyhow::Error::new(e.clone())
-                    .context("unable to access Warp app key in Windows Registry")
+                    .context("unable to access the app key in Windows Registry")
             );
             super::Error::IoError(io::Error::from(e))
         })

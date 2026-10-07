@@ -23,7 +23,7 @@ use super::{
 };
 use crate::inline_menu::{TuiInlineMenu, keep_selected_visible};
 use crate::input_suggestions_mode::{TuiInputSuggestionsMode, TuiInputSuggestionsModeModel};
-use crate::test_fixtures::add_test_conversation_selection;
+use crate::test_fixtures::{add_test_conversation_selection, enable_ai_for_tests};
 
 fn parsed_skill(argument: Option<&str>) -> ParsedSlashCommandInput {
     ParsedSlashCommandInput::SkillCommand(DetectedSkillCommand {
@@ -179,6 +179,7 @@ fn slash_command_menu_renders_auto_approve_row() {
 fn slash_command_menu_renders_natural_language_detection_row() {
     App::test((), |mut app| async move {
         register_tui_session_view_test_singletons(&mut app);
+        app.update(enable_ai_for_tests);
         app.update(|ctx| {
             let input_editor = ctx.add_model(|ctx| CodeEditorModel::new_tui(80, ctx));
             let suggestions_mode = ctx.add_model(|_| TuiInputSuggestionsModeModel::new());

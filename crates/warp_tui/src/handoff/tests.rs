@@ -20,7 +20,9 @@ use crate::handoff::TuiHandoffBlock;
 use crate::orchestration_model::TuiOrchestrationModel;
 use crate::root_view::RootTuiView;
 use crate::session_registry::TuiSessions;
-use crate::test_fixtures::{add_test_semantic_selection, add_test_terminal_session};
+use crate::test_fixtures::{
+    add_test_semantic_selection, add_test_terminal_session, enable_ai_for_tests,
+};
 
 struct Fixture {
     view: ViewHandle<TuiTerminalSessionView>,
@@ -29,6 +31,7 @@ struct Fixture {
 
 fn fixture(app: &mut App) -> Fixture {
     register_tui_session_view_test_singletons(app);
+    app.update(enable_ai_for_tests);
     add_test_semantic_selection(app);
     app.update(TuiAutoupdater::register);
     app.update(crate::keybindings::init);

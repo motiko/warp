@@ -112,7 +112,7 @@ use crate::terminal_use::TuiInputTarget;
 use crate::test_fixtures::{
     add_test_semantic_selection, add_test_terminal_session,
     add_test_terminal_session_with_first_run_onboarding,
-    add_test_terminal_session_with_settings_file_error,
+    add_test_terminal_session_with_settings_file_error, enable_ai_for_tests,
 };
 use crate::transcript_view::TRANSCRIPT_BLOCK_SPACING;
 use crate::transient_hint::TransientHintTone;
@@ -2740,6 +2740,7 @@ fn footer_model_label_is_a_bounded_click_target() {
 
 fn focus_test_fixture(app: &mut App) -> FocusTestFixture {
     register_tui_session_view_test_singletons(app);
+    app.update(enable_ai_for_tests);
     add_test_semantic_selection(app);
     app.update(TuiAutoupdater::register);
     let (window_id, _) = app.update(|ctx| {

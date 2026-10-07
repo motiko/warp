@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+#
+# Mirror the warpdotdev git dependencies of this workspace into our own GitHub namespace and
+# rewrite the manifests to point at the mirrors.
+#
+# Usage:
+#   script/mirror_git_deps --org <github-org> [--user] [--dry-run]
+#
+#   --org      Target GitHub namespace (organization, or user login together with --user).
+#   --user     The namespace is a personal account: fork with `gh repo fork` and no --org.
+#   --dry-run  Print every command that would run and change nothing.
+#
+# Third-party git sources (servo/core-foundation-rs) are left untouched. Every warpdotdev repo
+# is forked with `gh repo fork --clone=false`, which keeps the full history so the pinned
+# commits stay reachable. After the manifests and Cargo.lock are rewritten, run
+# `cargo metadata --format-version 1 --locked` to confirm the lock still resolves.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+UPSTREAM_ORG="warpdotdev"
+
+# upstream repo | pinned ref | crates resolved from it (per Cargo.lock) | declared in
+#
+# "uneval" is not declared by any workspace manifest: warpdotdev/workflows declares it in its own
+# Cargo.toml, so the mirror of `workflows` has to be updated (or a [patch] entry added) before
+# the warpdotdev entry can leave deny.toml.
+GIT_DEPS=(
+    "command-corrections|rev=eae08c8c51d9bc9741fcb17eef2c21f696aebbeb|command-corrections|Cargo.toml"
+    "font-kit|rev=a04b225ecb639bb850f21d05212cfdc7465000f3|font-kit|Cargo.toml"
+    "mermaid-to-svg|rev=8d3f789c2eb49335d7bf247a06bb649f59b6d4ed|mermaid_to_svg, dagre_rust|Cargo.toml"
+    "notify|rev=91b719849bc04ef251bcb2cc61076b099204e970|notify-debouncer-full, notify, notify-types, file-id|Cargo.toml"
+    "session-sharing-protocol|rev=f86afe16e65a56ecb9c062c961fcd91167192e9f|session-sharing-protocol|Cargo.toml"
+    "vte|rev=4b399c87b63ba88f45709edaa6383fc519f6c900|vte, vte_generate_state_changes, utf8parse|Cargo.toml"
+    "workflows|rev=793a98ddda6ef19682aed66364faebd2829f0e01|warp-workflows, warp-workflows-types|Cargo.toml"
+    "warp-proto-apis|rev=aad8b601abc02256ce6ea9648ff598ed0139a265|warp_multi_agent_api|Cargo.toml"
+    "command-signatures|rev=48fd7aa5b7b4d99f5db57d1c5a25c47c05567fcf|warp-command-signatures, warp-completion-metadata|Cargo.toml"
+    "winit|rev=14db95a686387211d57cf2afd1d908b2d82a20fe|winit, dpi|Cargo.toml"
+    "rust-objc|rev=5b656827fa9f863ef0eb22e444a3fedac009e78a|objc|Cargo.toml [patch.crates-io]"
+    "pathfinder|rev=34128a129ca6aee168fbc5060a4f21b4f7e486a9|pathfinder_simd|Cargo.toml [patch.crates-io]"
+    "yaml-rust|rev=51684719d0102ca85ff4b21cec39877a0c669e19|yaml-rust|Cargo.toml [patch.crates-io]"
+    "tink-rust|rev=54b9ac9af93b0c08b446a7bc0582836c9403a71b|tink-core, tink-proto, tink-hybrid|Cargo.toml [patch.crates-io]"
+    "jemallocator|rev=2ee30bfdf7059223b54810e4ea6c666f0a379e0b|tikv-jemallocator, tikv-jemalloc-sys|Cargo.toml [patch.crates-io]"
+    "difflib|rev=114177e7d8e1f8017baca397f943e11644b14d63|difflib|app/Cargo.toml"
+    "rust-email_address|rev=b3e5205b4efdc83832f230d8eb6894fd00a9ec32|email_address|app/Cargo.toml"
+    "cosmic-text|rev=a7c7b71497542758e08f77390b8efce543b3181f|cosmic-text|crates/warpui/Cargo.toml"
+    "dwrote-rs|rev=a71ce6c0136f7d0954a9a8b181b5b2d8ace5eb9c|dwrote|crates/warpui/Cargo.toml"
+    "uneval|rev=df4d9fad372aedc447e6f93ca0f930fabaf9dd1a|uneval|transitive (warpdotdev/workflows Cargo.toml)"
+)
+
+THIRD_PARTY_GIT_DEPS=(
+    "https://github.com/servo/core-foundation-rs|rev=6f844cf1a1a18e25b70fcdf1bcdc458555bd2eff|core-foundation, core-foundation-sys, core-graphics, core-graphics-types, core-text|Cargo.toml [patch.crates-io]"
+)
+
+MANIFESTS=(
+    "Cargo.toml"
+    "Cargo.lock"
+    "app/Cargo.toml"
+)
+while IFS= read -r manifest; do
+    MANIFESTS+=("$manifest")
+done < <(cd "$REPO_ROOT" && ls crates/*/Cargo.toml | sort)
+
+usage() {
+    sed -n '2,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+ORG=""
+NAMESPACE_IS_USER=0
+DRY_RUN=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --org)
+            [ $# -ge 2 ] || { echo "error: --org needs a value" >&2; exit 2; }
+            ORG="$2"
+            shift 2
+            ;;
+        --user)
+            NAMESPACE_IS_USER=1
+            shift
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "error: unknown argument: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+if [ -z "$ORG" ]; then
+    echo "error: --org is required" >&2
+    usage >&2
+    exit 2
+fi
+if [ "$ORG" = "$UPSTREAM_ORG" ]; then
+    echo "error: --org must differ from the upstream organization ($UPSTREAM_ORG)" >&2
+    exit 2
+fi
+
+run() {
+    if [ "$DRY_RUN" -eq 1 ]; then
+        printf '[dry-run] %q' "$1"
+        shift
+        for arg in "$@"; do
+            printf ' %q' "$arg"
+        done
+        printf '\n'
+    else
+        "$@"
+    fi
+}
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "Dry run: nothing will be forked or modified."
+fi
+
+echo
+echo "Git dependency inventory (upstream $UPSTREAM_ORG):"
+printf '  %-26s %-45s %s\n' "repo" "pinned ref" "crates (declared in)"
+for entry in "${GIT_DEPS[@]}"; do
+    IFS='|' read -r repo ref crates declared_in <<< "$entry"
+    printf '  %-26s %-45s %s (%s)\n' "$repo" "$ref" "$crates" "$declared_in"
+done
+echo
+echo "Third-party git dependencies left as they are:"
+for entry in "${THIRD_PARTY_GIT_DEPS[@]}"; do
+    IFS='|' read -r url ref crates declared_in <<< "$entry"
+    printf '  %-45s %-45s %s (%s)\n' "$url" "$ref" "$crates" "$declared_in"
+done
+
+echo
+echo "Step 1: fork each $UPSTREAM_ORG repository into $ORG"
+for entry in "${GIT_DEPS[@]}"; do
+    IFS='|' read -r repo _ _ _ <<< "$entry"
+    if [ "$NAMESPACE_IS_USER" -eq 1 ]; then
+        run gh repo fork "$UPSTREAM_ORG/$repo" --clone=false
+    else
+        run gh repo fork "$UPSTREAM_ORG/$repo" --org "$ORG" --clone=false
+    fi
+done
+
+echo
+echo "Step 2: rewrite git URLs in the manifests and Cargo.lock (pinned refs are untouched)"
+SED_EXPR="s#https://github\\.com/$UPSTREAM_ORG/#https://github.com/$ORG/#g"
+for manifest in "${MANIFESTS[@]}"; do
+    path="$REPO_ROOT/$manifest"
+    if ! grep -q "https://github.com/$UPSTREAM_ORG/" "$path"; then
+        continue
+    fi
+    matches="$(grep -c "https://github.com/$UPSTREAM_ORG/" "$path")"
+    echo "  $manifest ($matches occurrences)"
+    if [ "$(uname -s)" = "Darwin" ]; then
+        run sed -i '' -e "$SED_EXPR" "$path"
+    else
+        run sed -i -e "$SED_EXPR" "$path"
+    fi
+done
+
+echo
+echo "Step 3: update deny.toml [sources] by hand"
+echo "  replace:  allow-org = { github = [\"$UPSTREAM_ORG\"] }"
+echo "  with:     allow-org = { github = [\"$ORG\"] }"
+echo "  Keep \"$UPSTREAM_ORG\" in the list until the mirrored 'workflows' repo no longer declares"
+echo "  https://github.com/$UPSTREAM_ORG/uneval in its own Cargo.toml, or add to Cargo.toml:"
+echo "    [patch.\"https://github.com/$UPSTREAM_ORG/uneval\"]"
+echo "    uneval = { git = \"https://github.com/$ORG/uneval\", rev = \"df4d9fad372aedc447e6f93ca0f930fabaf9dd1a\" }"
+echo
+echo "Step 4: verify"
+echo "  cargo metadata --format-version 1 --locked > /dev/null"

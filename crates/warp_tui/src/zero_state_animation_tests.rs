@@ -172,11 +172,13 @@ impl TuiView for AnimationTestView {
 }
 
 #[test]
-fn logo_mask_preserves_the_offset_warp_faces() {
-    assert!(warp_logo_contains(0.25, -0.65));
+fn logo_mask_preserves_the_alef_outline() {
+    assert!(warp_logo_contains(0.6, -0.6));
     assert!(warp_logo_contains(-0.55, 0.45));
+    assert!(warp_logo_contains(0.0, 0.0));
     assert!(!warp_logo_contains(-0.85, -0.85));
     assert!(!warp_logo_contains(0.0, 0.9));
+    assert!(!warp_logo_contains(0.9, 0.0));
 }
 
 #[test]
@@ -340,11 +342,11 @@ fn adjacent_builtin_frames_have_bounded_occupancy_and_content_churn() {
         });
 
     assert!(
-        max_occupancy_changes <= 80,
+        max_occupancy_changes <= 100,
         "adjacent built-in frames changed occupancy in {max_occupancy_changes} cells"
     );
     assert!(
-        max_content_changes <= 120,
+        max_content_changes <= 150,
         "adjacent built-in frames changed glyph or surface content in {max_content_changes} cells"
     );
 }

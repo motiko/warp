@@ -49,5 +49,10 @@ allow-git = [
     # version to crates.io.
     "https://github.com/servo/core-foundation-rs",
 ]
-# Allow git references to all GitHub repositories in the warpdotdev organization.
+# Alefbet is a fork of Warp. The manifests still pin the upstream warpdotdev forks of
+# third-party crates by commit; once script/mirror_git_deps has mirrored them into the
+# Alefbet organization and rewritten the manifests, replace "warpdotdev" with that
+# organization here. Transitive git dependencies declared inside those forks (for
+# example uneval, pulled in by warp-workflows) keep pointing at warpdotdev until the
+# mirrored fork's own manifest is updated, so keep the upstream entry until then.
 allow-org = { github = ["warpdotdev"] }

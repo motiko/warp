@@ -129,20 +129,12 @@ the MCP runtime, and the CLI. App-level platform code is in `app/src/platform/`.
 ## Contribution workflow (from CONTRIBUTING.md)
 
 - Branch from `master`; branch names are prefixed with your handle (e.g. `alice/fix-parser`).
-- PRs must link a GitHub issue labeled `ready-to-implement` (bugs, settled designs) or
-  `ready-to-spec` (features). Issues labeled `warp:reserved-internal` are off limits.
-- Feature work needs a spec PR first: `specs/GH<issue-number>/product.md` (numbered, testable
-  behavior invariants) and `tech.md` (Context, Proposed changes, Testing and validation). See
-  `specs/GH408/` for an example. Internal specs use `specs/APP-<n>/`.
+- Run the targeted validation from AGENTS.md (relevant `cargo nextest` tests, `cargo clippy` for
+  the touched crates, `./script/format`); CI runs the full workspace checks.
 - PRs use `.github/pull_request_template.md`, need proof of manual testing (screenshots, or a
-  recording for interactive changes), and a changelog line. Besides the prefixes in AGENTS.md, the
-  template also accepts `CHANGELOG-OZ`, `CHANGELOG-TUI`, and `CHANGELOG-NONE` (explicit opt-out for
-  refactors/CI).
-- Review is two-stage: Oz reviews first, then a Warp SME. Comment `/warp-agent-review` to re-request
-  Oz (max three times per PR).
-- Project skills live in `.agents/skills/` (`.claude/skills` is a symlink to it). Shared skills are
-  pinned in `skills-lock.json`; the `/write-product-spec` and `/write-tech-spec` skills become
-  available once they are installed via `./script/bootstrap`.
+  recording for interactive changes), and a changelog line using the prefixes in AGENTS.md
+  (`CHANGELOG-NONE` opts out for refactors/CI). Linking an issue is welcome but not required.
+- There is no CLA, no spec requirement, and no issue-label gating.
 
 ## Licensing
 

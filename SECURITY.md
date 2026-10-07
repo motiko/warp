@@ -1,14 +1,22 @@
 # Security Policy
 
-We take security seriously at Warp and appreciate the efforts of security researchers who help keep our users safe.
-
 ## Reporting a Vulnerability
 
-If you believe you've found a security vulnerability, please follow responsible disclosure practices and **do not** open a public GitHub issue or pull request, as this could expose the vulnerability before a fix is available.
+If you believe you have found a security vulnerability in Alefbet, please follow responsible
+disclosure practices and **do not** open a public GitHub issue or pull request, as this could
+expose the vulnerability before a fix is available.
 
-Instead, please report it through one of the following channels:
+Instead, report it privately through GitHub's private vulnerability reporting: open the
+**Security** tab of this repository and choose **Report a vulnerability** to create a private
+security advisory. Only the repository maintainers can see the report.
 
-- **Email:** [security@warp.dev](mailto:security@warp.dev)
-- **GitHub Security Advisory:** [Open a private advisory](https://github.com/warpdotdev/Warp/security/advisories/new)
+Please include steps to reproduce, the affected version or commit, and any relevant logs or
+screenshots. We will acknowledge the report and work with you on a fix before anything is
+published.
 
-We will acknowledge your report promptly and work with you to understand and resolve the issue as quickly as possible.
+## Scope
+
+Alefbet runs entirely on the local machine and does not talk to any server, so most reports will
+concern local behavior: the terminal emulator, shell integration, file handling, or the build and
+packaging scripts. Issues that only affect upstream Warp's hosted services are out of scope for
+this repository.

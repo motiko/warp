@@ -292,12 +292,12 @@ pub enum Icon {
     AntigravityLogo,
     NLD,
     Oz,
-    /// The Warp "W" glyph used as the agent brand mark (sourced from
+    /// The alef mark used as the agent brand mark (sourced from
     /// `bundled/svg/warp-drive.svg`). The background and tint color are
     /// the **call site's responsibility** — this variant carries the shape
     /// only. Most surfaces tint it with the surrounding theme color (light
     /// theme: dark glyph; dark theme: light glyph). Kept distinct from
-    /// `Warp` so agent surfaces and non-agent Warp UI (e.g.
+    /// `Warp` so agent surfaces and non-agent UI (e.g.
     /// `QueryFilter::Drive`) can evolve independently.
     Agent,
     Conversation,
@@ -413,9 +413,9 @@ impl From<Icon> for &'static str {
             Icon::CloudOffline => "bundled/svg/cloud-offline.svg",
             Icon::Compass => "bundled/svg/compass-3.svg",
             Icon::CreateTeam => "bundled/svg/create-team.svg",
-            Icon::WarpDrive => "bundled/svg/warp.svg",
+            Icon::WarpDrive => "bundled/svg/alefbet.svg",
             Icon::Warp => "bundled/svg/warp-drive.svg",
-            Icon::WarpLogoLight => "bundled/svg/warp-logo-light.svg",
+            Icon::WarpLogoLight => "bundled/svg/alefbet-logo-light.svg",
             Icon::ArrowLeft => "bundled/svg/arrow-left.svg",
             Icon::ArrowBlockLeft => "bundled/svg/arrow-block-left.svg",
             Icon::ArrowBlockUp => "bundled/svg/arrow-block-up.svg",

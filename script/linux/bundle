@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds a Warp binary and bundles it up for distribution.
+# Builds an Alefbet binary and bundles it up for distribution.
 
 set -e
 
@@ -311,7 +311,7 @@ fi
 
 # Build the binary.
 if [[ "$BUILD" == "true" ]]; then
-  echo "Building and bundling Warp for channel $RELEASE_CHANNEL and bundle id $BUNDLE_ID"
+  echo "Building and bundling $APP_NAME for channel $RELEASE_CHANNEL and bundle id $BUNDLE_ID"
   if [[ "$ARTIFACT" == "tui" ]]; then
     cargo build -p warp_tui --profile "$CARGO_PROFILE" --bin "$WARP_BIN" --features "$WARP_TUI_FEATURES"
   else

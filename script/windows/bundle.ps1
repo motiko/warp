@@ -18,9 +18,9 @@ Param (
     [String]$RELEASE_TAG = '',
     [String]$FEATURES = 'release_bundle,crash_reporting,gui',
 
-    # Builds only the Warp binary, skips the installer.
+    # Builds only the app binary, skips the installer.
     [Switch]$SKIP_BUILD_INSTALLER = $False,
-    # Builds only the installer, skips the Warp binary. Use this if the Warp
+    # Builds only the installer, skips the app binary. Use this if the app
     # binary has already been built.
     [Switch]$SKIP_BUILD_BINARY = $False,
 
@@ -55,7 +55,7 @@ if ($ARCH -eq 'arm64') {
     $FILE_ENDING = 'Setup-arm64'
     $PLATFORM_TARGET = 'aarch64-pc-windows-msvc'
 } else {
-    # If x64, then we just use the filename "WarpSetup.exe" for example
+    # If x64, then we just use the filename "AlefbetSetup.exe" for example
     $FILE_ENDING = 'Setup'
     $PLATFORM_TARGET = 'x86_64-pc-windows-msvc'
 }
@@ -175,7 +175,7 @@ if ($IS_TUI) {
         'dev' { 'WarpAgentCLIDev' }
         'preview' { 'WarpAgentCLIPreview' }
         'stable' { 'WarpAgentCLI' }
-        'oss' { 'WarpAgentCLIOss' }
+        'oss' { 'AlefbetAgentCLI' }
     }
     $CLI_NAME = switch ($CHANNEL) {
         'local' { 'warp' }
@@ -251,19 +251,19 @@ if ($DEBUG_BUILD) {
 if ($CHECK_ONLY) {
     cargo check -p $CARGO_PACKAGE --profile "$CARGO_PROFILE" --bin "$WARP_BIN" --features "$FEATURES" --target $PLATFORM_TARGET
     if (-Not $?) {
-        Write-Error "Failed to verify Warp $WARP_BIN compilation with profile $CARGO_PROFILE"
+        Write-Error "Failed to verify $WARP_BIN compilation with profile $CARGO_PROFILE"
         exit 1
     }
     exit 0
 }
 
 if (-Not $SKIP_BUILD_BINARY) {
-    Write-Output "Building Warp for channel $CHANNEL and bundle id $BUNDLE_ID"
+    Write-Output "Building $APP_NAME for channel $CHANNEL and bundle id $BUNDLE_ID"
     $env:CARGO_BIN_NAME = $CHANNEL
     $env:WARP_APP_NAME = $APP_NAME
     cargo build -p $CARGO_PACKAGE --profile "$CARGO_PROFILE" --bin "$WARP_BIN" --features "$FEATURES" --target $PLATFORM_TARGET
     if (-Not $?) {
-        Write-Error "Failed to build Warp $WARP_BIN binary with profile $CARGO_PROFILE"
+        Write-Error "Failed to build $WARP_BIN binary with profile $CARGO_PROFILE"
         exit 1
     }
 
@@ -328,7 +328,7 @@ if ($IS_TUI -or $IS_CLI) {
     )
     foreach ($requiredFile in $requiredPayloadFiles) {
         if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
-            throw "Required Warp Agent CLI payload file does not exist: $requiredFile"
+            throw "Required Agent CLI payload file does not exist: $requiredFile"
         }
         if ($REQUIRE_SIGNATURES) {
             Assert-ValidSignature -Path $requiredFile
@@ -349,7 +349,7 @@ if ($IS_CLI) {
     exit 0
 }
 
-Write-Output 'Building Warp installer'
+Write-Output 'Building installer'
 $ISCC_ARGS = @(
     "$INSTALLER_SCRIPT",
     "/DReleaseChannel=$CHANNEL",

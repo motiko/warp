@@ -70,7 +70,7 @@ runs:
         git lfs ls-files --size
 
     - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      if: ${{ inputs.is_self_hosted != 'true' && !startsWith(runner.name, 'nsc-runner') }}
+      if: ${{ inputs.is_self_hosted != 'true' }}
       with:
         # Make sure x86_64-unknown-linux-gnu and wasm32-unknown-unknown builds
         # don't share a cache, despite running on the same _host_ architecture.
@@ -78,14 +78,6 @@ runs:
         # Only cache runs on the master branch (caches on feature branches
         # are not reusable).
         save-if: ${{ github.ref == 'refs/heads/master' }}
-
-    - name: Set up Namespace cache
-      if: ${{ startsWith(runner.name, 'nsc-runner') }}
-      uses: namespacelabs/nscloud-cache-action@a90bb5d4b27522ce881c6e98eebd7d7e6d1653f9 # v1.4.2
-      with:
-        cache: |
-          rust
-          ${{ inputs.target_os == 'macos' && 'brew' || '' }}
 
     # The script pins the binstall version, verifies the archive against an
     # in-repo SHA-256, retries transient download failures, and skips the

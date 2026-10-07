@@ -1,18 +1,14 @@
 name: Bug Report
-description: "Found a bug? Please search through our open issues and docs, to make sure it isn't already submitted. If you have an SSH related issue, please use the SSH Template below"
+description: "Found a bug? Please search the open issues first to make sure it isn't already reported."
 labels: ["bug"]
 body:
   - type: checkboxes
     attributes:
       label: "Pre-submit Checks"
       options:
-        - label: "I have [searched Warp bugs](https://github.com/warpdotdev/warp/issues?q=is%3Aissue+label%3ABUG) and there are no duplicates"
+        - label: "I have searched the open issues and there are no duplicates"
           required: true
-        - label: "I have [searched Warp known issues page](https://docs.warp.dev/help/known-issues) and my issue is not there"
-          required: true
-        - label: "I have an issue with AI and have included the debugging ID (Optional, but helps expedite the AI quality fix). [Debugging ID instructions](https://docs.warp.dev/agents/getting-started/faqs/#gathering-ai-debugging-id)"
-          required: false
-        - label: "I have technical issue and have included the logs (optional, but helps expedite the bug fix). [Log instructions](https://docs.warp.dev/support-and-community/troubleshooting-and-support/sending-us-feedback#gathering-warp-logs)"
+        - label: "I have included the log file (optional, but it helps). On macOS it is `~/Library/Logs/alefbet.log`."
           required: false
   - type: textarea
     id: "describe-the-bug"
@@ -26,8 +22,8 @@ body:
     id: "to-reproduce"
     attributes:
       label: "To reproduce"
-      description: "Bug reports with clear reproduction will get prioritized higher and addressed more quickly."
-      placeholder: "Steps to reproduce: 1. Go to '...' 2. Click on '...' 3. Scroll down to '...' 4. See error '...'"
+      description: "Bug reports with a clear reproduction get addressed more quickly."
+      placeholder: "Steps to reproduce: 1. Go to '...' 2. Click on '...' 3. See error '...'"
     validations:
       required: true
   - type: textarea
@@ -35,14 +31,13 @@ body:
     attributes:
       label: "Expected behavior"
       description: "A clear and concise description of what you expected to happen."
-      placeholder: Tell us what you expect to see.
     validations:
       required: false
   - type: textarea
     id: "screenshots-logs"
     attributes:
       label: "Screenshots, videos, and logs"
-      description: "If applicable, add screenshots/videos/logs to help us understand your problem. While optional, these help expedite the time in which your bug is addressed."
+      description: "If applicable, add screenshots, videos, or logs to help explain the problem."
     validations:
       required: false
   - type: dropdown
@@ -60,77 +55,40 @@ body:
   - type: input
     id: "os-version"
     attributes:
-      label: "Operating system and version"
-      description: "For example: Debian 11.2"
+      label: "Operating system version"
+      description: "For example: macOS 15.3"
     validations:
       required: true
   - type: input
-    id: "local-shell-version"
+    id: "shell-version"
     attributes:
-      label: "Shell Version"
-      description: "For example, `bash 4.0` e.g. Run `bash --version` or `zsh --version`"
+      label: "Shell and version"
+      description: "For example `zsh 5.9`. Run `bash --version`, `zsh --version`, or `fish --version`."
     validations:
       required: false
   - type: input
-    id: "warp-version"
+    id: "alefbet-version"
     attributes:
-      label: "Current Warp version"
-      description: "Open the Settings Dialog (CMD-,) using the Command Palette or by clicking the three dots > Settings > Account. Once you're on the Account page click the copy icon that's to the right of the version number. `v0.2047.04.07.47.47.stable_47`"
+      label: "Alefbet version or commit"
+      description: "The version shown in Settings, or the git commit you built from."
     validations:
       required: false
   - type: dropdown
-    id: "regression"
+    id: "terminals"
     attributes:
-      label: "Regression"
-      description: "Is this a regression (used to work in a previous Warp version)?"
+      label: "Is this an issue only in Alefbet?"
+      description: "Confirming that the issue does not happen in other terminals helps narrow it down."
       multiple: false
       options:
-        - "No, this bug or issue has existed throughout my experience using Warp"
-        - "Yes, this bug started recently or with an X Warp version"
-    validations:
-      required: true
-  - type: input
-    id: "warp-version-regression-date"
-    attributes:
-      label: "Recent working Warp date"
-      description: "Most recent date that Warp worked as expected"
+        - "Yes, this only happens in Alefbet, not in other terminals."
+        - "No, this happens in Alefbet and in other terminals."
+        - "I have not checked."
     validations:
       required: false
   - type: textarea
     id: "additional-context"
     attributes:
       label: "Additional context"
-      description: "Add any other context about the problem here. If using Warp on Linux, tell us if you're using X11 or Wayland. If the issue is graphical, run Warp with the following command `RUST_LOG=wgpu_core=info,wgpu_hal=info MESA_DEBUG=1 EGL_LOG_LEVEL=debug warp-terminal` attach logs and tell us the result of `eglinfo`."
-    validations:
-      required: false
-  - type: dropdown
-    id: "blocker"
-    attributes:
-      label: "Does this block you from using Warp daily?"
-      description: "All feedback will be reviewed, even if you select 'No'."
-      multiple: false
-      options:
-        - "No"
-        - "Yes, this issue prevents me from using Warp daily."
-    validations:
-      required: true
-  - type: dropdown
-    id: "terminals"
-    attributes:
-      label: "Is this an issue only in Warp?"
-      description: "Verifying this issue doesn't happen in other terminals helps us to prioritize the fix"
-      multiple: false
-      options:
-        - "Yes, I confirmed that this only happens in Warp, not other terminals."
-        - "No, this issue happens in Warp and other terminals."
-    validations:
-      required: true
-  - type: dropdown
-    id: "linear-label-bug"
-    attributes:
-      label: "Warp Internal (ignore): linear-label:b9d78064-c89e-4973-b153-5178a31ee54e"
-      multiple: false
-      options:
-        - Ignore
+      description: "Add any other context about the problem here. On Linux, say whether you are using X11 or Wayland."
     validations:
       required: false

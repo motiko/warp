@@ -73,7 +73,7 @@ if (-not (Get-Command ISCC -ErrorAction SilentlyContinue)) {
     throw 'ISCC is required to test the Windows TUI installer'
 }
 
-$testRoot = Join-Path ([System.IO.Path]::GetTempPath()) "warp tui installer $([guid]::NewGuid())"
+$testRoot = Join-Path ([System.IO.Path]::GetTempPath()) "alefbet tui installer $([guid]::NewGuid())"
 $inputDir = Join-Path $testRoot 'input'
 $assetsDir = Join-Path $testRoot 'assets'
 $outputDir = Join-Path $testRoot 'output'
@@ -114,7 +114,7 @@ try {
         throw 'The installer did not create the channel launcher'
     }
     if (-not (Test-Path -LiteralPath (Join-Path $installDir 'icon.ico') -PathType Leaf)) {
-        throw 'The installer did not install the Warp icon'
+        throw 'The installer did not install the Alefbet icon'
     }
 
     $version1Binary = Join-Path $installDir "versions\$version1\warp-tui-dev.exe"
@@ -143,7 +143,7 @@ try {
         throw 'The upgrade removed the running v1 payload'
     }
 
-    $registryPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\warp-agent-cli-dev_is1'
+    $registryPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\alefbet-agent-cli-dev_is1'
     $registration = Get-ItemProperty -LiteralPath $registryPath
     $registeredVersion = $registration.DisplayVersion
     if ($registeredVersion -cne $version2) {

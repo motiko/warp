@@ -57,7 +57,9 @@ use crate::model_menu::TuiModelMenuModel;
 use crate::prompt_and_command_history_menu::TuiPromptAndCommandHistoryMenuModel;
 use crate::read_only_menu::TuiReadOnlyMenuKind;
 use crate::slash_commands::{TuiSlashCommandModel, TuiSlashCommandRow};
-use crate::test_fixtures::{add_test_conversation_selection, add_test_semantic_selection};
+use crate::test_fixtures::{
+    add_test_conversation_selection, add_test_semantic_selection, enable_ai_for_tests,
+};
 use crate::tui_builder::TuiUiBuilder;
 #[cfg(feature = "voice_input")]
 use crate::voice_input::{TuiVoiceInputModel, TuiVoiceInputState};
@@ -285,6 +287,7 @@ fn build_view_with_masked_inline_menu(ctx: &mut AppContext) -> ViewHandle<TuiInp
 }
 fn add_test_input_mode(ctx: &mut AppContext) -> ModelHandle<BlocklistAIInputModel> {
     register_tui_input_mode_test_settings(ctx);
+    enable_ai_for_tests(ctx);
     BlocklistAIInputModel::mock(Rc::new(TestInputModePolicy), ctx)
 }
 
