@@ -350,19 +350,13 @@ impl PaneContent for TerminalPane {
                 );
             }
         });
-        let active_session = terminal_view.as_ref(ctx).active_session().clone();
         let active_stack_view = pane_stack.as_ref(ctx).active_view().clone();
         let active_ambient_session_registration = active_stack_view
             .as_ref(ctx)
             .ambient_agent_task_id_for_details_panel(ctx)
             .map(|task_id| (active_stack_view.id(), task_id));
         ActiveAgentViewsModel::handle(ctx).update(ctx, |model, ctx| {
-            model.register_agent_view_controller(
-                &agent_view_controller,
-                &active_session,
-                terminal_view_id,
-                ctx,
-            );
+            model.register_agent_view_controller(&agent_view_controller, terminal_view_id, ctx);
             if let Some((terminal_view_id, task_id)) = active_ambient_session_registration {
                 model.register_ambient_session(terminal_view_id, task_id, ctx);
             }
@@ -1021,11 +1015,6 @@ fn handle_terminal_view_event(
             Event::OpenSettings(section) => {
                 ctx.emit(pane_group::Event::OpenSettings(*section));
             }
-            Event::OpenAutoReloadModal { purchased_credits } => {
-                ctx.emit(pane_group::Event::OpenAutoReloadModal {
-                    purchased_credits: *purchased_credits,
-                });
-            }
             #[cfg(not(target_family = "wasm"))]
             Event::OpenPluginInstructionsPane(agent, kind) => {
                 ctx.emit(pane_group::Event::OpenPluginInstructionsPane(*agent, *kind));
@@ -1045,9 +1034,6 @@ fn handle_terminal_view_event(
             }
             Event::TerminalViewStateChanged => {
                 ctx.emit(pane_group::Event::TerminalViewStateChanged);
-            }
-            Event::OnboardingTutorialCompleted => {
-                ctx.emit(pane_group::Event::OnboardingTutorialCompleted);
             }
             Event::OpenWorkflowModalWithCommand(command) => {
                 ctx.emit(pane_group::Event::OpenWorkflowModalWithCommand(
@@ -1138,9 +1124,6 @@ fn handle_terminal_view_event(
             Event::StopSharingCurrentSession { .. } => {
                 group.stop_transitively_shared_child_shares(pane_id, ctx);
             }
-            Event::OpenShareSessionDeniedModal => {
-                group.open_share_session_denied_modal(terminal_pane_id, ctx);
-            }
             Event::FocusSession => {
                 group.focus_pane(terminal_pane_id.into(), true, ctx);
                 ctx.emit(pane_group::Event::FocusPaneGroup);
@@ -1196,11 +1179,6 @@ fn handle_terminal_view_event(
                 group.terminal_with_open_summarization_dialog = is_open.then_some(terminal_pane_id);
                 ctx.notify();
             }
-            Event::EnvironmentSetupModeSelectorToggled { is_open } => {
-                group.pane_with_open_environment_setup_mode_selector = is_open.then_some(pane_id);
-                ctx.notify();
-            }
-            Event::AnonymousUserSignup => ctx.emit(pane_group::Event::AnonymousUserSignup),
             #[cfg(feature = "local_fs")]
             Event::OpenFileWithTarget {
                 path,
@@ -1277,16 +1255,8 @@ fn handle_terminal_view_event(
                     upload_id: *upload_id,
                 })
             }
-            Event::SignupAnonymousUser { entrypoint } => {
-                ctx.emit(pane_group::Event::SignupAnonymousUser {
-                    entrypoint: *entrypoint,
-                });
-            }
             Event::OpenThemeChooser => {
                 ctx.emit(pane_group::Event::OpenThemeChooser);
-            }
-            Event::OpenMCPSettingsPage { page } => {
-                ctx.emit(pane_group::Event::OpenMCPSettingsPage { page: *page });
             }
             Event::OpenFilesPalette { source } => {
                 ctx.emit(pane_group::Event::OpenFilesPalette { source: *source })
@@ -1296,14 +1266,6 @@ fn handle_terminal_view_event(
             }
             Event::OpenRulesPane => {
                 ctx.emit(crate::pane_group::Event::OpenAIFactCollection { sync_id: None });
-            }
-            Event::OpenAddPromptPane { initial_content } => {
-                ctx.emit(crate::pane_group::Event::OpenAddPromptPane {
-                    initial_content: initial_content.clone(),
-                });
-            }
-            Event::OpenEnvironmentManagementPane => {
-                ctx.emit(crate::pane_group::Event::OpenEnvironmentManagementPane);
             }
             #[cfg(feature = "local_fs")]
             Event::FileRenamed { old_path, new_path } => {
@@ -1416,9 +1378,6 @@ fn handle_terminal_view_event(
                     diff_mode: diff_mode.to_owned(),
                     open_code_review: open_code_review.clone(),
                 });
-            }
-            Event::ShowCloudAgentCapacityModal { variant } => {
-                ctx.emit(pane_group::Event::ShowCloudAgentCapacityModal { variant: *variant });
             }
             Event::RevealChildAgent { conversation_id } => {
                 // Routed through the swap mechanism to land all reveal cases in one path.

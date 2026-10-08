@@ -236,6 +236,80 @@ pub struct AIExecutionProfilesModel {
 }
 
 impl AIExecutionProfilesModel {
+    #[cfg(any(test, feature = "integration_tests"))]
+    pub fn default_profile_id(&self) -> ExecutionProfileId {
+        if self.settings_are_authoritative() {
+            return ExecutionProfileId::default_profile();
+        }
+        self.default_profile_state.id()
+    }
+
+    #[cfg(test)]
+    /// Returns whether onboarding must leave the existing default profile unchanged.
+    pub fn should_preserve_onboarding_profile(&self, ctx: &AppContext) -> bool {
+        if self.settings_are_authoritative() {
+            self.preserve_profile_onboarding_overrides
+        } else {
+            self.default_profile(ctx).sync_id().is_some()
+        }
+    }
+
+    #[cfg(any(test, feature = "integration_tests"))]
+    pub fn create_profile(&mut self, ctx: &mut ModelContext<Self>) -> Option<ExecutionProfileId> {
+        let profile_id = ExecutionProfileId::new();
+        if self.settings_migration_state == SettingsMigrationState::PendingLegacyImport {
+            let mut profiles = self.pending_legacy_profiles(ctx);
+            let mut new_profile = self.default_profile(ctx).data().clone();
+            new_profile.name = String::new();
+            new_profile.is_default_profile = false;
+            new_profile.autosync_plans_to_warp_drive = true;
+            profiles.insert(profile_id.clone(), new_profile);
+            if !self.activate_pending_settings_collection(profiles, ctx) {
+                return None;
+            }
+            return Some(profile_id);
+        }
+
+        if self.settings_are_authoritative() {
+            let mut profiles = AISettings::as_ref(ctx).execution_profiles.value().clone();
+            let mut new_profile = self.default_profile(ctx).data().clone();
+            new_profile.name = String::new();
+            new_profile.is_default_profile = false;
+            new_profile.autosync_plans_to_warp_drive = true;
+            profiles.insert(profile_id.clone(), new_profile);
+            if let Err(error) = AISettings::handle(ctx).update(ctx, |settings, ctx| {
+                settings.execution_profiles.set_value(profiles, ctx)
+            }) {
+                report_error!(error.context("Failed to create execution profile in settings"));
+                return None;
+            }
+            return Some(profile_id);
+        }
+
+        let Some(owner) = UserWorkspaces::as_ref(ctx).personal_drive(ctx) else {
+            report_error!("Failed to create AI execution profile: personal drive not available");
+            return None;
+        };
+
+        let mut new_profile = self.default_profile(ctx).data().clone();
+        new_profile.name = "".to_string();
+        new_profile.is_default_profile = false;
+        new_profile.autosync_plans_to_warp_drive = true;
+
+        let update_manager = UpdateManager::handle(ctx);
+        let client_id = ClientId::default();
+        update_manager.update(ctx, |update_manager, ctx| {
+            update_manager.create_ai_execution_profile(new_profile, client_id, owner, ctx);
+        });
+
+        self.profile_id_to_sync_id
+            .insert(profile_id.clone(), SyncId::ClientId(client_id));
+
+        ctx.emit(AIExecutionProfilesModelEvent::ProfileCreated);
+
+        Some(profile_id)
+    }
+
     #[allow(unused_variables)]
     pub(crate) fn new(launch_mode: &LaunchMode, ctx: &mut ModelContext<Self>) -> Self {
         // Resolve the persistence backend before constructing any source-specific state.
@@ -740,15 +814,6 @@ impl AIExecutionProfilesModel {
         });
     }
 
-    /// Returns whether onboarding must leave the existing default profile unchanged.
-    pub fn should_preserve_onboarding_profile(&self, ctx: &AppContext) -> bool {
-        if self.settings_are_authoritative() {
-            self.preserve_profile_onboarding_overrides
-        } else {
-            self.default_profile(ctx).sync_id().is_some()
-        }
-    }
-
     /// This function performs one-time migrations from legacy settings into the default profile.
     /// The issue this solves is that, whenever we migrate an existing setting into the profile object,
     /// users will initialize the new field to its default value. We need to manually check to see if
@@ -782,65 +847,6 @@ impl AIExecutionProfilesModel {
             self.set_base_model(&default_profile_id, Some(base_llm_id.clone()), ctx);
             log::info!("Overwrote default profile with legacy setting for base llm: {base_llm_id}");
         }
-    }
-
-    pub fn create_profile(&mut self, ctx: &mut ModelContext<Self>) -> Option<ExecutionProfileId> {
-        let profile_id = ExecutionProfileId::new();
-        if self.settings_migration_state == SettingsMigrationState::PendingLegacyImport {
-            let mut profiles = self.pending_legacy_profiles(ctx);
-            let mut new_profile = self.default_profile(ctx).data().clone();
-            new_profile.name = String::new();
-            new_profile.is_default_profile = false;
-            new_profile.autosync_plans_to_warp_drive = true;
-            profiles.insert(profile_id.clone(), new_profile);
-            if !self.activate_pending_settings_collection(profiles, ctx) {
-                return None;
-            }
-            send_telemetry_from_ctx!(TelemetryEvent::AIExecutionProfileCreated, ctx);
-            return Some(profile_id);
-        }
-
-        if self.settings_are_authoritative() {
-            let mut profiles = AISettings::as_ref(ctx).execution_profiles.value().clone();
-            let mut new_profile = self.default_profile(ctx).data().clone();
-            new_profile.name = String::new();
-            new_profile.is_default_profile = false;
-            new_profile.autosync_plans_to_warp_drive = true;
-            profiles.insert(profile_id.clone(), new_profile);
-            if let Err(error) = AISettings::handle(ctx).update(ctx, |settings, ctx| {
-                settings.execution_profiles.set_value(profiles, ctx)
-            }) {
-                report_error!(error.context("Failed to create execution profile in settings"));
-                return None;
-            }
-            send_telemetry_from_ctx!(TelemetryEvent::AIExecutionProfileCreated, ctx);
-            return Some(profile_id);
-        }
-
-        let Some(owner) = UserWorkspaces::as_ref(ctx).personal_drive(ctx) else {
-            report_error!("Failed to create AI execution profile: personal drive not available");
-            return None;
-        };
-
-        let mut new_profile = self.default_profile(ctx).data().clone();
-        new_profile.name = "".to_string();
-        new_profile.is_default_profile = false;
-        new_profile.autosync_plans_to_warp_drive = true;
-
-        let update_manager = UpdateManager::handle(ctx);
-        let client_id = ClientId::default();
-        update_manager.update(ctx, |update_manager, ctx| {
-            update_manager.create_ai_execution_profile(new_profile, client_id, owner, ctx);
-        });
-
-        self.profile_id_to_sync_id
-            .insert(profile_id.clone(), SyncId::ClientId(client_id));
-
-        send_telemetry_from_ctx!(TelemetryEvent::AIExecutionProfileCreated, ctx);
-
-        ctx.emit(AIExecutionProfilesModelEvent::ProfileCreated);
-
-        Some(profile_id)
     }
 
     pub fn delete_profile(
@@ -954,13 +960,6 @@ impl AIExecutionProfilesModel {
             .and_then(|id| self.active_profiles_per_session.get(&id))
             .and_then(|profile_id| self.get_profile_by_id(profile_id, ctx))
             .unwrap_or_else(|| self.default_profile(ctx))
-    }
-
-    pub fn default_profile_id(&self) -> ExecutionProfileId {
-        if self.settings_are_authoritative() {
-            return ExecutionProfileId::default_profile();
-        }
-        self.default_profile_state.id()
     }
 
     pub fn default_profile(&self, ctx: &AppContext) -> AIExecutionProfileInfo {

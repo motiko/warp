@@ -405,10 +405,6 @@ pub enum SurfaceCommand {
     #[command(subcommand)]
     Keybindings(SurfaceOpenCommand),
 
-    /// Open or toggle Warp Drive.
-    #[command(subcommand)]
-    WarpDrive(SurfaceOpenToggleCommand),
-
     /// Toggle the resource center.
     #[command(subcommand)]
     ResourceCenter(SurfaceToggleCommand),
@@ -428,10 +424,6 @@ pub enum SurfaceCommand {
     /// Open global search.
     #[command(subcommand)]
     GlobalSearch(SurfaceOpenCommand),
-
-    /// Open the conversation list.
-    #[command(subcommand)]
-    ConversationList(SurfaceOpenCommand),
 
     /// Toggle the left panel.
     #[command(subcommand)]

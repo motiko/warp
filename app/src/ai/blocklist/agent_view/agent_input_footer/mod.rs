@@ -35,7 +35,7 @@ use warpui::elements::{
     ChildAnchor, ChildView, Clipped, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
     DispatchEventResult, Element, Empty, EventHandler, Flex, MainAxisAlignment, MainAxisSize,
     OffsetPositioning, ParentAnchor, ParentElement, ParentOffsetBounds, Radius, SavePosition,
-    Shrinkable, Stack, Wrap, WrapFill, WrapFillEntireRun,
+    Stack, Wrap, WrapFill, WrapFillEntireRun,
 };
 use warpui::{
     AppContext, Entity, EntityId, ModelHandle, SingletonEntity, TypedActionView, View, ViewContext,
@@ -49,7 +49,6 @@ use crate::ai::AIRequestUsageModel;
 use crate::ai::blocklist::BlocklistAIInputModel;
 use crate::ai::blocklist::agent_view::is_in_cloud_context;
 use crate::ai::blocklist::history_model::{BlocklistAIHistoryEvent, BlocklistAIHistoryModel};
-use crate::ai::blocklist::prompt::prompt_alert::{PromptAlertEvent, PromptAlertView};
 use crate::ai::blocklist::usage::icon_for_context_window_usage;
 use crate::ai::blocklist::usage::usage_popover_view::{
     UsagePopoverEvent, UsagePopoverView, conversation_total_text,
@@ -198,7 +197,6 @@ pub struct AgentInputFooter {
     model_selector: ViewHandle<ProfileModelSelector>,
     environment_selector: Option<ViewHandle<EnvironmentSelector>>,
     handoff_environment_selector: ViewHandle<EnvironmentSelector>,
-    prompt_alert: ViewHandle<PromptAlertView>,
     ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
     handoff_compose_state: ModelHandle<HandoffComposeState>,
     left_display_chips: Vec<ViewHandle<DisplayChip>>,
@@ -297,9 +295,6 @@ impl AgentInputFooter {
                 if !*open {
                     ctx.emit(AgentInputFooterEvent::EnvironmentSelectorClosed);
                 }
-            }
-            EnvironmentSelectorEvent::OpenEnvironmentManagementPane => {
-                ctx.emit(AgentInputFooterEvent::OpenEnvironmentManagementPane);
             }
         });
         self.environment_selector = Some(environment_selector);
@@ -716,9 +711,6 @@ impl AgentInputFooter {
                         ctx.emit(AgentInputFooterEvent::EnvironmentSelectorClosed);
                     }
                 }
-                EnvironmentSelectorEvent::OpenEnvironmentManagementPane => {
-                    ctx.emit(AgentInputFooterEvent::OpenEnvironmentManagementPane);
-                }
             },
         );
 
@@ -734,11 +726,6 @@ impl AgentInputFooter {
                 ctx.notify();
             },
         );
-
-        let prompt_alert = ctx.add_typed_action_view(PromptAlertView::new);
-        ctx.subscribe_to_view(&prompt_alert, |_, _, event, ctx| {
-            ctx.emit(AgentInputFooterEvent::PromptAlert(event.clone()));
-        });
 
         ctx.subscribe_to_model(&NetworkStatus::handle(ctx), |_, _, _, ctx| {
             ctx.notify();
@@ -921,7 +908,6 @@ impl AgentInputFooter {
             model_selector: profile_model_selector_full,
             environment_selector,
             handoff_environment_selector,
-            prompt_alert,
             terminal_model,
             handoff_compose_state,
             left_display_chips: vec![],
@@ -2226,26 +2212,15 @@ impl View for AgentInputFooter {
             .with_main_axis_size(MainAxisSize::Min)
             .with_spacing(4.);
 
-        let has_prompt_alert = !self.prompt_alert.as_ref(app).is_no_alert();
-        if has_prompt_alert {
-            right_buttons.add_child(
-                Shrinkable::new(
-                    1.,
-                    Clipped::new(ChildView::new(&self.prompt_alert).finish()).finish(),
-                )
-                .finish(),
-            );
-        } else {
-            for item in &right_items {
-                if let Some(element) = self.render_toolbar_item(
-                    item,
-                    &shared_status,
-                    is_cloud_context,
-                    is_conversation_transcript_context,
-                    app,
-                ) {
-                    right_buttons.add_child(element);
-                }
+        for item in &right_items {
+            if let Some(element) = self.render_toolbar_item(
+                item,
+                &shared_status,
+                is_cloud_context,
+                is_conversation_transcript_context,
+                app,
+            ) {
+                right_buttons.add_child(element);
             }
         }
 
@@ -2264,12 +2239,10 @@ impl View for AgentInputFooter {
             })
             .finish();
 
-        let mut container = Container::new(content).with_padding_bottom(8.0);
-        if !has_prompt_alert {
-            container = container.with_padding_right(16.);
-        }
-
-        container.finish()
+        Container::new(content)
+            .with_padding_bottom(8.0)
+            .with_padding_right(16.)
+            .finish()
     }
 }
 
@@ -2461,11 +2434,9 @@ impl TypedActionView for AgentInputFooter {
                 ctx.emit(AgentInputFooterEvent::StopRemoteControl);
             }
             AgentInputFooterAction::OpenCodingAgentSettings => {
-                #[cfg(not(target_family = "wasm"))]
-                ctx.dispatch_typed_action_deferred(WorkspaceAction::ScrollToSettingsWidget {
-                    page: SettingsSection::ThirdPartyCLIAgents,
-                    widget_id: crate::settings_view::cli_agent_settings_widget_id(),
-                });
+                ctx.dispatch_typed_action_deferred(WorkspaceAction::ShowSettingsPage(
+                    SettingsSection::AI,
+                ));
             }
             AgentInputFooterAction::HandoffChipClicked => {
                 if FeatureFlag::OzHandoff.is_enabled()
@@ -2522,7 +2493,6 @@ pub enum AgentInputFooterEvent {
         open: bool,
     },
     TryExecuteChipCommand(PromptChipShellCommand),
-    PromptAlert(PromptAlertEvent),
     ModelSelectorOpened,
     ModelSelectorClosed,
     EnvironmentSelectorClosed,
@@ -2538,7 +2508,6 @@ pub enum AgentInputFooterEvent {
     ShowContextMenu {
         position: Vector2F,
     },
-    OpenEnvironmentManagementPane,
     PluginInstalled(CLIAgent),
     #[cfg(not(target_family = "wasm"))]
     OpenPluginInstructionsPane(CLIAgent, PluginModalKind),

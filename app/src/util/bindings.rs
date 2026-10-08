@@ -30,9 +30,7 @@ pub enum CustomAction {
     ShowAboutWarp,
     ShowSettings,
     ConfigureKeybindings,
-    ShowAccount,
     ShowAppearance,
-    ReferAFriend,
     ViewChangelog,
     FocusInput,
     ClearBlocks,
@@ -82,14 +80,12 @@ pub enum CustomAction {
     CopyBlock,
     CopyBlockCommand,
     CopyBlockOutput,
-    ViewSharedBlocks,
     CloseTab,
     CloseOtherTabs,
     CloseTabsRight,
     ToggleMaximizePane,
     LaunchConfigPalette,
     FilesPalette,
-    TriggerWelcomeBlock,
     CommandSearch,
     ToggleResourceCenter,
     ToggleKeybindingsPage,
@@ -99,18 +95,10 @@ pub enum CustomAction {
     ToggleSyncTerminalInputsInCurrentTab,
     DisableSyncTerminalInputs,
     ReopenClosedSession,
-    ToggleWarpDrive,
+    ToggleLeftPanel,
     AddWindow,
     CloseCurrentSession,
     CloseWindow,
-    NewPersonalWorkflow,
-    NewPersonalNotebook,
-    NewPersonalEnvVars,
-    NewTeamWorkflow,
-    NewTeamNotebook,
-    NewTeamEnvVars,
-    SearchDrive,
-    OpenTeamSettings,
     ShareCurrentSession,
     SharePaneContents,
     #[cfg(windows)]
@@ -122,16 +110,12 @@ pub enum CustomAction {
     /// Also applies to legacy Warp AI (attaches the selection to the panel editor)
     AttachSelectionAsAgentModeContext,
     OpenAIFactCollection,
-    OpenMCPServerCollection,
     ToggleProjectExplorer,
-    NewPersonalAIPrompt,
-    NewTeamAIPrompt,
     OpenRepository,
     NewTerminalTab,
     NewAgentTab,
     GoToLine,
     ToggleGlobalSearch,
-    ToggleConversationListView,
 }
 
 lazy_static! {
@@ -390,7 +374,7 @@ pub fn custom_tag_to_keystroke(custom: CustomTag) -> Option<Keystroke> {
             }
         }
         CustomAction::AddWindow => Keystroke::parse(cmd_or_ctrl_shift("n")).ok(),
-        CustomAction::ToggleWarpDrive => {
+        CustomAction::ToggleLeftPanel => {
             if OperatingSystem::get().is_mac() {
                 Keystroke::parse("cmd-\\").ok()
             } else {
@@ -426,13 +410,6 @@ pub fn custom_tag_to_keystroke(custom: CustomTag) -> Option<Keystroke> {
                 Keystroke::parse("alt-3").ok()
             }
         }
-        CustomAction::ToggleConversationListView => {
-            if OperatingSystem::get().is_mac() {
-                Keystroke::parse("ctrl-2").ok()
-            } else {
-                Keystroke::parse("alt-2").ok()
-            }
-        }
         CustomAction::NewTerminalTab
         | CustomAction::NewFile
         | CustomAction::ShowAboutWarp
@@ -444,29 +421,14 @@ pub fn custom_tag_to_keystroke(custom: CustomTag) -> Option<Keystroke> {
         | CustomAction::CloseTab
         | CustomAction::CloseOtherTabs
         | CustomAction::CloseTabsRight
-        | CustomAction::ReferAFriend
-        | CustomAction::ViewSharedBlocks
-        | CustomAction::ShowAccount
         | CustomAction::ShowAppearance
         | CustomAction::SaveCurrentConfig
-        | CustomAction::TriggerWelcomeBlock
         | CustomAction::HistorySearch
         | CustomAction::DisableSyncTerminalInputs
         | CustomAction::ToggleSyncAllTerminalInputsInAllTabs
-        | CustomAction::NewPersonalWorkflow
-        | CustomAction::NewPersonalNotebook
-        | CustomAction::NewPersonalEnvVars
-        | CustomAction::NewTeamWorkflow
-        | CustomAction::NewTeamNotebook
-        | CustomAction::NewTeamEnvVars
-        | CustomAction::SearchDrive
-        | CustomAction::OpenTeamSettings
         | CustomAction::ShareCurrentSession
         | CustomAction::SharePaneContents
         | CustomAction::OpenAIFactCollection
-        | CustomAction::OpenMCPServerCollection
-        | CustomAction::NewPersonalAIPrompt
-        | CustomAction::NewTeamAIPrompt
         | CustomAction::NewAgentTab => None,
     }
 }

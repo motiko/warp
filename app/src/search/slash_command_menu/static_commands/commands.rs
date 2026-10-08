@@ -30,15 +30,6 @@ pub static CLOUD_AGENT: LazyLock<StaticCommand> = LazyLock::new(|| StaticCommand
     argument: Some(Argument::optional().with_execute_on_selection()),
 });
 
-pub const ADD_MCP: StaticCommand = StaticCommand {
-    name: "/add-mcp",
-    description: "Add a new MCP server via the MCP settings page",
-    kind: SlashCommandKind::AddMcp,
-    icon_path: "bundled/svg/dataflow.svg",
-    availability: Availability::AI_ENABLED,
-    auto_enter_ai_mode: false,
-    argument: None,
-};
 pub static CREATE_ENVIRONMENT: LazyLock<StaticCommand> = LazyLock::new(|| StaticCommand {
     name: "/create-environment",
     description: "Create an Oz environment (Docker image + repos) via guided setup",
@@ -78,20 +69,6 @@ pub static INVOKE_SKILL: LazyLock<StaticCommand> = LazyLock::new(|| StaticComman
     description: "Invoke a skill",
     kind: SlashCommandKind::InvokeSkill,
     icon_path: "bundled/svg/stars-01.svg",
-    availability: Availability::AI_ENABLED,
-    auto_enter_ai_mode: false,
-    argument: None,
-});
-
-pub static ADD_PROMPT: LazyLock<StaticCommand> = LazyLock::new(|| StaticCommand {
-    name: "/add-prompt",
-    description: "Add new Agent prompt",
-    kind: SlashCommandKind::AddPrompt,
-    icon_path: if FeatureFlag::AgentView.is_enabled() {
-        "bundled/svg/prompt.svg"
-    } else {
-        "bundled/svg/agentmode.svg"
-    },
     availability: Availability::AI_ENABLED,
     auto_enter_ai_mode: false,
     argument: None,
@@ -234,16 +211,6 @@ pub const OPEN_PROJECT_RULES: StaticCommand = StaticCommand {
     kind: SlashCommandKind::OpenProjectRules,
     icon_path: "bundled/svg/file-code-02.svg",
     availability: Availability::REPOSITORY.union(Availability::AI_ENABLED),
-    auto_enter_ai_mode: false,
-    argument: None,
-};
-
-pub const OPEN_MCP_SERVERS: StaticCommand = StaticCommand {
-    name: "/open-mcp-servers",
-    description: "Open MCP servers",
-    kind: SlashCommandKind::OpenMcpServers,
-    icon_path: "bundled/svg/dataflow.svg",
-    availability: Availability::AI_ENABLED,
     auto_enter_ai_mode: false,
     argument: None,
 };
@@ -493,16 +460,6 @@ pub static CONTINUE_LOCALLY: LazyLock<StaticCommand> = LazyLock::new(|| {
     }
 });
 
-pub const USAGE: StaticCommand = StaticCommand {
-    name: "/usage",
-    description: "View account and credit usage",
-    kind: SlashCommandKind::Usage,
-    icon_path: "bundled/svg/bar-chart-04.svg",
-    availability: Availability::AI_ENABLED,
-    auto_enter_ai_mode: false,
-    argument: None,
-};
-
 pub const REMOTE_CONTROL: StaticCommand = StaticCommand {
     name: "/remote-control",
     description: "Start remote control for this session",
@@ -662,15 +619,12 @@ impl Registry {
 
 fn all_commands() -> Vec<StaticCommand> {
     let mut commands = vec![
-        ADD_MCP,
-        ADD_PROMPT.clone(),
         ADD_RULE,
         COST,
         FEEDBACK.clone(),
         INDEX,
         INIT,
         OPEN_PROJECT_RULES,
-        OPEN_MCP_SERVERS,
         OPEN_RULES,
         AGENT.clone(),
         NEW.clone(),
@@ -678,7 +632,6 @@ fn all_commands() -> Vec<StaticCommand> {
         RENAME_CONVERSATION.clone(),
         RENAME_TAB.clone(),
         SET_TAB_COLOR.clone(),
-        USAGE,
         CONVERSATIONS,
         EXPORT_TO_CLIPBOARD,
         COPY_DEBUGGING_ID,

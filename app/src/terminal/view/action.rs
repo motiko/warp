@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use ai::skills::SkillReference;
 use command_corrections::Correction;
-pub use onboarding::OnboardingIntention;
 use pathfinder_geometry::vector::Vector2F;
 use session_sharing_protocol::common::Role;
 use session_sharing_protocol::sharer::RoleUpdateReason;
@@ -14,10 +13,7 @@ use warpui::elements::HyperlinkUrl;
 use warpui::event::ModifiersState;
 use warpui::units::Lines;
 
-use super::inline_banner::{
-    AwsBedrockLoginBannerAction, AwsCliNotInstalledBannerAction, OpenInWarpBannerAction,
-    VimModeBannerAction,
-};
+use super::inline_banner::{OpenInWarpBannerAction, VimModeBannerAction};
 use super::{
     AliasExpansionBannerAction, ContextMenuAction, GridHighlightedLink, InputContextMenuAction,
     NotificationsDiscoveryBannerAction, NotificationsErrorBannerAction, RichContentLink,
@@ -43,26 +39,8 @@ use crate::terminal::model::selection::{SelectAction, SelectionDirection};
 use crate::terminal::model::terminal_model::{BlockIndex, WithinModel};
 use crate::terminal::shared_session::SharedSessionActionSource;
 use crate::terminal::view::RichContentSecretTooltipInfo;
-use crate::terminal::view::inline_banner::AgentModeSetupSpeedbumpBannerAction;
 use crate::terminal::view::passive_suggestions::PromptSuggestionResolution;
 use crate::workflows::workflow::Workflow;
-
-/// Version of the agent onboarding flow (non-legacy).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AgentOnboardingVersion {
-    UniversalInput {
-        has_project: bool,
-    },
-    AgentModality {
-        has_project: bool,
-        intention: OnboardingIntention,
-    },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OnboardingVersion {
-    Agent(AgentOnboardingVersion),
-}
 
 /// This represents whether entering a subshell for a particular command should become automatic in
 /// the future, or to ask again.
@@ -293,7 +271,6 @@ pub enum TerminalAction {
     AliasExpansionBanner(AliasExpansionBannerAction),
     OpenInWarpBanner(OpenInWarpBannerAction),
     OpenBlockFilterEditor(BlockIndex),
-    OnboardingFlow(OnboardingVersion),
     ImportSettings,
     StopSharingCurrentSession {
         source: SharedSessionActionSource,
@@ -325,10 +302,8 @@ pub enum TerminalAction {
     SetInputModeTerminal,
 
     HyperlinkClick(HyperlinkUrl),
-    AttemptLoginGatedFeature,
     StartFileDropTarget,
     StopFileDropTarget,
-    OpenTeamSettingsPage,
     SetMarkedText {
         marked_text: UserInput<String>,
         selected_range: Range<usize>,
@@ -354,7 +329,6 @@ pub enum TerminalAction {
     ToggleAutoexecuteMode,
     ToggleQueueNextPrompt,
     CodebaseIndexSpeedbumpBanner(CodebaseIndexSpeedbumpBannerAction),
-    AgentModeSetupSpeedbumpBanner(AgentModeSetupSpeedbumpBannerAction),
     ResumeConversation,
     ForkConversationFromLastKnownGoodState,
     ToggleAIDocumentPane,
@@ -368,15 +342,11 @@ pub enum TerminalAction {
     IndexProjectSpeedbump,
     AddProjectAtCurrentDirectory,
     OpenProjectRulesPane,
-    OpenViewMCPPane,
-    OpenAddMCPPane,
     OpenAddRulePane,
     OpenRulesPane,
     OpenEditSkillPane {
         skill_reference: SkillReference,
     },
-    OpenAddPromptPane,
-    OpenBillingAndUsagePane,
     OpenConversationsPalette,
     PickRepoToOpen,
     OpenFilesPalette {
@@ -391,8 +361,6 @@ pub enum TerminalAction {
     SetupCloudEnvironmentAndStart(Vec<String>),
     /// Show the environment setup mode selector to choose between remote GitHub or local agent flow.
     TriggerEnvironmentSetupSelection(Vec<String>),
-    /// Open the Environment Management pane.
-    OpenEnvironmentManagementPane,
     ToggleLongRunningCommandControl,
     ToggleHideCliResponses,
     ExitAgentView,
@@ -407,8 +375,6 @@ pub enum TerminalAction {
     OpenInlineHistoryMenu,
     OpenModelSelector,
     ResolvePromptSuggestion(PromptSuggestionResolution),
-    AwsBedrockLoginBanner(AwsBedrockLoginBannerAction),
-    AwsCliNotInstalledBanner(AwsCliNotInstalledBannerAction),
     /// Toggle the usage footer on the last AI block in the active conversation.
     ToggleUsageFooter,
     /// Reveal a hidden child agent pane from the orchestrator status card.
@@ -622,7 +588,6 @@ impl fmt::Debug for TerminalAction {
             OpenBlockFilterEditor(block_index) => {
                 write!(f, "OpenBlockFilterEditor({block_index:?})")
             }
-            OnboardingFlow(version) => write!(f, "OnboardingFlow({version:?})"),
             ImportSettings => write!(f, "ImportSettings"),
             StopSharingCurrentSession { source } => {
                 write!(f, "StopSharingCurrentSession({source:?})")
@@ -656,13 +621,11 @@ impl fmt::Debug for TerminalAction {
             SetInputModeAgent => write!(f, "SetInputModeAgent"),
             SetInputModeTerminal => write!(f, "SetInputModeTerminal"),
             HyperlinkClick(hyperlink_url) => write!(f, "HyperlinkClick({hyperlink_url:?})"),
-            AttemptLoginGatedFeature => write!(f, "AttemptLoginGatedFeature"),
             StartFileDropTarget => write!(f, "StartFileDropTarget"),
             StopFileDropTarget => write!(f, "StopFileDropTarget"),
             RunNativeShellCompletions { buffer_text, .. } => {
                 write!(f, "RunNativeShellCompletions({buffer_text:?})")
             }
-            OpenTeamSettingsPage => write!(f, "OpenTeamSettingsPage"),
             SetMarkedText {
                 marked_text,
                 selected_range,
@@ -684,9 +647,6 @@ impl fmt::Debug for TerminalAction {
             CodebaseIndexSpeedbumpBanner(action) => {
                 write!(f, "CodebaseIndexSpeedbumpBanner({action:?})")
             }
-            AgentModeSetupSpeedbumpBanner(action) => {
-                write!(f, "AgentModeSetupSpeedbumpBanner({action:?})")
-            }
             ResumeConversation => write!(f, "ResumeConversation"),
             ForkConversationFromLastKnownGoodState => {
                 write!(f, "ForkConversationFromLastKnownGoodState")
@@ -699,13 +659,9 @@ impl fmt::Debug for TerminalAction {
             IndexProjectSpeedbump => write!(f, "IndexProject"),
             AddProjectAtCurrentDirectory => write!(f, "AddProjectAtCurrentDirectory"),
             OpenProjectRulesPane => write!(f, "OpenProjectRulesPane"),
-            OpenViewMCPPane => write!(f, "OpenViewMCPPane"),
-            OpenAddMCPPane => write!(f, "OpenAddMCPPane"),
             OpenAddRulePane => write!(f, "OpenAddRulePane"),
             OpenRulesPane => write!(f, "OpenRulesPane"),
             OpenEditSkillPane { .. } => write!(f, "OpenEditSkillPane"),
-            OpenAddPromptPane => write!(f, "OpenAddPromptPane"),
-            OpenBillingAndUsagePane => write!(f, "OpenBillingAndUsagePane"),
             OpenConversationsPalette => write!(f, "OpenConversationsPalette"),
             PickRepoToOpen => write!(f, "PickRepoToOpen"),
             OpenFilesPalette { .. } => write!(f, "OpenFilesPalette"),
@@ -714,7 +670,6 @@ impl fmt::Debug for TerminalAction {
             SetupCloudEnvironment(_) => write!(f, "SetupCloudEnvironment"),
             SetupCloudEnvironmentAndStart(_) => write!(f, "SetupCloudEnvironmentAndStart"),
             TriggerEnvironmentSetupSelection(_) => write!(f, "TriggerEnvironmentSetupSelection"),
-            OpenEnvironmentManagementPane => write!(f, "OpenEnvironmentManagementPane"),
             SummarizeConversation => write!(f, "SummarizeConversation"),
             ToggleLongRunningCommandControl => {
                 write!(f, "TakeOverLongRunningCommandControlForUser")
@@ -730,8 +685,6 @@ impl fmt::Debug for TerminalAction {
             OpenInlineHistoryMenu => write!(f, "OpenInlineHistoryMenu"),
             OpenModelSelector => write!(f, "OpenModelSelector"),
             ResolvePromptSuggestion(..) => write!(f, "ResolvePromptSuggestion"),
-            AwsBedrockLoginBanner(action) => write!(f, "AwsBedrockLoginBanner({action:?})"),
-            AwsCliNotInstalledBanner(action) => write!(f, "AwsCliNotInstalledBanner({action:?})"),
             ToggleUsageFooter => write!(f, "ToggleUsageFooter"),
             RevealChildAgent { .. } => write!(f, "RevealChildAgent"),
             SwitchAgentViewToConversation { .. } => write!(f, "SwitchAgentViewToConversation"),

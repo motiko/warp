@@ -176,7 +176,6 @@ pub fn init(app: &mut AppContext) {
 #[derive(Default)]
 struct StateHandles {
     invalid_api_key_button_handle: MouseStateHandle,
-    subscribe_button_handle: MouseStateHandle,
     debug_copy_button_handle: MouseStateHandle,
     submit_issue_button_handle: MouseStateHandle,
     query_selection_handle: SelectionHandle,
@@ -1223,7 +1222,6 @@ impl View for CLISubagentView {
                         invalid_api_key_button_handle: &self
                             .state_handles
                             .invalid_api_key_button_handle,
-                        subscribe_button_handle: &self.state_handles.subscribe_button_handle,
                         aws_bedrock_credentials_error_view: None,
                         gemini_enterprise_credentials_error_view: None,
                         // The CLI subagent block cannot resume the conversation itself; the
@@ -1905,9 +1903,7 @@ fn render_permissions_speedbump(
     )
     .with_hyperlink_font_color(blended_colors::accent_fg_strong(theme).into())
     .register_default_click_handlers(|_, ctx, _| {
-        ctx.dispatch_typed_action(WorkspaceAction::ShowSettingsPage(
-            SettingsSection::WarpAgent,
-        ));
+        ctx.dispatch_typed_action(WorkspaceAction::ShowSettingsPage(SettingsSection::AI));
     })
     .finish();
 

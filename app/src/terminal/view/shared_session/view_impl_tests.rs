@@ -13,6 +13,7 @@ use warpui::platform::WindowStyle;
 use warpui::{App, EntityId, TypedActionView, ViewHandle};
 
 use super::*;
+use crate::FeatureFlag;
 use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent::conversation::{
     AIAgentHarness, AIConversation, ConversationStatus, ServerAIConversationMetadata,
@@ -37,7 +38,6 @@ use crate::server::server_api::ai::SpawnAgentRequest;
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 use crate::server::team_scope::RequestTeamScope;
 use crate::terminal::TerminalView;
-use crate::terminal::model::blocks::{INLINE_BANNER_HEIGHT, ToTotalIndex as _};
 use crate::terminal::model::terminal_model::ConversationTranscriptViewerStatus;
 use crate::terminal::view::shared_session::test_utils::terminal_view_for_viewer;
 use crate::terminal::view::{AIQueryRouting, TerminalAction, resolve_ai_query_routing};
@@ -45,7 +45,6 @@ use crate::test_util::add_window_with_terminal;
 use crate::test_util::terminal::initialize_app_for_terminal_view;
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 use crate::workspaces::user_workspaces::TeamlessScopeForTest;
-use crate::{FeatureFlag, assert_lines_approx_eq};
 
 #[test]
 fn test_prompt_context_menu_items_shared_session_viewer_no_edit_prompt() {
@@ -270,152 +269,6 @@ fn test_begin_viewing_ambient_session_reuses_existing_model_for_cloud_pane() {
 }
 
 #[test]
-fn test_shared_session_banners() {
-    let _flag = FeatureFlag::CreatingSharedSessions.override_enabled(true);
-
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-
-        let terminal = add_window_with_terminal(&mut app, None);
-        let mut expected_block_heights_len = terminal.read(&app, |view, _| {
-            assert!(matches!(
-                view.inline_banners_state.shared_session_banner_state,
-                SharedSessionBanners::None
-            ));
-            view.model.lock().block_list().block_heights().items().len()
-        });
-
-        // Make a block and then insert the shared session starter banner.
-        terminal.update(&mut app, |view, ctx| {
-            view.model.lock().simulate_block("ls", "foo");
-            view.insert_shared_session_started_banner(
-                SharedSessionScrollbackType::All,
-                false,
-                Local::now(),
-                ctx,
-            );
-            expected_block_heights_len += 2;
-        });
-
-        terminal.read(&app, |view, _ctx| {
-            let model = view.model.lock();
-
-            // Make sure the state has changed.
-            assert!(matches!(
-                view.inline_banners_state.shared_session_banner_state,
-                SharedSessionBanners::ActiveShare { .. }
-            ));
-
-            // We should have inserted a block and a banner.
-            let block_height_items = model.block_list().block_heights().items();
-            assert_eq!(block_height_items.len(), expected_block_heights_len);
-
-            // The banner should have been inserted before the first visible block.
-            let first_block_total_index = model
-                .block_list()
-                .first_non_hidden_block_by_index()
-                .unwrap()
-                .to_total_index(model.block_list());
-            assert_lines_approx_eq!(
-                block_height_items[first_block_total_index.0 - 1]
-                    .height()
-                    .into_lines(),
-                INLINE_BANNER_HEIGHT
-            );
-        });
-
-        // Insert another block and then the shared session ended banner.
-        terminal.update(&mut app, |view, ctx| {
-            view.model.lock().simulate_block("ls", "foo");
-            view.insert_shared_session_ended_banner(ctx);
-            expected_block_heights_len += 2;
-        });
-
-        terminal.read(&app, |view, _ctx| {
-            let model = view.model.lock();
-
-            // Make sure the state has changed.
-            assert!(matches!(
-                view.inline_banners_state.shared_session_banner_state,
-                SharedSessionBanners::LastShared { .. }
-            ));
-
-            // by now, we've inserted two new blocks and two new banners since the initialization of the view.
-            let block_height_items = model.block_list().block_heights().items();
-            assert_eq!(block_height_items.len(), expected_block_heights_len);
-
-            // The first banner should continue to be at the start of the blocklist.
-            let first_block_total_index = model
-                .block_list()
-                .first_non_hidden_block_by_index()
-                .unwrap()
-                .to_total_index(model.block_list());
-            assert_lines_approx_eq!(
-                block_height_items[first_block_total_index.0 - 1]
-                    .height()
-                    .into_lines(),
-                INLINE_BANNER_HEIGHT
-            );
-
-            // The second banner should be at the end of the blocklist, before the active block.
-            let last_block_total_index = model
-                .block_list()
-                .last_non_hidden_block_by_index()
-                .unwrap()
-                .to_total_index(model.block_list());
-            assert_lines_approx_eq!(
-                block_height_items[last_block_total_index.0 + 1]
-                    .height()
-                    .into_lines(),
-                INLINE_BANNER_HEIGHT
-            );
-        });
-
-        // Mimic starting a shared session again in the same view.
-        terminal.update(&mut app, |view, ctx| {
-            view.insert_shared_session_started_banner(
-                SharedSessionScrollbackType::None,
-                false,
-                Local::now(),
-                ctx,
-            );
-
-            // We should have removed two banners and inserted one. So overall,
-            // we lost one item in the blocklist since the last time.
-            expected_block_heights_len -= 1;
-        });
-
-        terminal.read(&app, |view, _ctx| {
-            let model = view.model.lock();
-
-            // Make sure the state has changed.
-            assert!(matches!(
-                view.inline_banners_state.shared_session_banner_state,
-                SharedSessionBanners::ActiveShare { .. }
-            ));
-
-            // We should have removed two banners and inserted one. So overall,
-            // we lost one item in the blocklist since the last time.
-            let block_height_items = model.block_list().block_heights().items();
-            assert_eq!(block_height_items.len(), expected_block_heights_len);
-
-            // The banner should have been inserted at the end of the blocklist, before the active block.
-            let last_block_total_index = model
-                .block_list()
-                .last_non_hidden_block_by_index()
-                .unwrap()
-                .to_total_index(model.block_list());
-            assert_lines_approx_eq!(
-                block_height_items[last_block_total_index.0 + 1]
-                    .height()
-                    .into_lines(),
-                INLINE_BANNER_HEIGHT
-            );
-        });
-    })
-}
-
-#[test]
 fn test_resize_shared_session_viewer_from_server() {
     let _flag = FeatureFlag::CreatingSharedSessions.override_enabled(true);
 
@@ -627,9 +480,9 @@ fn test_on_session_share_ended_does_not_insert_tombstone_for_ambient_session_und
         terminal.read(&app, |view, _| {
             let final_block_height_items =
                 view.model.lock().block_list().block_heights().items().len();
-            // Only shared session ended banner. Ended-state continuation UI is
-            // driven by the task resolver path under CloudModeSetupV2.
-            assert_eq!(final_block_height_items, initial_block_height_items + 1);
+            // Ended-state continuation UI is driven by the task resolver path under
+            // CloudModeSetupV2.
+            assert_eq!(final_block_height_items, initial_block_height_items);
             assert!(view.conversation_ended_tombstone_view_id.is_none());
         });
     });
@@ -665,7 +518,7 @@ fn test_on_session_share_ended_skips_cloud_continuation_for_user_share_with_task
             let model = view.model.lock();
             assert_eq!(
                 model.block_list().block_heights().items().len(),
-                initial_block_height_items + 1
+                initial_block_height_items
             );
             assert!(view.conversation_ended_tombstone_view_id.is_none());
             assert_eq!(view.pending_cloud_followup_task_id, None);
@@ -931,9 +784,8 @@ fn test_child_shared_session_link_keeps_default_conversation_details_auto_open()
 
 fn cloud_mode_terminal_for_test(app: &mut App) -> ViewHandle<TerminalView> {
     initialize_app_for_terminal_view(app);
-    let tips_model = app.add_model(|_| Default::default());
     let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, |ctx| {
-        TerminalView::new_for_test_with_cloud_mode(tips_model, None, true, ctx)
+        TerminalView::new_for_test_with_cloud_mode(None, true, ctx)
     });
     terminal
 }
@@ -1382,7 +1234,7 @@ fn test_on_session_share_ended_enables_followup_input_without_tombstone_for_owne
         terminal.read(&app, |view, ctx| {
             let final_block_height_items =
                 view.model.lock().block_list().block_heights().items().len();
-            assert_eq!(final_block_height_items, initial_block_height_items + 1);
+            assert_eq!(final_block_height_items, initial_block_height_items);
             assert!(view.conversation_ended_tombstone_view_id.is_none());
             assert_eq!(view.pending_cloud_followup_task_id, Some(task_id));
             assert_eq!(
@@ -1432,7 +1284,7 @@ fn test_on_session_share_ended_shows_tombstone_for_github_action_ambient_session
             let model = view.model.lock();
             assert_eq!(
                 model.block_list().block_heights().items().len(),
-                initial_block_height_items + 2
+                initial_block_height_items + 1
             );
             assert!(view.conversation_ended_tombstone_view_id.is_some());
             assert_eq!(view.pending_cloud_followup_task_id, None);
@@ -1492,7 +1344,7 @@ fn test_on_session_share_ended_hides_input_for_no_cta_tombstone() {
             let model = view.model.lock();
             assert_eq!(
                 model.block_list().block_heights().items().len(),
-                initial_block_height_items + 2
+                initial_block_height_items + 1
             );
             assert!(view.conversation_ended_tombstone_view_id.is_some());
             assert!(!view.is_input_box_visible(&model, ctx));
@@ -1542,7 +1394,7 @@ fn test_on_session_share_ended_does_not_insert_tombstone_for_owned_ambient_sessi
         terminal.read(&app, |view, ctx| {
             let final_block_height_items =
                 view.model.lock().block_list().block_heights().items().len();
-            assert_eq!(final_block_height_items, initial_block_height_items + 1);
+            assert_eq!(final_block_height_items, initial_block_height_items);
             assert!(view.conversation_ended_tombstone_view_id.is_none());
             assert_eq!(view.pending_cloud_followup_task_id, None);
             assert_eq!(
@@ -1626,8 +1478,7 @@ fn test_on_session_share_ended_does_not_insert_tombstone_for_non_ambient_session
         terminal.read(&app, |view, _| {
             let final_block_height_items =
                 view.model.lock().block_list().block_heights().items().len();
-            // Only shared session ended banner.
-            assert_eq!(final_block_height_items, initial_block_height_items + 1);
+            assert_eq!(final_block_height_items, initial_block_height_items);
         });
     });
 }
@@ -2489,56 +2340,6 @@ fn test_on_ambient_agent_execution_ended_inserts_tombstone_without_handoff() {
             assert_eq!(final_block_height_items, initial_block_height_items + 1);
             assert!(view.conversation_ended_tombstone_view_id.is_some());
         });
-    });
-}
-
-#[test]
-fn passive_suggestions_suppressed_for_shared_ambient_viewer() {
-    // A link-join viewer of a shared *cloud-agent* session starts with no ambient view model
-    // (it is created lazily at `SessionJoined` and never propagated back to the
-    // passive-suggestions model). In this case, we still should not send passive suggestion requests.
-    App::test((), |mut app| async move {
-        let terminal = terminal_view_for_viewer(&mut app);
-
-        terminal.read(&app, |view, _| {
-            assert!(
-                view.ambient_agent_view_model().is_none(),
-                "a link-join shared-session viewer starts without an ambient view model"
-            );
-        });
-
-        // A non-ambient (user) shared-session viewer must still get passive suggestions:
-        // the fix must not over-suppress ordinary shared sessions.
-        let suppressed_for_user_viewer = terminal.update(&mut app, |view, ctx| {
-            view.passive_suggestions_models
-                .maa
-                .update(ctx, |model, ctx| {
-                    model.is_ambient_agent_session_for_test(ctx)
-                })
-        });
-        assert!(
-            !suppressed_for_user_viewer,
-            "passive suggestions must not be suppressed for a non-ambient shared-session viewer"
-        );
-
-        // Once the viewer discovers it is viewing an ambient (cloud-agent) run, passive
-        // suggestions must be suppressed even though the ambient view model is still absent.
-        let suppressed_for_ambient_viewer = terminal.update(&mut app, |view, ctx| {
-            view.model
-                .lock()
-                .set_shared_session_source(SharedSessionSource::ambient_agent(Some(
-                    "44444444-4444-4444-4444-444444444444".to_string(),
-                )));
-            view.passive_suggestions_models
-                .maa
-                .update(ctx, |model, ctx| {
-                    model.is_ambient_agent_session_for_test(ctx)
-                })
-        });
-        assert!(
-            suppressed_for_ambient_viewer,
-            "passive suggestions must be suppressed for a shared cloud-agent viewer"
-        );
     });
 }
 

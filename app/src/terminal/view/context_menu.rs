@@ -6,8 +6,7 @@ use super::{
     ContextMenuState, ContextMenuType, EntityId, FeatureFlag, ForkAIConversationParams,
     ForkFromExchange, ForkedConversationDestination, MenuItem, MenuItemFields, RichContentLink,
     ServerConversationToken, ServerOutputId, ShareableObject, TerminalAction, TerminalModel,
-    TerminalView, Tip, TipHint, Vector2F, ViewContext, fork_label_for_query,
-    mark_feature_used_and_write_to_user_defaults,
+    TerminalView, Vector2F, ViewContext, fork_label_for_query,
 };
 
 impl TerminalView {
@@ -139,14 +138,6 @@ impl TerminalView {
                     .into_item(),
             );
         }
-        items.push(MenuItem::Separator);
-        items.push(
-            MenuItemFields::new("Save as prompt")
-                .with_on_select_action(TerminalAction::ContextMenu(
-                    ContextMenuAction::SavePromptAsAgentModeWorkflow { ai_block_view_id },
-                ))
-                .into_item(),
-        );
         items.push(MenuItem::Separator);
 
         if FeatureFlag::CloudConversations.is_enabled() {
@@ -516,14 +507,5 @@ impl TerminalView {
         self.context_menu_state = Some(menu_state);
         ctx.focus(&self.context_menu);
         ctx.notify();
-
-        self.tips_completed.update(ctx, |tips, ctx| {
-            mark_feature_used_and_write_to_user_defaults(
-                Tip::Hint(TipHint::BlockAction),
-                tips,
-                ctx,
-            );
-            ctx.notify();
-        });
     }
 }

@@ -1,23 +1,19 @@
 //! Support for displaying inherited ACLs.
 
 use warp_core::ui::appearance::Appearance;
-use warpui::elements::{CrossAxisAlignment, Flex, MouseStateHandle, ParentElement as _};
+use warpui::elements::{CrossAxisAlignment, Flex, ParentElement as _};
 use warpui::ui_components::components::UiComponent as _;
 use warpui::{AppContext, Element, SingletonEntity as _};
 
 use super::style;
 use crate::cloud_object::ServerObjectContainer;
 use crate::cloud_object::model::persistence::CloudModel;
-use crate::drive::CloudObjectTypeAndId;
 use crate::server::ids::SyncId;
-use crate::server::telemetry::SharingDialogSource;
-use crate::workspace::WorkspaceAction;
 
 /// UI state for inherited permissions.
 pub struct InheritanceState {
     // The server API allows inheriting ACLs from drives as well, but we currently don't use this.
     source_folder: SyncId,
-    link_handle: MouseStateHandle,
 }
 
 impl InheritanceState {
@@ -35,10 +31,7 @@ impl InheritanceState {
             return None;
         }
 
-        Some(InheritanceState {
-            source_folder,
-            link_handle: Default::default(),
-        })
+        Some(InheritanceState { source_folder })
     }
 
     pub fn details(&self, appearance: &Appearance, app: &AppContext) -> InheritanceDetails {
@@ -51,21 +44,7 @@ impl InheritanceState {
                 let prefix = style::detail_text("Inherited from ", appearance)
                     .build()
                     .finish();
-                let source_folder = self.source_folder;
-                let folder_link = appearance
-                    .ui_builder()
-                    .link(
-                        folder_name.to_owned(),
-                        None,
-                        Some(Box::new(move |ctx| {
-                            ctx.dispatch_typed_action(WorkspaceAction::OpenObjectSharingSettings {
-                                object_id: CloudObjectTypeAndId::Folder(source_folder),
-                                source: SharingDialogSource::InheritedPermission,
-                            });
-                        })),
-                        self.link_handle.clone(),
-                    )
-                    .soft_wrap(false)
+                let folder_link = style::detail_text(folder_name.to_owned(), appearance)
                     .build()
                     .finish();
 

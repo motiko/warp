@@ -1,6 +1,5 @@
 use instant::Instant;
 use markdown_parser::{FormattedText, FormattedTextFragment, FormattedTextLine};
-use warp_core::features::FeatureFlag;
 use warpui::elements::{
     Border, CacheOption, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment, Element,
     Flex, FormattedTextElement, HighlightedHyperlink, Icon, Image, MouseStateHandle, ParentElement,
@@ -13,7 +12,6 @@ use warpui::{
     ViewContext,
 };
 
-use super::feature_section::FeatureSection;
 use super::{SectionAction, SectionView};
 use crate::appearance::Appearance;
 use crate::changelog_model::{
@@ -64,7 +62,6 @@ impl TypedActionView for ChangelogSectionView {
                 ctx.open_url(url.as_str());
             }
             ToggleExpanded => self.toggle_expanded(ctx),
-            _ => {}
         }
     }
 }
@@ -352,15 +349,6 @@ impl SectionView for ChangelogSectionView {
         ctx.notify();
     }
 
-    fn section_progress_indicator(
-        &self,
-        _show_gamified: bool,
-        _appearance: &Appearance,
-        _ctx: &AppContext,
-    ) -> Option<Box<dyn Element>> {
-        None
-    }
-
     fn section_link(&self, appearance: &Appearance) -> Option<Box<dyn Element>> {
         Some(
             appearance
@@ -395,18 +383,16 @@ impl View for ChangelogSectionView {
         let changelog_model = app.model(&self.changelog_model_handle);
         let appearance = Appearance::as_ref(app);
         let header = self.render_section_header(
-            FeatureSection::WhatsNew,
-            false,
+            "What's New?",
             appearance,
             self.changelog_button_mouse_states
                 .top_bar_mouse_state
                 .clone(),
-            app,
         );
 
         let mut section = Flex::column().with_child(header);
 
-        if self.is_expanded || FeatureFlag::AvatarInTabBar.is_enabled() {
+        if self.is_expanded {
             let mut content_flex = Flex::column();
             match &changelog_model.changelog {
                 ChangelogState::Some(_) => {

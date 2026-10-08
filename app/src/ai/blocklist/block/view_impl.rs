@@ -773,7 +773,7 @@ where
                                     ctx.dispatch_typed_action(
                                         WorkspaceAction::ShowSettingsPageWithSearch {
                                             search_query: "Autonomy".to_string(),
-                                            section: Some(SettingsSection::WarpAgent),
+                                            section: Some(SettingsSection::AI),
                                         },
                                     );
                                 })),
@@ -848,7 +848,7 @@ pub fn render_autonomy_checkbox_setting_speedbump_footer(
                                 ctx.dispatch_typed_action(
                                     WorkspaceAction::ShowSettingsPageWithSearch {
                                         search_query: "Autonomy".to_string(),
-                                        section: Some(SettingsSection::WarpAgent),
+                                        section: Some(SettingsSection::AI),
                                     },
                                 );
                             })),

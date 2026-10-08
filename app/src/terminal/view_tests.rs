@@ -96,9 +96,8 @@ use crate::workspace::{ToastStack, WorkspaceAction};
 use crate::workspaces::user_workspaces::TeamlessScopeForTest;
 
 fn add_window_with_cloud_mode_terminal(app: &mut App) -> ViewHandle<TerminalView> {
-    let tips_model = app.add_model(|_| Default::default());
     let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, |ctx| {
-        TerminalView::new_for_test_with_cloud_mode(tips_model, None, true, ctx)
+        TerminalView::new_for_test_with_cloud_mode(None, true, ctx)
     });
     terminal.update(app, |view, _| {
         view.model.lock().set_is_dummy_cloud_mode_session(true);
@@ -2954,12 +2953,9 @@ fn clicking_old_banner_for_open_conversation_focuses_current_terminal_surface_wi
         });
         let restored_agent_view_controller =
             restored_view.read(&app, |view, _| view.agent_view_controller().clone());
-        let restored_active_session =
-            restored_view.read(&app, |view, _| view.active_session().clone());
         ActiveAgentViewsModel::handle(&app).update(&mut app, |active_views, ctx| {
             active_views.register_agent_view_controller(
                 &restored_agent_view_controller,
-                &restored_active_session,
                 restored_view_id,
                 ctx,
             );
@@ -7958,16 +7954,11 @@ fn inline_agent_view_persists_across_transfer_takeover_for_monitored_long_runnin
 }
 
 #[test]
-fn use_agent_footer_renders_for_transfer_handoff_even_when_user_command_footer_setting_disabled() {
+fn use_agent_footer_renders_for_transfer_handoff() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
         enable_ai_for_tests(&mut app);
         FeatureFlag::AgentView.set_enabled(true);
-        AISettings::handle(&app).update(&mut app, |settings, ctx| {
-            let _ = settings
-                .should_render_use_agent_footer_for_user_commands
-                .set_value(false, ctx);
-        });
 
         let terminal = add_window_with_terminal(&mut app, None);
 
@@ -9722,58 +9713,6 @@ fn close_cli_agent_rich_input_with_empty_buffer_stores_no_draft() {
             assert_eq!(
                 session.draft_text, None,
                 "no draft should be stored for empty buffer"
-            );
-        });
-    })
-}
-
-#[test]
-fn ctrl_c_does_not_accept_prompt_suggestion_banner() {
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-        let terminal = add_window_with_terminal(&mut app, None);
-
-        let block_id = terminal.update(&mut app, |view, _ctx| {
-            let mut model = view.model.lock();
-            model.simulate_block("ls", "output");
-            let last_completed_block_index = BlockIndex(model.block_list().blocks().len() - 2);
-            model
-                .block_list()
-                .block_at(last_completed_block_index)
-                .unwrap()
-                .id()
-                .clone()
-        });
-
-        terminal.update(&mut app, |view, ctx| {
-            view.on_legacy_prompt_suggestion_generated(
-                AgentModePromptSuggestion::Success(PromptSuggestion {
-                    id: "suggestion".to_owned(),
-                    label: Some("Do something".to_owned()),
-                    prompt: "Do something".to_owned(),
-                    coding_query_context: None,
-                    static_prompt_suggestion_name: None,
-                    should_start_new_conversation: false,
-                }),
-                block_id.clone(),
-                "ls".to_owned(),
-                0,
-                ctx,
-            );
-
-            assert!(
-                view.inline_banners_state
-                    .prompt_suggestions_banner
-                    .is_some()
-            );
-
-            // Ctrl-C should not accept the prompt suggestion.
-            view.handle_action(&TerminalAction::CtrlC, ctx);
-
-            assert!(
-                view.inline_banners_state
-                    .prompt_suggestions_banner
-                    .is_some()
             );
         });
     })

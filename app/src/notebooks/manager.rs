@@ -181,7 +181,7 @@ impl NotebookManager {
             NotebookSource::Existing(notebook_id) => {
                 let notebook = CloudModel::as_ref(ctx).get_notebook(notebook_id).cloned();
                 if let Some(notebook) = notebook {
-                    view.update(ctx, |view, ctx| view.load(notebook, settings, ctx));
+                    view.update(ctx, |view, ctx| view.load(notebook, ctx));
                 } else {
                     // If the notebook doesn't exist yet, try waiting for initial load and check again
                     view.update(ctx, |view, ctx| {

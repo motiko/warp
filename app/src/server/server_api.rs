@@ -4,10 +4,8 @@ pub mod block;
 #[cfg(not(target_family = "wasm"))]
 pub(crate) mod download;
 pub mod factory;
-pub mod integrations;
 pub mod object;
 pub(crate) mod presigned_upload;
-pub mod referral;
 pub mod team;
 pub mod workspace;
 
@@ -27,7 +25,6 @@ use factory::FactoryClient;
 use instant::Instant;
 use object::ObjectClient;
 use parking_lot::Mutex;
-use referral::ReferralsClient;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use team::TeamClient;
@@ -48,6 +45,7 @@ use warpui::{Entity, ModelContext, SingletonEntity};
 use workspace::WorkspaceClient;
 
 use super::experiments::{ServerExperiment, ServerExperiments};
+use crate::ChannelState;
 use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::get_relevant_files::api::{GetRelevantFiles, GetRelevantFilesResponse};
 use crate::ai::predict::generate_ai_input_suggestions::GenerateAIInputSuggestionsRequest;
@@ -59,14 +57,8 @@ use crate::auth::auth_state::AuthState;
 use crate::server::team_scope::RequestTeamScope;
 use crate::server::telemetry::TelemetryApi;
 use crate::settings::PrivacySettingsSnapshot;
-use crate::{ChannelState, settings_view};
 
 pub const FETCH_CHANNEL_VERSIONS_TIMEOUT: std::time::Duration = Duration::from_secs(60);
-#[derive(Serialize)]
-struct AgentTipShownAnalyticsRequest {
-    tip: String,
-}
-
 /// We use a special error code header `X-Warp-Error-Code` to allow the server to send
 /// more specific error code information, so that the client can discern between different
 /// errors with the same error code.
@@ -1032,41 +1024,6 @@ impl ServerApi {
             .await
     }
 
-    pub async fn send_agent_tip_shown_analytics_event(&self, tip: String) -> Result<()> {
-        let auth_token = self
-            .get_or_refresh_access_token()
-            .await
-            .context("Failed to get access token for API request")?;
-        let url = format!(
-            "{}/analytics/agent-tip-shown",
-            ChannelState::server_root_url()
-        );
-        let mut request = self
-            .base_client
-            .http_client()
-            .post(&url)
-            .json(&AgentTipShownAnalyticsRequest { tip });
-        if let Some(token) = auth_token.as_bearer_token() {
-            request = request.bearer_auth(token);
-        }
-
-        for (name, value) in self.ambient_agent_headers().await? {
-            request = request.header(name, value);
-        }
-
-        let response = request
-            .send()
-            .await
-            .with_context(|| format!("Failed to send API request to {url}"))?;
-
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            self.observe_iap_challenge(&response);
-            Err(Self::error_from_response(response).await)
-        }
-    }
-
     /// Drains all queued [`TelemetryEvent`]s into Rudderstack requests containing the corresponding
     /// batch of events. Events are queued using the [`send_telemetry_from_ctx`] or
     /// [`send_telemetry_from_app_ctx`] macros. If telemetry is disabled for the user, this flushes
@@ -1418,8 +1375,6 @@ impl ServerApiProvider {
         ServerExperiments::handle(ctx).update(ctx, |state, ctx| {
             state.apply_latest_state(experiments, ctx);
         });
-
-        settings_view::handle_experiment_change(ctx);
     }
 
     /// Constructs a new SeverApiProvider for tests.
@@ -1443,10 +1398,6 @@ impl ServerApiProvider {
         self.auth_client.clone()
     }
 
-    pub fn get_referrals_client(&self) -> Arc<dyn ReferralsClient> {
-        self.server_api.clone()
-    }
-
     pub fn get_block_client(&self) -> Arc<dyn BlockClient> {
         self.server_api.clone()
     }
@@ -1463,10 +1414,6 @@ impl ServerApiProvider {
     }
 
     pub fn get_cloud_objects_client(&self) -> Arc<dyn ObjectClient> {
-        self.server_api.clone()
-    }
-
-    pub fn get_integrations_client(&self) -> Arc<dyn integrations::IntegrationsClient> {
         self.server_api.clone()
     }
 

@@ -7,9 +7,10 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use clap::ValueEnum;
+#[cfg(test)]
+pub use entry::AgentConversationProvenance;
 pub use entry::{
     AgentConversationEntry, AgentConversationEntryId, AgentConversationNavigationSubject,
-    AgentConversationProvenance,
 };
 use futures::stream::AbortHandle;
 use fuzzy_match::FuzzyMatchResult;

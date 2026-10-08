@@ -9,14 +9,13 @@ use warpui::{AppContext, SingletonEntity};
 use super::Input;
 use super::common::{
     add_command_xray_overlay, add_input_suggestions_overlays, add_vim_status_to_stack,
-    add_voltron_overlay, add_workflow_info_overlay, maybe_add_buy_credits_banner,
+    add_voltron_overlay, add_workflow_info_overlay,
     wrap_input_with_terminal_padding_and_focus_handler,
 };
 use crate::appearance::Appearance;
 use crate::context_chips::spacing;
 use crate::features::FeatureFlag;
 use crate::settings::{AppEditorSettings, InputModeSettings};
-use crate::terminal::block_list_viewport::InputMode;
 use crate::terminal::input::{InputAction, InputDropTargetData};
 use crate::terminal::settings::TerminalSettings;
 use crate::terminal::view::TerminalAction;
@@ -48,20 +47,7 @@ impl Input {
         let show_vim_status = vim_state.is_some() && *app_editor_settings.vim_status_bar.value();
         let input_mode = *InputModeSettings::as_ref(app).input_mode.value();
 
-        // For Universal Developer Input, ignore compact mode setting
-        let is_compact_mode = false;
         let mut column = Flex::column();
-
-        if matches!(input_mode, InputMode::PinnedToBottom | InputMode::Waterfall)
-            && let Some(banner) =
-                self.render_input_banner(appearance, app, input_mode, is_compact_mode)
-        {
-            column.add_child(
-                Container::new(banner)
-                    .with_margin_top(spacing::UDI_CHIP_MARGIN)
-                    .finish(),
-            );
-        }
 
         column.add_child(prompt_row.finish());
 
@@ -89,17 +75,6 @@ impl Input {
                 .finish(),
         );
         column.add_child(ChildView::new(&self.universal_developer_input_button_bar).finish());
-
-        if matches!(input_mode, InputMode::PinnedToTop)
-            && let Some(banner) =
-                self.render_input_banner(appearance, app, input_mode, is_compact_mode)
-        {
-            column.add_child(
-                Container::new(banner)
-                    .with_margin_bottom(spacing::UDI_CHIP_MARGIN)
-                    .finish(),
-            );
-        }
 
         if let Some(vim_state) = vim_state.as_ref()
             && show_vim_status
@@ -144,17 +119,6 @@ impl Input {
                 app,
             );
         }
-
-        maybe_add_buy_credits_banner(
-            &mut stack,
-            &self.buy_credits_banner,
-            self.is_pane_focused(app),
-            self.terminal_view_id,
-            self.is_input_at_top(&model, app),
-            &self.team_scope(app),
-            &model,
-            app,
-        );
 
         // If the file tree is enabled, don't include the top margin for UDI so that the UDI is flush with the
         // file tree.

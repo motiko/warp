@@ -468,12 +468,6 @@ impl Input {
 
         // Handle the slash command action based on its kind
         match command.kind {
-            SlashCommandKind::AddMcp => {
-                ctx.dispatch_typed_action(&TerminalAction::OpenAddMCPPane);
-            }
-            SlashCommandKind::AddPrompt => {
-                ctx.dispatch_typed_action(&TerminalAction::OpenAddPromptPane);
-            }
             SlashCommandKind::AddRule => {
                 ctx.dispatch_typed_action(&TerminalAction::OpenAddRulePane);
             }
@@ -886,9 +880,6 @@ impl Input {
                     entrypoint: CodeReviewPaneEntrypoint::SlashCommand,
                 });
             }
-            SlashCommandKind::OpenMcpServers => {
-                ctx.dispatch_typed_action(&TerminalAction::OpenViewMCPPane);
-            }
             SlashCommandKind::OpenSettingsFile => {
                 if !FeatureFlag::SettingsFile.is_enabled() || !cfg!(feature = "local_fs") {
                     return false;
@@ -1009,9 +1000,6 @@ impl Input {
             }
             SlashCommandKind::Rewind => {
                 self.open_rewind_menu(ctx);
-            }
-            SlashCommandKind::Usage => {
-                ctx.dispatch_typed_action(&TerminalAction::OpenBillingAndUsagePane);
             }
             SlashCommandKind::RemoteControl => {
                 if !FeatureFlag::CreatingSharedSessions.is_enabled()

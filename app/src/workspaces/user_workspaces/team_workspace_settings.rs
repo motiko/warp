@@ -29,8 +29,8 @@ use crate::server::ids::ServerId;
 use crate::settings::AISettings;
 use crate::workspaces::team::Team;
 use crate::workspaces::workspace::{
-    AdminEnablementSetting, AiAutonomySettings, HostEnablementSetting, LlmHostSettings,
-    LlmSettings, TeamByoSettings, Workspace,
+    AiAutonomySettings, HostEnablementSetting, LlmHostSettings, LlmSettings, TeamByoSettings,
+    Workspace,
 };
 
 mod sealed {
@@ -144,6 +144,33 @@ pub(crate) enum GeminiEnterpriseBackgroundHost<'a> {
 }
 
 impl UserWorkspaces {
+    #[cfg(test)]
+    pub(crate) fn is_gemini_enterprise_credentials_toggleable<S: TeamScope + ?Sized>(
+        &self,
+        scope: &S,
+    ) -> bool {
+        matches!(
+            self.gemini_enterprise_host_enablement_setting(scope),
+            HostEnablementSetting::RespectUserSetting
+        )
+    }
+
+    #[cfg(test)]
+    /// The agent attribution policy for `scope`'s team: `Enable` and `Disable` lock the user's
+    /// attribution toggle, `RespectUserSetting` leaves it editable. See
+    /// [`Self::scoped_or_workspace_setting`] for the no-team fallback.
+    pub(crate) fn get_agent_attribution_setting<S: TeamScope + ?Sized>(
+        &self,
+        scope: &S,
+    ) -> crate::workspaces::workspace::AdminEnablementSetting {
+        self.scoped_or_workspace_setting(
+            scope,
+            |team| team.settings.enable_warp_attribution.clone(),
+            |workspace| workspace.settings.enable_warp_attribution.clone(),
+            crate::workspaces::workspace::AdminEnablementSetting::default(),
+        )
+    }
+
     /// Captures the team selected in `ctx`'s window as an operation's
     /// [`TeamContextForOperation`]. Always succeeds -- a window with no team selected still yields
     /// a scope whose `team_uid()` is `None`.
@@ -360,21 +387,6 @@ impl UserWorkspaces {
         )
     }
 
-    /// The agent attribution policy for `scope`'s team: `Enable` and `Disable` lock the user's
-    /// attribution toggle, `RespectUserSetting` leaves it editable. See
-    /// [`Self::scoped_or_workspace_setting`] for the no-team fallback.
-    pub(crate) fn get_agent_attribution_setting<S: TeamScope + ?Sized>(
-        &self,
-        scope: &S,
-    ) -> AdminEnablementSetting {
-        self.scoped_or_workspace_setting(
-            scope,
-            |team| team.settings.enable_warp_attribution.clone(),
-            |workspace| workspace.settings.enable_warp_attribution.clone(),
-            AdminEnablementSetting::default(),
-        )
-    }
-
     pub(crate) fn is_anyone_with_link_sharing_enabled<S: TeamScope + ?Sized>(
         &self,
         scope: &S,
@@ -528,16 +540,6 @@ impl UserWorkspaces {
         self.gemini_enterprise_host_settings(scope)
             .map(|settings| settings.enablement_setting.clone())
             .unwrap_or_default()
-    }
-
-    pub(crate) fn is_gemini_enterprise_credentials_toggleable<S: TeamScope + ?Sized>(
-        &self,
-        scope: &S,
-    ) -> bool {
-        matches!(
-            self.gemini_enterprise_host_enablement_setting(scope),
-            HostEnablementSetting::RespectUserSetting
-        )
     }
 
     /// Whether Gemini Enterprise (GEAP) credentials should be minted and attached to requests

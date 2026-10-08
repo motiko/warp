@@ -24,15 +24,13 @@ fn command_names_and_kinds_are_unique() {
 fn command_registry_keeps_icon_metadata() {
     assert_eq!(COST.kind, SlashCommandKind::Cost);
     assert_eq!(COST.icon_path, "bundled/svg/bar-chart-04.svg");
-    assert_eq!(ADD_MCP.kind, SlashCommandKind::AddMcp);
-    assert_eq!(ADD_MCP.icon_path, "bundled/svg/dataflow.svg");
 
     let registry = Registry::new();
     assert_eq!(
         registry
-            .get_command_with_name(ADD_MCP.name)
+            .get_command_with_name(COST.name)
             .map(|command| command.icon_path),
-        Some("bundled/svg/dataflow.svg")
+        Some("bundled/svg/bar-chart-04.svg")
     );
 }
 

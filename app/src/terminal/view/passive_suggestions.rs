@@ -35,8 +35,8 @@ impl TerminalView {
         if self.resolve_unit_test_suggestion(resolution, ctx) {
             return true;
         }
-        if self.resolve_prompt_suggestion(resolution, ctx) {
-            return true;
+        if let PromptSuggestionResolution::Reject { ctrl_c: false } = resolution {
+            self.clear_prompt_suggestions(ctx);
         }
 
         false

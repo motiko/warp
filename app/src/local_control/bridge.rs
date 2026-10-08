@@ -105,15 +105,12 @@ impl LocalControlBridge {
             | ActionKind::SurfaceCommandSearchOpen
             | ActionKind::SurfaceThemePickerOpen
             | ActionKind::SurfaceKeybindingsOpen
-            | ActionKind::SurfaceWarpDriveOpen
-            | ActionKind::SurfaceWarpDriveToggle
             | ActionKind::SurfaceResourceCenterToggle
             | ActionKind::SurfaceAiAssistantToggle
             | ActionKind::SurfaceCodeReviewOpen
             | ActionKind::SurfaceCodeReviewToggle
             | ActionKind::SurfaceProjectExplorerOpen
             | ActionKind::SurfaceGlobalSearchOpen
-            | ActionKind::SurfaceConversationListOpen
             | ActionKind::SurfaceLeftPanelToggle
             | ActionKind::SurfaceRightPanelToggle
             | ActionKind::SurfaceVerticalTabsOpen

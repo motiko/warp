@@ -217,7 +217,6 @@ impl PaneGroup {
         };
 
         let resources = TerminalViewResources {
-            tips_completed: self.tips_completed.clone(),
             server_api: self.server_api.clone(),
             model_event_sender: self.model_event_sender.clone(),
         };
@@ -392,7 +391,6 @@ impl PaneGroup {
         self.discard_child_agent_pane_for_conversation(child_id, ctx);
 
         let resources = TerminalViewResources {
-            tips_completed: self.tips_completed.clone(),
             server_api: self.server_api.clone(),
             model_event_sender: self.model_event_sender.clone(),
         };
@@ -486,7 +484,6 @@ impl PaneGroup {
     ) -> Option<PaneId> {
         let child_id = child_conversation.id();
         let resources = TerminalViewResources {
-            tips_completed: self.tips_completed.clone(),
             server_api: self.server_api.clone(),
             model_event_sender: self.model_event_sender.clone(),
         };

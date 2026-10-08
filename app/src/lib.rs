@@ -10,7 +10,6 @@ mod app_state;
 mod auth;
 mod autoupdate;
 mod banner;
-mod billing;
 mod changelog_model;
 mod chip_configurator;
 mod cloud_object;
@@ -61,11 +60,9 @@ mod profiling;
 mod projects;
 mod prompt;
 mod quit_warning;
-mod referral_theme_status;
 #[allow(dead_code)]
 mod remote_server;
 mod resource_limits;
-mod reward_view;
 mod rich_text;
 mod safe_triangle;
 mod search_bar;
@@ -78,7 +75,6 @@ mod tab;
 #[cfg(test)]
 mod test_util;
 mod throttle;
-mod tips;
 mod tracing;
 mod ui_components;
 mod undo_close;
@@ -89,8 +85,6 @@ mod view_components;
 mod vim_registers;
 mod voltron;
 mod warp_managed_paths_watcher;
-#[cfg(target_family = "wasm")]
-mod wasm_nux_dialog;
 mod window_settings;
 mod word_block_editor;
 mod workspaces;
@@ -196,7 +190,6 @@ use interval_timer::IntervalTimer;
 use itertools::Itertools;
 #[cfg(feature = "integration_tests")]
 pub use persistence::testing as sqlite_testing;
-use referral_theme_status::ReferralThemeStatus;
 use server::server_api::ServerApiProvider;
 use settings::{ExtraMetaKeys, PrivacySettings};
 #[cfg(feature = "local_fs")]
@@ -219,7 +212,6 @@ use warp_logging::{LogDestination, LogFrontend};
 use warp_server_client::iap::{IapManager, IapManagerEvent, IapState};
 use warp_server_client::network_logging::NetworkLogModel;
 use warpui::integration::TestDriver;
-use warpui::modals::{AlertDialogWithCallbacks, AppModalCallback};
 use warpui::platform::TerminationMode;
 use warpui::platform::app::{ApproveTerminateResult, TerminationRequestSource};
 use warpui::windowing::state::ApplicationStage;
@@ -286,7 +278,7 @@ use crate::settings::cloud_preferences_syncer::{
     CloudPreferencesSyncerEvent, initialize_cloud_preferences_syncer,
 };
 use crate::settings::manager::SettingsManager;
-use crate::settings::{AISettings, AccessibilitySettings, ScrollSettings, SelectionSettings};
+use crate::settings::{AccessibilitySettings, ScrollSettings, SelectionSettings};
 use crate::settings_view::DisplayCount;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::suggestions::ignored_suggestions_model::IgnoredSuggestionsModel;
@@ -304,9 +296,7 @@ use crate::vim_registers::VimRegisters;
 use crate::warp_managed_paths_watcher::{WarpManagedPathsWatcher, ensure_warp_watch_roots_exist};
 use crate::workflows::aliases::WorkflowAliases;
 use crate::workflows::local_workflows::LocalWorkflows;
-use crate::workspace::{
-    ActiveSession, OneTimeModalModel, PaneViewLocator, ToastStack, Workspace, WorkspaceAction,
-};
+use crate::workspace::{ActiveSession, PaneViewLocator, ToastStack, Workspace, WorkspaceAction};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_profiles::UserProfiles;
@@ -1171,8 +1161,6 @@ pub(crate) fn initialize_app(
 
     let model_event_sender = persistence_writer.sender();
 
-    let referral_theme_status = ctx.add_model(ReferralThemeStatus::new);
-    let tips_handle = ctx.add_model(|_| user_defaults_on_startup.tips_data);
     let user_default_shell_unsupported_banner_model_handle =
         ctx.add_model(|_| user_defaults_on_startup.user_default_shell_unsupported_banner_state);
     // Extract the full-file parse error (if any) before the settings_file_error
@@ -1191,8 +1179,6 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(move |_ctx| {
         GlobalResourceHandlesProvider::new(GlobalResourceHandles {
             model_event_sender,
-            tips_completed: tips_handle,
-            referral_theme_status,
             user_default_shell_unsupported_banner_model_handle,
             settings_file_error,
         })
@@ -1616,9 +1602,7 @@ pub(crate) fn initialize_app(
     terminal::init(ctx);
     input::init(ctx);
     editor::init(ctx);
-    onboarding::init(ctx);
     menu::init(ctx);
-    tips::tip_view::init(ctx);
     launch_configs::init(ctx);
     workflows::init(ctx);
     themes::theme_chooser::init(ctx);
@@ -1626,27 +1610,21 @@ pub(crate) fn initialize_app(
     themes::theme_deletion_modal::init(ctx);
     root_view::init(ctx);
     voltron::init(ctx);
-    auth::init(ctx);
-    reward_view::init(ctx);
     crate::view_components::find::init(ctx);
     prompt::editor_modal::init(ctx);
     ai::blocklist::agent_view::editor::init(ctx);
     undo_close::init(ctx);
-    billing::shared_objects_creation_denied_modal::init(ctx);
     tab_configs::new_worktree_modal::init(ctx);
     tab_configs::params_modal::init(ctx);
     ai::blocklist::init(ctx);
     ai::blocklist::block::status_bar::init(ctx);
-    drive::index::init(ctx);
     drive::sharing::dialog::init(ctx);
     ai_assistant::panel::init(ctx);
-    settings_view::update_environment_form::init(ctx);
     env_vars::env_var_collection_block::init(ctx);
     context_chips::display_menu::init(ctx);
     context_chips::node_version_popup::init(ctx);
     env_vars::view::env_var_collection::init(ctx);
     ai::agent::todos::popup::init(ctx);
-    terminal::view::init_environment::mode_selector::init(ctx);
     coding_entrypoints::project_buttons::init(ctx);
     if FeatureFlag::CodeReviewSaveChanges.is_enabled() {
         code_review::init(ctx);
@@ -1660,7 +1638,6 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(|_| GitHubAuthNotifier::new());
     ctx.add_singleton_model(|_| NetworkStatus::new());
     ctx.add_singleton_model(|_| SystemStats::new());
-    workspace::auto_handoff::init(ctx);
     ctx.add_singleton_model(|_| KeybindingChangedNotifier::new());
     ctx.add_singleton_model(|_| TabShortcutModifierState::new());
     ctx.add_singleton_model(|_| search::command_palette::SelectedItems::new());
@@ -1669,10 +1646,6 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(UndoCloseStack::new);
     ctx.add_singleton_model(|_| ToastStack);
     ctx.add_singleton_model(|_| GlobalCodeReviewModel);
-    ctx.add_singleton_model(workspace::OneTimeModalModel::new);
-    ctx.add_singleton_model(
-        workspace::bonus_grant_notification_model::BonusGrantNotificationModel::new,
-    );
     #[cfg(feature = "local_fs")]
     ctx.add_singleton_model(FileModel::new);
     ctx.add_singleton_model(GlobalBufferModel::new);
@@ -1978,38 +1951,6 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(LLMPreferences::new);
     ctx.add_singleton_model(HarnessAvailabilityModel::new);
     ctx.add_singleton_model(ConnectedSelfHostedWorkersModel::new);
-
-    let tip_model_handle = ctx.add_singleton_model(|ctx| {
-        ai::agent_tips::AITipModel::<ai::AgentTip>::new_for_agent_tips(ctx)
-    });
-    {
-        // Rebuild the tip pool when AI settings change so tips whose applicability
-        // depends on AI settings appear/disappear without waiting for the next cooldown cycle.
-        let tip_model_handle_for_ai = tip_model_handle.clone();
-        ctx.subscribe_to_model(&AISettings::handle(ctx), move |_, _, ctx| {
-            tip_model_handle_for_ai.update(ctx, |model, ctx| {
-                model.revalidate_tips(ctx);
-            });
-        });
-        // Also revalidate when workspace/team data changes: billing metadata lives inside
-        // the team data, so `TeamsChanged` covers all policy updates.
-        let tip_model_handle_for_teams = tip_model_handle.clone();
-        ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), move |_, event, ctx| {
-            if matches!(event, UserWorkspacesEvent::TeamsChanged) {
-                tip_model_handle_for_teams.update(ctx, |model, ctx| {
-                    model.revalidate_tips(ctx);
-                });
-            }
-        });
-        // Revalidate when any keybinding changes so tips with `<keybinding>`
-        // placeholders are hidden/shown when the referenced binding is cleared
-        // or reassigned.
-        ctx.subscribe_to_model(&KeybindingChangedNotifier::handle(ctx), move |_, _, ctx| {
-            tip_model_handle.update(ctx, |model, ctx| {
-                model.revalidate_tips(ctx);
-            });
-        });
-    }
 
     timer.mark_interval_end("SINGLETON_MODELS_REGISTERED");
 
@@ -2372,12 +2313,6 @@ pub(crate) fn app_callbacks(is_integration_test: bool) -> warpui::platform::AppC
                 );
             }
 
-            if let Some(active_window_id) = active_window_id {
-                OneTimeModalModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.update_target_window_id(active_window_id, ctx);
-                });
-            }
-
             ctx.dispatch_global_action("workspace:save_app", &());
         })),
         on_window_will_close: Some(Box::new(move |closed_window_data, ctx| {
@@ -2399,34 +2334,6 @@ pub(crate) fn app_callbacks(is_integration_test: bool) -> warpui::platform::AppC
             ctx.dispatch_global_action("workspace:save_app", &());
         })),
         ..Default::default()
-    }
-}
-
-/// Focuses the active window or if there isn't one then a window with a running process
-/// and then shows the native modal.
-fn focus_running_window_and_show_native_modal(
-    sessions_summary: RunningSessionSummary,
-    dialog_with_callbacks: AlertDialogWithCallbacks<AppModalCallback>,
-    ctx: &mut AppContext,
-) {
-    let windowing_model = ctx.windows();
-    let active_window_id = windowing_model.active_window();
-    // Show the nav palette in the active window. If there is no active window,
-    // arbitrarily pick one of the windows having a running process.
-    let window_id_to_focus = active_window_id.unwrap_or_else(|| {
-        *sessions_summary
-            .windows_running()
-            .iter()
-            .next()
-            .expect("already checked len > 0")
-    });
-    ctx.windows().show_window_and_focus_app(window_id_to_focus);
-    if let Some(workspaces) = ctx.views_of_type::<Workspace>(window_id_to_focus)
-        && let Some(handle) = workspaces.first()
-    {
-        handle.update(ctx, |view, ctx| {
-            view.show_native_modal(dialog_with_callbacks, ctx);
-        });
     }
 }
 

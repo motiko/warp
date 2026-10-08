@@ -56,6 +56,12 @@ impl Default for InitialGlobalMcpScanState {
 }
 
 impl FileBasedMCPManager {
+    #[cfg(test)]
+    /// Returns all detected file-based MCP server installations.
+    pub fn file_based_servers(&self) -> Vec<&TemplatableMCPServerInstallation> {
+        self.file_based_servers.values().collect()
+    }
+
     pub fn new(ctx: &mut ModelContext<Self>) -> Self {
         if FeatureFlag::FileBasedMcp.is_enabled() {
             ctx.subscribe_to_model(&FileMCPWatcher::handle(ctx), |me, _, event, ctx| {
@@ -556,10 +562,6 @@ impl FileBasedMCPManager {
             .collect()
     }
 
-    /// Returns all detected file-based MCP server installations.
-    pub fn file_based_servers(&self) -> Vec<&TemplatableMCPServerInstallation> {
-        self.file_based_servers.values().collect()
-    }
     /// Returns owned file-based installations with every config source that
     /// currently references each installation.
     #[cfg(test)]
@@ -599,37 +601,6 @@ impl FileBasedMCPManager {
     #[cfg(test)]
     pub fn installation_by_hash(&self, hash: u64) -> Option<&TemplatableMCPServerInstallation> {
         self.file_based_servers.get(&hash)
-    }
-
-    /// Returns the installation with the given UUID, if any.
-    pub fn get_installation_by_uuid(
-        &self,
-        uuid: Uuid,
-    ) -> Option<&TemplatableMCPServerInstallation> {
-        self.file_based_servers
-            .values()
-            .find(|server| server.uuid() == uuid)
-    }
-
-    /// Returns all root paths for the given installation scoped to a specific provider.
-    pub fn directory_paths_for_installation_and_provider(
-        &self,
-        uuid: Uuid,
-        provider: MCPProvider,
-    ) -> Vec<PathBuf> {
-        let Some(hash) = self.get_hash_by_uuid(uuid) else {
-            return vec![];
-        };
-        self.file_based_servers_by_root
-            .iter()
-            .filter(|(_, provider_map)| {
-                provider_map
-                    .get(&provider)
-                    .is_some_and(|hashes| hashes.contains(&hash))
-            })
-            .map(|(root, _)| root.clone())
-            .sorted()
-            .collect()
     }
 
     /// Returns the directory a file-based MCP installation should be spawned from

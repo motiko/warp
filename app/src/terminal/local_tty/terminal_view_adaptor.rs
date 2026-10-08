@@ -16,9 +16,9 @@ use session_sharing_protocol::common::{
     LongRunningCommandAgentInteractionState, SelectedConversation, UniversalDeveloperInputContext,
 };
 use session_sharing_protocol::sharer::{
-    AddGuestsResponse, FailedToInitializeSessionReason, Lifetime, LinkAccessLevelUpdateResponse,
-    QuotaType, RemoveGuestResponse, SessionEndedReason, SessionSourceType,
-    TeamAccessLevelUpdateResponse, UpdatePendingUserRoleResponse,
+    AddGuestsResponse, Lifetime, LinkAccessLevelUpdateResponse, RemoveGuestResponse,
+    SessionEndedReason, SessionSourceType, TeamAccessLevelUpdateResponse,
+    UpdatePendingUserRoleResponse,
 };
 use warp_core::execution_mode::AppExecutionMode;
 use warp_core::send_telemetry_from_ctx;
@@ -495,14 +495,8 @@ fn wire_up_terminal_view_session_sharing(
     });
 
     let agent_view_controller = view.as_ref(ctx).agent_view_controller().clone();
-    let active_session = view.as_ref(ctx).active_session().clone();
     ActiveAgentViewsModel::handle(ctx).update(ctx, |model, ctx| {
-        model.register_agent_view_controller(
-            &agent_view_controller,
-            &active_session,
-            terminal_view_id,
-            ctx,
-        );
+        model.register_agent_view_controller(&agent_view_controller, terminal_view_id, ctx);
     });
 
     let ai_context_model = view.as_ref(ctx).ai_context_model().clone();
@@ -1019,7 +1013,6 @@ impl TerminalManager<TerminalView> {
                     view.on_session_share_started(
                         sharer_id.clone(),
                         *sharer_firebase_uid,
-                        scrollback_type,
                         *session_id,
                         source.source_type.clone(),
                         ctx,
@@ -1099,16 +1092,7 @@ impl TerminalManager<TerminalView> {
                     view.notify_shared_session_link_changed(ctx);
                     let reason_string = failed_to_initialize_session_user_error(reason);
 
-                    if matches!(
-                        reason,
-                        FailedToInitializeSessionReason::NoUserQuotaRemaining {
-                            quota_type: QuotaType::SessionsCreated
-                        }
-                    ) {
-                        view.open_share_session_denied_modal(ctx);
-                    } else {
-                        view.show_persistent_toast(reason_string.clone(), ToastFlavor::Error, ctx);
-                    }
+                    view.show_persistent_toast(reason_string.clone(), ToastFlavor::Error, ctx);
 
                     ctx.emit(TerminalViewEvent::FailedToShareSession {
                         reason: reason_string,

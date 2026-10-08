@@ -26,7 +26,6 @@ use parking_lot::FairMutex;
 use pathfinder_color::ColorU;
 use warp_core::features::FeatureFlag;
 use warp_core::send_telemetry_from_ctx;
-use warp_core::settings::Setting;
 use warp_core::ui::appearance::Appearance;
 use warp_core::ui::color::contrast::{
     MinimumAllowedContrast, high_enough_contrast, pick_best_foreground_color,
@@ -37,9 +36,7 @@ use warp_errors::report_error;
 use warp_terminal::model::escape_sequences::{BRACKETED_PASTE_END, BRACKETED_PASTE_START};
 use warpify_footer::{WarpifyFooterView, WarpifyFooterViewEvent};
 use warpui::r#async::Timer;
-use warpui::elements::{
-    ChildView, Container, CrossAxisAlignment, Empty, Expanded, Flex, MainAxisSize, ParentElement,
-};
+use warpui::elements::{ChildView, Container, Empty};
 use warpui::keymap::Keystroke;
 use warpui::{
     AppContext, Element, Entity, EntityId, ModelHandle, SingletonEntity, TypedActionView, View,
@@ -156,19 +153,6 @@ impl TerminalView {
         ctx.subscribe_to_model(&ai_settings, |me, _, event, ctx| match event {
             AISettingsChangedEvent::IsAnyAIEnabled { .. }
             | AISettingsChangedEvent::ShouldRenderCLIAgentToolbar { .. } => {
-                me.maybe_show_use_agent_footer_in_blocklist(ctx);
-            }
-            AISettingsChangedEvent::ShouldRenderUseAgentToolbarForUserCommands { .. } => {
-                // When the setting is re-enabled (e.g. from the AI settings page),
-                // reset the pane-scoped dismissal so the footer can reappear.
-                if *AISettings::as_ref(ctx)
-                    .should_render_use_agent_footer_for_user_commands
-                    .value()
-                {
-                    me.use_agent_footer.update(ctx, |footer, _| {
-                        footer.did_user_dismiss = false;
-                    });
-                }
                 me.maybe_show_use_agent_footer_in_blocklist(ctx);
             }
             AISettingsChangedEvent::CLIAgentToolbarEnabledCommands { .. } => {
@@ -325,29 +309,10 @@ impl TerminalView {
             return true;
         }
 
-        // All other footer variants require the global AI setting to be on.
-        if !ai_settings.is_any_ai_enabled(app) {
-            return false;
-        }
-
-        if !active_block.is_eligible_for_agent_handoff() {
-            // For regular commands (not agent handoff), check the "Use Agent" footer setting.
-            // Agent handoff blocks always show the footer regardless of this setting.
-            let is_user_command = active_block.requested_command_action_id().is_none();
-            if is_user_command
-                && (self.use_agent_footer.as_ref(app).did_user_dismiss()
-                    || !*ai_settings.should_render_use_agent_footer_for_user_commands)
-            {
-                return false;
-            }
-        }
-
-        // Don't show the use agent footer during LRCs in setup phase of ambient agent sessions.
-        let is_shared_ambient_session = model.is_shared_ambient_agent_session();
-
-        !self.is_input_box_visible(model, app)
-            && ((active_block.is_eligible_to_tag_in_agent() && !is_shared_ambient_session)
-                || active_block.is_eligible_for_agent_handoff())
+        // The agent handoff footer requires the global AI setting to be on.
+        ai_settings.is_any_ai_enabled(app)
+            && active_block.is_eligible_for_agent_handoff()
+            && !self.is_input_box_visible(model, app)
     }
 
     /// Returns the detected CLI agent for the active block's command, if any.
@@ -1061,23 +1026,13 @@ pub struct UseAgentToolbar {
     terminal_view_id: EntityId,
     terminal_model: Arc<FairMutex<TerminalModel>>,
 
-    // Standard "Use agent" UI
-    button: ViewHandle<ActionButton>,
     give_control_back_button: ViewHandle<ActionButton>,
-    dismiss_button: ViewHandle<ActionButton>,
-    dont_show_again_button: ViewHandle<ActionButton>,
 
     // Shared agent input footer (renders CLI agent mode when a CLI session is active).
     agent_input_footer: ViewHandle<AgentInputFooter>,
 
     // Warpify footer UI (shown when a subshell/SSH command is detected).
     warpify_footer_view: ViewHandle<WarpifyFooterView>,
-
-    // `true` if the user has dismissed the footer.
-    //
-    // Footer dismissal is terminal pane-scoped, e.g. dismissal hides the footer for this
-    // specific terminal pane for the lifetime of the pane.
-    did_user_dismiss: bool,
 }
 
 impl UseAgentToolbar {
@@ -1090,20 +1045,6 @@ impl UseAgentToolbar {
     ) -> Self {
         let button_size = ButtonSize::XSmall;
 
-        let button = ctx.add_typed_action_view(|ctx| {
-            ActionButton::new(
-                "Use agent",
-                AgentFooterButtonTheme::new(Some(terminal_model.clone())),
-            )
-            .with_icon(Icon::Agent)
-            .with_keybinding(KeystrokeSource::Fixed(USE_AGENT_KEYSTROKE.clone()), ctx)
-            .with_size(button_size)
-            .with_tooltip("Ask the Warp agent to assist")
-            .with_tooltip_alignment(TooltipAlignment::Left)
-            .on_click(|ctx| {
-                ctx.dispatch_typed_action(TerminalAction::SetInputModeAgent);
-            })
-        });
         let give_control_back_button = ctx.add_typed_action_view(|ctx| {
             ActionButton::new(
                 "Give control back to agent",
@@ -1117,26 +1058,6 @@ impl UseAgentToolbar {
             .on_click(|ctx| {
                 ctx.dispatch_typed_action(TerminalAction::SetInputModeAgent);
             })
-        });
-        let dismiss_button = ctx.add_typed_action_view(|_| {
-            ActionButton::new(
-                "Dismiss",
-                AgentFooterButtonTheme::new(Some(terminal_model.clone())),
-            )
-            .on_click(|ctx| {
-                ctx.dispatch_typed_action(UseAgentToolbarAction::Dismiss { permanently: false });
-            })
-            .with_size(button_size)
-        });
-        let dont_show_again_button = ctx.add_typed_action_view(|_| {
-            ActionButton::new(
-                "Don't show again",
-                AgentFooterButtonTheme::new(Some(terminal_model.clone())),
-            )
-            .on_click(|ctx| {
-                ctx.dispatch_typed_action(UseAgentToolbarAction::Dismiss { permanently: true });
-            })
-            .with_size(button_size)
         });
 
         // Subscribe to agent input footer events to forward CLI-relevant ones.
@@ -1169,14 +1090,10 @@ impl UseAgentToolbar {
 
         Self {
             terminal_view_id,
-            button,
             give_control_back_button,
-            dismiss_button,
-            dont_show_again_button,
             agent_input_footer,
             warpify_footer_view,
             terminal_model,
-            did_user_dismiss: false,
         }
     }
 
@@ -1243,17 +1160,8 @@ impl UseAgentToolbar {
         ctx.notify();
         self.agent_input_footer.update(ctx, |_, ctx| ctx.notify());
         self.warpify_footer_view.update(ctx, |_, ctx| ctx.notify());
-        self.button.update(ctx, |_, ctx| ctx.notify());
         self.give_control_back_button
             .update(ctx, |_, ctx| ctx.notify());
-        self.dismiss_button.update(ctx, |_, ctx| ctx.notify());
-        self.dont_show_again_button
-            .update(ctx, |_, ctx| ctx.notify());
-    }
-
-    /// Returns whether the user has dismissed this footer.
-    pub fn did_user_dismiss(&self) -> bool {
-        self.did_user_dismiss
     }
 
     fn cli_agent(&self, app: &AppContext) -> Option<CLIAgent> {
@@ -1263,7 +1171,7 @@ impl UseAgentToolbar {
     }
 
     /// Activates the warpify footer. When active, the footer shows the
-    /// warpify view instead of the CLI agent or regular "Use agent" views.
+    /// warpify view instead of the CLI agent or agent handoff views.
     pub(in crate::terminal) fn show_warpify(&mut self, ctx: &mut ViewContext<Self>) {
         self.warpify_footer_view.update(ctx, |view, ctx| {
             view.show(ctx);
@@ -1356,36 +1264,15 @@ impl View for UseAgentToolbar {
         }
 
         let terminal_model = self.terminal_model.lock();
-
-        let active_block = terminal_model.block_list().active_block();
-        let show_give_control_back_button = active_block.is_eligible_for_agent_handoff();
-        let show_dismiss_actions = active_block.requested_command_action_id().is_none();
-
-        let mut button_row = Flex::row()
-            .with_spacing(4.)
-            .with_main_axis_size(MainAxisSize::Max)
-            .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_child(
-                ChildView::new(if show_give_control_back_button {
-                    &self.give_control_back_button
-                } else {
-                    &self.button
-                })
-                .finish(),
-            );
-
-        if show_dismiss_actions {
-            button_row = button_row
-                .with_child(Expanded::new(1., Empty::new().finish()).finish())
-                .with_child(ChildView::new(&self.dismiss_button).finish());
-
-            if !show_give_control_back_button {
-                button_row =
-                    button_row.with_child(ChildView::new(&self.dont_show_again_button).finish());
-            }
+        if !terminal_model
+            .block_list()
+            .active_block()
+            .is_eligible_for_agent_handoff()
+        {
+            return Empty::new().finish();
         }
 
-        let mut container = Container::new(button_row.finish())
+        let mut container = Container::new(ChildView::new(&self.give_control_back_button).finish())
             .with_horizontal_padding(*super::PADDING_LEFT)
             .with_vertical_padding(4.);
 
@@ -1396,36 +1283,6 @@ impl View for UseAgentToolbar {
         }
 
         container.finish()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum UseAgentToolbarAction {
-    Dismiss { permanently: bool },
-}
-
-impl TypedActionView for UseAgentToolbar {
-    type Action = UseAgentToolbarAction;
-
-    fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
-        let UseAgentToolbarAction::Dismiss { permanently } = action;
-        self.did_user_dismiss = true;
-        ctx.emit(UseAgentToolbarEvent::Dismiss);
-
-        if *permanently {
-            AISettings::handle(ctx).update(ctx, |settings, ctx| {
-                if let Err(e) = settings
-                    .should_render_use_agent_footer_for_user_commands
-                    .set_value(false, ctx)
-                {
-                    report_error!(
-                        e.context("Failed to set `ShouldRenderUseAgentToolbarForUserCommands`")
-                    );
-                }
-            });
-        }
-
-        ctx.notify();
     }
 }
 

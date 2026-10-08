@@ -77,11 +77,8 @@ use crate::app_state::{
 };
 use crate::appearance::Appearance;
 use crate::auth::AuthStateProvider;
-use crate::auth::auth_manager::AuthManager;
-use crate::auth::auth_view_modal::AuthViewVariant;
 use crate::banner::{Banner, BannerEvent, BannerState, BannerTextContent, DismissalType};
 use crate::channel::{Channel, ChannelState};
-use crate::cloud_object::Space;
 use crate::code::active_file::ActiveFileModel;
 use crate::code::buffer_location::LocalOrRemotePath;
 #[cfg(feature = "local_fs")]
@@ -89,8 +86,6 @@ use crate::code::editor_management::CodeSource;
 use crate::code::view::{CodeView, CodeViewAction};
 use crate::code_review::comments::{AttachedReviewComment, PendingImportedReviewComment};
 use crate::code_review::diff_state::DiffMode;
-use crate::drive::CloudObjectTypeAndId;
-use crate::drive::items::WarpDriveItemId;
 use crate::env_vars::EnvVarCollectionType;
 use crate::features::FeatureFlag;
 use crate::launch_configs::launch_config::{self, PaneMode, PaneTemplateType};
@@ -104,21 +99,15 @@ use crate::pane_group::pane::terminal_pane::{
 };
 use crate::persistence::ModelEvent;
 use crate::quit_warning::UnsavedStateSummary;
-use crate::resource_center::{
-    Tip, TipAction, TipsCompleted, mark_feature_used_and_write_to_user_defaults,
-};
 use crate::rich_text::file::FileNotebookView;
 #[cfg(target_family = "wasm")]
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ObjectUid, SyncId};
 use crate::server::server_api::{ServerApi, ServerApiProvider};
-use crate::server::telemetry::{
-    AnonymousUserSignupEntrypoint, PaletteSource, SharingDialogSource, TelemetryEvent,
-};
+use crate::server::telemetry::{PaletteSource, TelemetryEvent};
 use crate::session_management::SessionNavigationData;
 use crate::settings::{AISettings, DefaultSessionMode, PaneSettings};
 use crate::settings_view::SettingsSection;
-use crate::settings_view::mcp_servers_page::MCPServersSettingsPage;
 use crate::shell_indicator::ShellIndicatorType;
 use crate::terminal::available_shells::{AvailableShell, AvailableShells};
 #[cfg(not(target_family = "wasm"))]
@@ -142,9 +131,6 @@ use crate::terminal::shared_session::role_change_modal::{
 use crate::terminal::shared_session::share_modal::{ShareSessionModal, ShareSessionModalEvent};
 use crate::terminal::shared_session::{
     self, IsSharedSessionCreator, SharedSessionActionSource, SharedSessionSource,
-};
-use crate::terminal::view::inline_banner::{
-    ZeroStatePromptSuggestionTriggeredFrom, ZeroStatePromptSuggestionType,
 };
 use crate::terminal::view::load_ai_conversation::{
     RestoreConversationEntryBehavior, RestoredAIConversation,
@@ -196,7 +182,6 @@ pub use pane::code_diff_pane::CodeDiffPane;
 pub use pane::code_pane::CodePane;
 pub use pane::custom_router_editor_pane::CustomRouterEditorPane;
 pub use pane::env_var_collection_pane::EnvVarCollectionPane;
-pub use pane::environment_management_pane::EnvironmentManagementPane;
 pub use pane::execution_profile_editor_pane::ExecutionProfileEditorPane;
 pub use pane::file_pane::FilePane;
 pub use pane::network_log_pane::NetworkLogPane;
@@ -503,9 +488,6 @@ pub enum Event {
         pane_id: PaneId,
     },
     OpenSettings(SettingsSection),
-    OpenAutoReloadModal {
-        purchased_credits: i32,
-    },
     AskAIAssistant(AskAIType),
     /// Pass input sync event up from underlying TerminalViews
     /// to the Workspace to sync throughout the window.
@@ -515,19 +497,12 @@ pub enum Event {
     /// Event used to propagate a state change for one of the terminal views
     /// inside this pane group.
     TerminalViewStateChanged,
-    /// Event used to propagate guided onboarding tutorial completion to the workspace.
-    OnboardingTutorialCompleted,
     // Tell the workspace to open the workflow modal.
     OpenWorkflowModalWithCommand(String),
     // Tell the workspace to open the workflow for edit.
     OpenCloudWorkflowForEdit(SyncId),
     // Tell the workspace to open the share dialog for the given drive object. The share dialog will
     // open in the index. If the invitee email is provided, it will be added to the share dialog.
-    OpenDriveObjectShareDialog {
-        cloud_object_type_and_id: CloudObjectTypeAndId,
-        invitee_email: Option<String>,
-        source: SharingDialogSource,
-    },
     // Tell the workspace to open the workflow modal with an unsaved workflow.
     OpenWorkflowModalWithTemporary(Box<Workflow>),
     OpenPromptEditor,
@@ -585,11 +560,6 @@ pub enum Event {
     FocusPaneInWorkspace {
         locator: PaneViewLocator,
     },
-    ViewInWarpDrive(WarpDriveItemId),
-    MoveToSpace {
-        cloud_object_type_and_id: CloudObjectTypeAndId,
-        space: Space,
-    },
     PaneFocused,
     DroppedOnTabBar {
         origin: ActionOrigin,
@@ -632,7 +602,6 @@ pub enum Event {
         /// If set, open the fact collection to the specific rule.
         sync_id: Option<SyncId>,
     },
-    AnonymousUserSignup,
     /// Request that the workspace open the command palette.
     OpenPalette {
         mode: PaletteMode,
@@ -669,21 +638,10 @@ pub enum Event {
         flavor: ToastFlavor,
         pane_id: Option<PaneId>,
     },
-    SignupAnonymousUser {
-        entrypoint: AnonymousUserSignupEntrypoint,
-    },
     OpenThemeChooser,
     InvalidatedActiveConversation,
     OpenConversationHistory,
-    OpenMCPSettingsPage {
-        page: Option<MCPServersSettingsPage>,
-    },
-    OpenAddPromptPane {
-        /// The initial prompt body content.
-        initial_content: Option<String>,
-    },
     OpenAddRulePane,
-    OpenEnvironmentManagementPane,
     OpenFilesPalette {
         source: PaletteSource,
     },
@@ -746,9 +704,6 @@ pub enum Event {
     /// Request to open LSP logs in a terminal pane
     OpenLspLogs {
         log_path: PathBuf,
-    },
-    ShowCloudAgentCapacityModal {
-        variant: crate::workspace::view::cloud_agent_capacity_modal::CloudAgentCapacityModalVariant,
     },
     #[cfg(not(target_family = "wasm"))]
     OpenPluginInstructionsPane(crate::terminal::CLIAgent, PluginModalKind),
@@ -867,7 +822,6 @@ pub enum PaneDragDropLocation {
 }
 
 pub struct PaneGroup {
-    tips_completed: ModelHandle<TipsCompleted>,
     user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
     model_event_sender: Option<SyncSender<ModelEvent>>,
     panes: PaneData,
@@ -906,9 +860,6 @@ pub struct PaneGroup {
     terminal_with_open_summarization_dialog: Option<TerminalPaneId>,
 
     /// Pane with an open environment setup mode selector modal (rendered at tab level).
-    pane_with_open_environment_setup_mode_selector: Option<PaneId>,
-    /// Pane with an open agent-assisted environment modal (rendered at tab level).
-    pane_with_open_agent_assisted_environment_modal: Option<PaneId>,
 
     /// If the left panel is open for this pane group
     pub left_panel_open: bool,
@@ -1013,7 +964,6 @@ pub enum SplitPaneState {
 // Helper to group together certain structs necessary to instantiate a new terminal view.
 #[derive(Clone)]
 pub struct TerminalViewResources {
-    pub tips_completed: ModelHandle<TipsCompleted>,
     pub server_api: Arc<ServerApi>,
     pub model_event_sender: Option<SyncSender<ModelEvent>>,
 }
@@ -2016,13 +1966,6 @@ impl PaneGroup {
                     Ok((PaneData::new(pane_id), focus))
                 }
             }
-            LeafContents::EnvironmentManagement(_) => {
-                // Environment management panes are not restored from persistence.
-                // They are opened on-demand via workspace actions.
-                Err(anyhow::anyhow!(
-                    "Environment management panes are not restored"
-                ))
-            }
         };
 
         if let (Ok((pane_data, _)), Some(title)) = (&result, custom_vertical_tabs_title.as_deref())
@@ -2619,12 +2562,6 @@ impl PaneGroup {
             .get()
             .is_anonymous_or_logged_out()
         {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, _| {
-                auth_manager.attempt_login_gated_feature(
-                    "Share Session",
-                    AuthViewVariant::ShareRequirementCloseable,
-                )
-            });
             return;
         }
 
@@ -2636,19 +2573,6 @@ impl PaneGroup {
                 terminal_view.id(),
                 ctx,
             );
-        });
-        self.terminal_with_open_share_session_modal = Some(terminal_pane_id);
-        ctx.focus(&self.share_session_modal);
-        ctx.notify();
-    }
-
-    fn open_share_session_denied_modal(
-        &mut self,
-        terminal_pane_id: TerminalPaneId,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.share_session_modal.update(ctx, |modal, ctx| {
-            modal.open_denied(terminal_pane_id, ctx);
         });
         self.terminal_with_open_share_session_modal = Some(terminal_pane_id);
         ctx.focus(&self.share_session_modal);
@@ -2719,16 +2643,6 @@ impl PaneGroup {
                         ctx,
                     );
                 });
-            }
-            ShareSessionModalEvent::Upgrade => {
-                self.terminal_with_open_share_session_modal = None;
-                if let Some(pane) = self.focused_pane_content(ctx) {
-                    pane.focus(ctx);
-                }
-                ctx.emit(Event::OpenSettings(SettingsSection::Teams));
-                ctx.notify();
-
-                send_telemetry_from_ctx!(TelemetryEvent::SharedSessionModalUpgradePressed, ctx);
             }
         }
     }
@@ -3030,7 +2944,6 @@ impl PaneGroup {
     }
 
     fn new_internal(
-        tips_completed: ModelHandle<TipsCompleted>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         server_api: Arc<ServerApi>,
         model_event_sender: Option<SyncSender<ModelEvent>>,
@@ -3043,7 +2956,6 @@ impl PaneGroup {
         let mut pane_contents = HashMap::new();
 
         let resources = TerminalViewResources {
-            tips_completed: tips_completed.clone(),
             server_api: server_api.clone(),
             model_event_sender: model_event_sender.clone(),
         };
@@ -3161,7 +3073,6 @@ impl PaneGroup {
         let active_file_model = ctx.add_model(|_| ActiveFileModel::new());
 
         let mut pane_group = Self {
-            tips_completed,
             user_default_shell_unsupported_banner_model_handle,
             model_event_sender,
             panes: pane_data,
@@ -3179,8 +3090,6 @@ impl PaneGroup {
             shared_session_role_change_modal,
             active_file_model,
             terminal_with_open_summarization_dialog: None,
-            pane_with_open_environment_setup_mode_selector: None,
-            pane_with_open_agent_assisted_environment_modal: None,
             right_panel_open: false,
             left_panel_open: false,
             is_right_panel_maximized: false,
@@ -3418,7 +3327,6 @@ impl PaneGroup {
     /// to the specification of the provided [`PanesLayout`].
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_panes_layout(
-        tips_completed: ModelHandle<TipsCompleted>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         server_api: Arc<ServerApi>,
         panes_layout: PanesLayout,
@@ -3506,7 +3414,6 @@ impl PaneGroup {
         };
 
         let mut pane_group = Self::new_internal(
-            tips_completed,
             user_default_shell_unsupported_banner_model_handle,
             server_api,
             model_event_sender.clone(),
@@ -3526,7 +3433,6 @@ impl PaneGroup {
 
     pub fn new_from_existing_pane(
         pane: Box<dyn AnyPaneContent>,
-        tips_completed: ModelHandle<TipsCompleted>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         server_api: Arc<ServerApi>,
         model_event_sender: Option<SyncSender<ModelEvent>>,
@@ -3548,7 +3454,6 @@ impl PaneGroup {
             (PaneData::new(pane_id), initial_focus)
         };
         Self::new_internal(
-            tips_completed,
             user_default_shell_unsupported_banner_model_handle,
             server_api,
             model_event_sender,
@@ -3559,7 +3464,6 @@ impl PaneGroup {
 
     pub fn new_for_shared_session_viewer(
         session_id: SessionId,
-        tips_completed: ModelHandle<TipsCompleted>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         server_api: Arc<ServerApi>,
         model_event_sender: Option<SyncSender<ModelEvent>>,
@@ -3596,7 +3500,6 @@ impl PaneGroup {
             )
         };
         Self::new_internal(
-            tips_completed,
             user_default_shell_unsupported_banner_model_handle,
             server_api,
             model_event_sender,
@@ -3609,7 +3512,6 @@ impl PaneGroup {
     pub fn new_for_conversation_transcript_viewer(
         conversation: AIConversation,
         ambient_agent_task_id: Option<AmbientAgentTaskId>,
-        tips_completed: ModelHandle<TipsCompleted>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         server_api: Arc<ServerApi>,
         model_event_sender: Option<SyncSender<ModelEvent>>,
@@ -3640,7 +3542,6 @@ impl PaneGroup {
             )
         };
         Self::new_internal(
-            tips_completed,
             user_default_shell_unsupported_banner_model_handle,
             server_api,
             model_event_sender,
@@ -3652,7 +3553,6 @@ impl PaneGroup {
     /// Create a new pane group with a loading state for a conversation viewer.
     /// The actual conversation data will be loaded asynchronously.
     pub fn new_for_conversation_transcript_viewer_loading(
-        tips_completed: ModelHandle<TipsCompleted>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         server_api: Arc<ServerApi>,
         model_event_sender: Option<SyncSender<ModelEvent>>,
@@ -3687,7 +3587,6 @@ impl PaneGroup {
             )
         };
         Self::new_internal(
-            tips_completed,
             user_default_shell_unsupported_banner_model_handle,
             server_api,
             model_event_sender,
@@ -4158,7 +4057,6 @@ impl PaneGroup {
     ) -> TerminalPaneId {
         let uuid = Uuid::new_v4();
         let resources = TerminalViewResources {
-            tips_completed: self.tips_completed.clone(),
             server_api: self.server_api.clone(),
             model_event_sender: self.model_event_sender.clone(),
         };
@@ -4843,13 +4741,6 @@ impl PaneGroup {
                 self.hide_closed_pane(pane_id, ctx);
             }
 
-            if self.pane_with_open_environment_setup_mode_selector == Some(pane_id) {
-                self.pane_with_open_environment_setup_mode_selector = None;
-            }
-            if self.pane_with_open_agent_assisted_environment_modal == Some(pane_id) {
-                self.pane_with_open_agent_assisted_environment_modal = None;
-            }
-
             self.focus_next_terminal_pane_and_activate_session(
                 pane_id,
                 PaneRemovalReason::Close,
@@ -4869,13 +4760,6 @@ impl PaneGroup {
             }
 
             self.clean_up_pane(pane_id, ctx);
-
-            if self.pane_with_open_environment_setup_mode_selector == Some(pane_id) {
-                self.pane_with_open_environment_setup_mode_selector = None;
-            }
-            if self.pane_with_open_agent_assisted_environment_modal == Some(pane_id) {
-                self.pane_with_open_agent_assisted_environment_modal = None;
-            }
 
             self.focus_next_terminal_pane_and_activate_session(
                 pane_id,
@@ -5170,7 +5054,7 @@ impl PaneGroup {
                 ctx.emit(Event::AppStateChanged);
             }
             PaneEvent::NewPaneInAIMode { initial_query } => {
-                self.add_terminal_pane_in_agent_mode(initial_query.as_deref(), None, ctx)
+                self.add_terminal_pane_in_agent_mode(initial_query.as_deref(), ctx)
             }
             PaneEvent::ClearHoveredTabIndex => ctx.emit(Event::ClearHoveredTabIndex),
             #[cfg(feature = "local_fs")]
@@ -5416,7 +5300,6 @@ impl PaneGroup {
         ctx: &mut ViewContext<Self>,
     ) -> bool {
         let resources = TerminalViewResources {
-            tips_completed: self.tips_completed.clone(),
             server_api: self.server_api.clone(),
             model_event_sender: self.model_event_sender.clone(),
         };
@@ -6467,7 +6350,6 @@ impl PaneGroup {
     ) -> PaneId {
         let uuid = Uuid::new_v4();
         let resources = TerminalViewResources {
-            tips_completed: self.tips_completed.clone(),
             server_api: self.server_api.clone(),
             model_event_sender: self.model_event_sender.clone(),
         };
@@ -6540,7 +6422,6 @@ impl PaneGroup {
 
         let uuid = Uuid::new_v4();
         let resources = TerminalViewResources {
-            tips_completed: self.tips_completed.clone(),
             server_api: self.server_api.clone(),
             model_event_sender: self.model_event_sender.clone(),
         };
@@ -6659,7 +6540,6 @@ impl PaneGroup {
     ) -> (TerminalPane, ViewHandle<TerminalView>) {
         let uuid = Uuid::new_v4();
         let resources = TerminalViewResources {
-            tips_completed: self.tips_completed.clone(),
             server_api: self.server_api.clone(),
             model_event_sender: self.model_event_sender.clone(),
         };
@@ -6850,14 +6730,6 @@ impl PaneGroup {
             send_telemetry_from_ctx!(TelemetryEvent::SplitPane, ctx);
         }
 
-        self.tips_completed.update(ctx, |tips_completed, ctx| {
-            mark_feature_used_and_write_to_user_defaults(
-                Tip::Action(TipAction::SplitPane),
-                tips_completed,
-                ctx,
-            );
-            ctx.notify();
-        });
         self.add_pane_with_options(
             new_pane,
             AddPaneOptions {
@@ -8013,7 +7885,6 @@ impl PaneGroup {
     pub(crate) fn start_agent_mode_in_new_pane(
         &mut self,
         initial_query: Option<&str>,
-        zero_state_prompt_suggestion_type: Option<ZeroStatePromptSuggestionType>,
         ctx: &mut ViewContext<Self>,
     ) {
         if let Some(terminal_view) = self.focused_session_view(ctx) {
@@ -8037,17 +7908,6 @@ impl PaneGroup {
                             input.focus_input_box(ctx);
                         });
                 }
-                if let Some(zero_state_prompt_suggestion_type) = zero_state_prompt_suggestion_type {
-                    terminal_view
-                        .input()
-                        .update(terminal_view_ctx, |input, ctx| {
-                            input.insert_zero_state_prompt_suggestion(
-                                zero_state_prompt_suggestion_type,
-                                ZeroStatePromptSuggestionTriggeredFrom::TryAgentModeBanner,
-                                ctx,
-                            );
-                        });
-                }
             });
         }
     }
@@ -8057,7 +7917,6 @@ impl PaneGroup {
     pub(crate) fn add_terminal_pane_in_agent_mode(
         &mut self,
         initial_query: Option<&str>,
-        zero_state_prompt_suggestion_type: Option<ZeroStatePromptSuggestionType>,
         ctx: &mut ViewContext<Self>,
     ) {
         // We can only control the size of a pane that hasn't been laid out by setting `PaneFlex`
@@ -8107,14 +7966,13 @@ impl PaneGroup {
 
         ctx.emit(Event::AppStateChanged);
 
-        self.start_agent_mode_in_new_pane(initial_query, zero_state_prompt_suggestion_type, ctx);
+        self.start_agent_mode_in_new_pane(initial_query, ctx);
     }
 
     /// Creates an ambient agent pane with the given initial prompt.
     fn create_ambient_agent_pane(&self, ctx: &mut ViewContext<Self>) -> TerminalPane {
         let uuid = Uuid::new_v4();
         let resources = TerminalViewResources {
-            tips_completed: self.tips_completed.clone(),
             server_api: self.server_api.clone(),
             model_event_sender: self.model_event_sender.clone(),
         };
@@ -8351,43 +8209,6 @@ impl View for PaneGroup {
             })
         {
             stack.add_child(ChildView::new(&dialog_handle).finish());
-        }
-
-        // Render environment setup mode selector at tab level when open.
-        if let Some(pane_id) = self.pane_with_open_environment_setup_mode_selector {
-            let selector_handle = self
-                .terminal_view_from_pane_id(pane_id, app)
-                .and_then(|tv| {
-                    tv.as_ref(app)
-                        .environment_setup_mode_selector_handle()
-                        .cloned()
-                })
-                .or_else(|| {
-                    self.downcast_pane_by_id::<EnvironmentManagementPane>(pane_id)
-                        .and_then(|emp| {
-                            emp.environments_page_view(app)
-                                .as_ref(app)
-                                .environment_setup_mode_selector_handle()
-                                .cloned()
-                        })
-                });
-            if let Some(handle) = selector_handle {
-                stack.add_child(ChildView::new(&handle).finish());
-            }
-        }
-
-        // Render agent-assisted environment modal at tab level when open.
-        if let Some(pane_id) = self.pane_with_open_agent_assisted_environment_modal
-            && let Some(handle) = self
-                .downcast_pane_by_id::<EnvironmentManagementPane>(pane_id)
-                .and_then(|emp| {
-                    emp.environments_page_view(app)
-                        .as_ref(app)
-                        .agent_assisted_environment_modal_handle(app)
-                        .cloned()
-                })
-        {
-            stack.add_child(ChildView::new(&handle).finish());
         }
 
         stack.finish()

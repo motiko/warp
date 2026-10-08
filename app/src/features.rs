@@ -83,18 +83,12 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::ArtifactCommand,
         #[cfg(feature = "cloud_agent_runners")]
         FeatureFlag::CloudAgentRunners,
-        #[cfg(feature = "account_first_onboarding")]
-        FeatureFlag::AccountFirstOnboarding,
-        #[cfg(all(feature = "simulate_github_unauthed", debug_assertions))]
-        FeatureFlag::SimulateGithubUnauthed,
         #[cfg(feature = "session_sharing_acls")]
         FeatureFlag::SessionSharingAcls,
         #[cfg(feature = "full_screen_zen_mode")]
         FeatureFlag::FullScreenZenMode,
         #[cfg(feature = "minimalist_ui")]
         FeatureFlag::MinimalistUI,
-        #[cfg(feature = "avatar_in_tab_bar")]
-        FeatureFlag::AvatarInTabBar,
         #[cfg(feature = "workflow_aliases")]
         FeatureFlag::WorkflowAliases,
         #[cfg(feature = "ssh_drag_and_drop")]
@@ -103,8 +97,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::DragTabsToWindows,
         #[cfg(feature = "cycle_next_command_suggestion")]
         FeatureFlag::CycleNextCommandSuggestion,
-        #[cfg(feature = "multi_workspace")]
-        FeatureFlag::MultiWorkspace,
         #[cfg(feature = "ime_marked_text")]
         FeatureFlag::ImeMarkedText,
         #[cfg(feature = "partial_next_command_suggestions")]
@@ -133,8 +125,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::AgentModePrimaryXML,
         #[cfg(feature = "agent_mode_pre_plan_xml")]
         FeatureFlag::AgentModePrePlanXML,
-        #[cfg(feature = "agent_onboarding")]
-        FeatureFlag::AgentOnboarding,
         #[cfg(feature = "agent_shared_sessions")]
         FeatureFlag::AgentSharedSessions,
         #[cfg(feature = "suggested_rules")]
@@ -155,8 +145,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::GrepTool,
         #[cfg(feature = "mcp_server")]
         FeatureFlag::McpServer,
-        #[cfg(feature = "mcp_debugging_ids")]
-        FeatureFlag::McpDebuggingIds,
         #[cfg(feature = "markdown_tables")]
         FeatureFlag::MarkdownTables,
         #[cfg(feature = "jupyter_notebook_rendering")]
@@ -183,8 +171,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::RetryTruncatedCodeResponses,
         #[cfg(feature = "read_image_files")]
         FeatureFlag::ReadImageFiles,
-        #[cfg(feature = "usage_based_pricing")]
-        FeatureFlag::UsageBasedPricing,
         #[cfg(feature = "cross_repo_context")]
         FeatureFlag::CrossRepoContext,
         #[cfg(feature = "codebase_index_persistence")]
@@ -273,8 +259,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::ScheduledAmbientAgents,
         #[cfg(feature = "code_launch_modal")]
         FeatureFlag::CodeLaunchModal,
-        #[cfg(feature = "api_key_management")]
-        FeatureFlag::APIKeyManagement,
         #[cfg(feature = "mcp_oauth")]
         FeatureFlag::McpOauth,
         #[cfg(feature = "file_based_mcp")]
@@ -343,10 +327,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::BackgroundComputerUse,
         #[cfg(feature = "local_claude_codex_child_harnesses")]
         FeatureFlag::LocalClaudeCodexChildHarnesses,
-        #[cfg(feature = "team_api_keys")]
-        FeatureFlag::TeamApiKeys,
-        #[cfg(feature = "named_agents")]
-        FeatureFlag::NamedAgents,
         #[cfg(feature = "cloud_conversations")]
         FeatureFlag::CloudConversations,
         #[cfg(feature = "agent_toolbar_editor")]
@@ -393,20 +373,10 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::OzChangelogUpdates,
         #[cfg(feature = "bundled_skills")]
         FeatureFlag::BundledSkills,
-        #[cfg(feature = "oz_launch_modal")]
-        FeatureFlag::OzLaunchModal,
-        #[cfg(feature = "open_warp_launch_modal")]
-        FeatureFlag::OpenWarpLaunchModal,
-        #[cfg(feature = "orchestration_launch_modal")]
-        FeatureFlag::OrchestrationLaunchModal,
-        #[cfg(feature = "agent_cli_launch_modal")]
-        FeatureFlag::AgentCliLaunchModal,
         #[cfg(feature = "new_tab_styling")]
         FeatureFlag::NewTabStyling,
         #[cfg(feature = "skill_arguments")]
         FeatureFlag::SkillArguments,
-        #[cfg(feature = "active_conversation_requires_interaction")]
-        FeatureFlag::ActiveConversationRequiresInteraction,
         #[cfg(feature = "conversations_as_context")]
         FeatureFlag::ConversationsAsContext,
         #[cfg(feature = "incremental_auto_reload")]
@@ -463,8 +433,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::GPTConfigurableContextWindow,
         #[cfg(feature = "skip_firebase_anonymous_user")]
         FeatureFlag::SkipFirebaseAnonymousUser,
-        #[cfg(feature = "hoa_onboarding_flow")]
-        FeatureFlag::HOAOnboardingFlow,
         #[cfg(feature = "git_operations_in_code_review")]
         FeatureFlag::GitOperationsInCodeReview,
         #[cfg(feature = "hoa_remote_control")]

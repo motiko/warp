@@ -76,7 +76,6 @@ use crate::notebooks::manager::NotebookManager;
 use crate::notebooks::notebook::NotebookView;
 use crate::pricing::PricingInfoModel;
 use crate::projects::persisted_workspace::PersistedWorkspace;
-use crate::resource_center::TipsCompleted;
 use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::search::files::model::FileSearchModel;
 use crate::server::cloud_objects::listener::Listener;
@@ -110,7 +109,7 @@ use crate::undo_close::UndoCloseStack;
 use crate::warp_managed_paths_watcher::WarpManagedPathsWatcher;
 use crate::workflows::local_workflows::LocalWorkflows;
 use crate::workspace::sync_inputs::SyncedInputState;
-use crate::workspace::{ActiveSession, OneTimeModalModel, WorkspaceRegistry};
+use crate::workspace::{ActiveSession, WorkspaceRegistry};
 use crate::workspaces::team::Team;
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
@@ -223,9 +222,7 @@ fn initialize_app_with_history(app: &mut App, conversations: Vec<AgentConversati
     });
     app.add_singleton_model(PersistedWorkspace::new_for_test);
     app.add_singleton_model(|_| ProjectContextModel::default());
-    app.add_singleton_model(|ctx| crate::ai::agent_tips::AITipModel::new_for_agent_tips(ctx));
     app.add_singleton_model(|_| RestoredAgentConversations::new_seeded(vec![]));
-    app.add_singleton_model(OneTimeModalModel::new);
     app.add_singleton_model(|_| WorkspaceRegistry::new());
     app.add_singleton_model(UndoCloseStack::new);
     app.add_singleton_model(|_| IgnoredSuggestionsModel::new(vec![]));
@@ -256,14 +253,12 @@ impl Default for MockOptions {
 }
 
 fn mock_pane_group(app: &mut App, options: MockOptions) -> ViewHandle<PaneGroup> {
-    let tips_model = app.add_model(|_| TipsCompleted::default());
     let (_, pane_group) =
         app.add_window_with_bounds(WindowStyle::NotStealFocus, options.window_bounds, |ctx| {
             let user_default_shell_changed_banner_dismissal_model_handle =
                 ctx.add_model(|_| BannerState::default());
             let block_lists = Arc::new(HashMap::new());
             PaneGroup::new_with_panes_layout(
-                tips_model,
                 user_default_shell_changed_banner_dismissal_model_handle,
                 ServerApiProvider::as_ref(ctx).get(),
                 options.layout,
@@ -2223,7 +2218,6 @@ fn create_shared_session_viewer_with_cloud_mode_populates_ambient_agent_view_mod
 
         pane_group.update(&mut app, |panes, ctx| {
             let resources = TerminalViewResources {
-                tips_completed: panes.tips_completed.clone(),
                 server_api: panes.server_api.clone(),
                 model_event_sender: panes.model_event_sender.clone(),
             };
@@ -2255,7 +2249,6 @@ fn create_shared_session_viewer_without_cloud_mode_does_not_populate_ambient_age
 
         pane_group.update(&mut app, |panes, ctx| {
             let resources = TerminalViewResources {
-                tips_completed: panes.tips_completed.clone(),
                 server_api: panes.server_api.clone(),
                 model_event_sender: panes.model_event_sender.clone(),
             };
@@ -3957,7 +3950,6 @@ fn test_focused_pane_is_synchronized_with_application_focus() {
             ],
         });
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, root_view) =
             app.add_window_with_bounds(WindowStyle::NotStealFocus, WindowBounds::Default, |ctx| {
                 let user_default_shell_changed_banner_dismissal_model_handle =
@@ -3965,7 +3957,6 @@ fn test_focused_pane_is_synchronized_with_application_focus() {
                 let block_lists = Arc::new(HashMap::new());
                 let pane_group = ctx.add_typed_action_view(|ctx| {
                     PaneGroup::new_with_panes_layout(
-                        tips_model,
                         user_default_shell_changed_banner_dismissal_model_handle,
                         ServerApiProvider::as_ref(ctx).get(),
                         panes_layout,

@@ -43,10 +43,7 @@ pub use action_model::{
     BlocklistAIActionEvent, BlocklistAIActionModel, ShellCommandExecutor, ShellCommandExecutorEvent,
 };
 #[cfg_attr(target_family = "wasm", allow(unused_imports))]
-pub(crate) use action_model::{
-    FileReadResult, ReadFileContextResult, RequestFileEditsFormatKind, apply_edits,
-    read_local_file_context,
-};
+pub(crate) use action_model::{ReadFileContextResult, read_local_file_context};
 #[cfg_attr(target_family = "wasm", allow(unused_imports))]
 pub use action_model::{
     StartAgentExecutor, StartAgentExecutorEvent, StartAgentRequest, StartAgentRequestId,
@@ -91,8 +88,7 @@ pub use input_model::{
     BlocklistAIInputModel, InputConfig, InputType, InputTypeAutoDetectionSource,
 };
 pub(crate) use passive_suggestions::{
-    LegacyPassiveSuggestionsEvent, LegacyPassiveSuggestionsModel, MaaPassiveSuggestionsEvent,
-    MaaPassiveSuggestionsModel, PassiveSuggestionsModels,
+    LegacyPassiveSuggestionsEvent, LegacyPassiveSuggestionsModel, PassiveSuggestionsModels,
 };
 #[cfg(test)]
 pub(crate) use permissions::is_agent_mode_autonomy_allowed;
@@ -109,7 +105,6 @@ pub(crate) use queued_query::{
 };
 pub use queued_query::{QueuedQueryEvent, QueuedQueryModel};
 pub use suggestion_chip_view::*;
-pub use view_util::error_color;
 pub(crate) use view_util::{
     ATTACH_AS_AGENT_MODE_CONTEXT_TEXT, CLAUDE_ORANGE, NEW_AGENT_PANE_LABEL, ai_brand_color,
     ai_indicator_height, format_credits, get_ai_block_overflow_menu_element_position_id,

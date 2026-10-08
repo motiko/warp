@@ -667,7 +667,7 @@ impl SearchItem for ModelSearchItem {
                         Some(url) => WorkspaceAction::OpenLink(url.to_string()),
                         None => WorkspaceAction::ShowSettingsPageWithSearch {
                             search_query: search_query.clone(),
-                            section: Some(SettingsSection::WarpAgent),
+                            section: Some(SettingsSection::AI),
                         },
                     };
                     ctx.dispatch_typed_action(action);
@@ -735,7 +735,7 @@ impl SearchItem for ModelSearchItem {
                     "bring your own key",
                     WorkspaceAction::ShowSettingsPageWithSearch {
                         search_query: "api".to_string(),
-                        section: Some(SettingsSection::WarpAgent),
+                        section: Some(SettingsSection::AI),
                     },
                 ));
             }

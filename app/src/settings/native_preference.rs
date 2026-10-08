@@ -38,12 +38,4 @@ define_settings_group!(NativePreferenceSettings, settings: [
         toml_path: "general.user_native_preference",
         description: "Whether to prefer the native desktop app or the web app.",
     },
-    preference_dialog_dismissed: UserNativePreferenceDialogDismissed {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::WEB,
-        sync_to_cloud: SyncToCloud::Never,
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
-    },
 ]);

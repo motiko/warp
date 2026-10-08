@@ -33,8 +33,6 @@ use crate::terminal::view::rich_content::{RichContentInsertionPosition, RichCont
 use crate::terminal::view::{
     ConversationDetailsPanelAutoOpenPolicy, Event as TerminalViewEvent, TerminalView,
 };
-use crate::workspace::view::cloud_agent_capacity_modal::CloudAgentCapacityModalVariant;
-use crate::workspaces::user_workspaces::UserWorkspaces;
 
 const CHILD_AGENT_GITHUB_AUTH_REQUIRED_BLOCKED_ACTION: &str =
     "GitHub authentication required before starting the child agent.";
@@ -79,19 +77,9 @@ impl TerminalView {
     }
 
     pub(in crate::terminal::view) fn show_out_of_credits_modal(&self, ctx: &mut ViewContext<Self>) {
-        let is_on_paid_plan = UserWorkspaces::as_ref(ctx)
-            .current_workspace()
-            .is_some_and(|workspace| workspace.billing_metadata.is_user_on_paid_plan());
-
-        if is_on_paid_plan {
-            ctx.emit(crate::terminal::view::Event::ShowCloudAgentCapacityModal {
-                variant: CloudAgentCapacityModalVariant::OutOfCredits,
-            });
-        } else {
-            AIRequestUsageModel::handle(ctx).update(ctx, |model, ctx| {
-                model.refresh_request_usage_async(ctx);
-            });
-        }
+        AIRequestUsageModel::handle(ctx).update(ctx, |model, ctx| {
+            model.refresh_request_usage_async(ctx);
+        });
     }
 
     /// Handles ambient agent view model events.
@@ -174,16 +162,6 @@ impl TerminalView {
                             self.insert_cloud_mode_queued_user_query_block(prompt, ctx);
                         }
                     }
-                } else {
-                    // Reset tip cooldown so the first tip shows for 60 seconds
-                    let tip_model = ambient_agent_view_model
-                        .as_ref(ctx)
-                        .ui_state
-                        .tip_model
-                        .clone();
-                    tip_model.update(ctx, |model, model_ctx| {
-                        model.reset_cooldown(model_ctx);
-                    });
                 }
                 // Re-render to show loading state.
                 ctx.emit(TerminalViewEvent::TerminalViewStateChanged);
@@ -240,15 +218,6 @@ impl TerminalView {
             }
             AmbientAgentViewModelEvent::EnvironmentSelected => {}
             AmbientAgentViewModelEvent::ProgressUpdated => {
-                // Refresh the tip (respects 60s cooldown internally)
-                let tip_model = ambient_agent_view_model
-                    .as_ref(ctx)
-                    .ui_state
-                    .tip_model
-                    .clone();
-                tip_model.update(ctx, |model, model_ctx| {
-                    model.maybe_refresh_tip(model_ctx);
-                });
                 // Update pane header to reflect any changes (e.g., task_id being set)
                 self.update_pane_configuration(ctx);
                 ctx.emit(TerminalViewEvent::TerminalViewStateChanged);
@@ -284,15 +253,6 @@ impl TerminalView {
                 ctx.notify();
             }
             AmbientAgentViewModelEvent::ShowCloudAgentCapacityModal => {
-                if FeatureFlag::CloudMode.is_enabled()
-                    && ambient_agent_view_model.as_ref(ctx).is_ambient_agent()
-                    && !self.model.lock().is_shared_ambient_agent_session()
-                {
-                    ctx.emit(crate::terminal::view::Event::ShowCloudAgentCapacityModal {
-                        variant: CloudAgentCapacityModalVariant::ConcurrentLimit,
-                    });
-                }
-
                 ctx.notify();
             }
             AmbientAgentViewModelEvent::ShowAICreditModal => {
@@ -758,7 +718,6 @@ impl TerminalView {
         ctx: &mut ViewContext<Self>,
     ) -> Option<(ViewHandle<TerminalView>, ModelHandle<AmbientAgentViewModel>)> {
         let resources = TerminalViewResources {
-            tips_completed: self.tips_completed.clone(),
             server_api: self.server_api.clone(),
             model_event_sender: self.model_event_sender.clone(),
         };
@@ -907,7 +866,6 @@ impl TerminalView {
                 message,
                 appearance,
                 &ui_state.loading_shimmer_handle,
-                &ui_state.tip_model,
                 &self.view_handle,
                 app,
             )
@@ -915,32 +873,6 @@ impl TerminalView {
 
         // Center the screen within the terminal view
         Align::new(screen).finish()
-    }
-
-    /// Handles events from the first-time cloud agent setup view.
-    pub(in crate::terminal::view) fn handle_first_time_cloud_agent_setup_event(
-        &mut self,
-        event: &super::FirstTimeCloudAgentSetupViewEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            super::FirstTimeCloudAgentSetupViewEvent::Cancelled => {
-                // Exit agent view (pops from nav stack)
-                self.exit_agent_view(ctx);
-            }
-            super::FirstTimeCloudAgentSetupViewEvent::EnvironmentCreated => {
-                // Set the environment on the ambient agent view model
-                if let Some(ambient_agent_view_model) = self.ambient_agent_view_model.as_ref() {
-                    ambient_agent_view_model.update(ctx, |model, ctx| {
-                        // Transition from Setup to Composing
-                        model.enter_composing_from_setup(ctx);
-                    });
-                }
-
-                // Focus the input box so user can start typing
-                self.focus_input_box(ctx);
-            }
-        }
     }
 
     /// Fetches task data and updates the conversation details panel.

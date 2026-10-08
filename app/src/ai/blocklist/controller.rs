@@ -76,8 +76,6 @@ use crate::terminal::model::block::{
 use crate::terminal::model::session::SessionType;
 use crate::terminal::model::session::active_session::ActiveSession;
 use crate::terminal::model::terminal_model::TerminalModel;
-use crate::terminal::view::inline_banner::ZeroStatePromptSuggestionType;
-use crate::workspace::OneTimeModalModel;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_workspaces::{
     ResolvedTeamScope, TeamContext, TeamContextResolver, TeamScope, UserWorkspaces,
@@ -1392,32 +1390,6 @@ impl BlocklistAIController {
         true
     }
 
-    /// Sends a request triggered by a zero-state prompt suggestion.
-    pub fn send_zero_state_prompt_suggestion(
-        &mut self,
-        query_type: ZeroStatePromptSuggestionType,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let participant_id = self.get_sharer_participant_id();
-        self.send_query(
-            InputQuery {
-                which_task: WhichTask::NewConversation,
-                input_query: InputQueryType::UserSubmittedQueryFromInput {
-                    query: query_type.query().to_string(),
-                    static_query_type: query_type.static_query_type(),
-                    running_command: None,
-                    base: None,
-                },
-                additional_attachments: HashMap::new(),
-                queued_query_id: None,
-            },
-            EntrypointType::ZeroStateAgentModePromptSuggestion,
-            participant_id,
-            /*is_queued_prompt*/ false,
-            ctx,
-        );
-    }
-
     /// Sends a custom [`AIAgentInput`] query.
     pub fn send_custom_ai_input_query(
         &mut self,
@@ -2120,15 +2092,9 @@ impl BlocklistAIController {
         let backoff = resume.backoff();
         let recovery = resume.recovery();
         let wait_for_online = NetworkStatus::as_ref(ctx).wait_until_online();
-        let wait_for_modal_closed =
-            OneTimeModalModel::as_ref(ctx).wait_until_auto_handoff_sleep_modal_closed();
         let wait = async move {
             Timer::after(backoff).await;
             wait_for_online.await;
-            // Await the modal second: the future reads live modal state at
-            // poll time, so a modal surfaced on wake (after connectivity
-            // returns) is still observed.
-            wait_for_modal_closed.await;
         };
         let handle = ctx.spawn(wait, move |me, _, ctx| {
             // Clean up the pending handle now that the resume is executing.

@@ -164,9 +164,6 @@ pub enum FeatureFlag {
     /// completion specs.
     NativeShellCompletions,
 
-    /// Adds avatar to the tab bar.
-    AvatarInTabBar,
-
     /// Adds aliases for executing Warp Drive workflows.
     WorkflowAliases,
 
@@ -178,9 +175,6 @@ pub enum FeatureFlag {
 
     /// Enables cycling through the next command suggestions with down arrow.
     CycleNextCommandSuggestion,
-
-    /// Enables multi-workspace selection.
-    MultiWorkspace,
 
     /// Maximizes data in flat storage to reduce memory usage.
     MaximizeFlatStorage,
@@ -237,9 +231,6 @@ pub enum FeatureFlag {
     /// Enables the XML output system prompt for the pre-plan agent in Agent Mode.
     AgentModePrePlanXML,
 
-    /// Enables Agent Mode onboarding.
-    AgentOnboarding,
-
     /// Enables suggested rules.
     SuggestedRules,
 
@@ -287,8 +278,6 @@ pub enum FeatureFlag {
 
     /// Enables reading images with the `read_files` tool.
     ReadImageFiles,
-
-    UsageBasedPricing,
 
     /// Enables cross-repo codebase context.
     CrossRepoContext,
@@ -421,9 +410,6 @@ pub enum FeatureFlag {
     /// Enables the one-time modal on app startup for existing users for the Code launch.
     CodeLaunchModal,
 
-    /// Enables API key management UI in settings
-    APIKeyManagement,
-
     /// Enables OAuth support for MCP.
     McpOauth,
 
@@ -481,9 +467,6 @@ pub enum FeatureFlag {
 
     /// Enables the web fetch UI (when the model fetches content from URLs).
     WebFetchUI,
-
-    /// Displays debugging IDs for MCP servers, installations, and gallery items.
-    McpDebuggingIds,
 
     /// Enables rendering of images in markdown files and AI responses.
     MarkdownImages,
@@ -582,9 +565,6 @@ pub enum FeatureFlag {
     /// macOS/Linux ffmpeg paths, so it rolls out and can be killed independently of them.
     WindowsVideoRecording,
 
-    /// Enables team API key creation in the API key management UI.
-    TeamApiKeys,
-
     /// Enables cloud conversation loading via the CLI --conversation flag.
     CloudConversations,
 
@@ -613,11 +593,6 @@ pub enum FeatureFlag {
     /// External programs can trigger system and in-app notifications.
     PluggableNotifications,
 
-    /// Dev-only: simulate a GitHub-unauthed user in the Environments page flow.
-    ///
-    /// This is intended for developer testing and should have no effect in release builds.
-    SimulateGithubUnauthed,
-
     /// When enabled, profile selection is displayed in an inline view above the Agent input (e.g. via /profile).
     InlineProfileSelector,
 
@@ -644,19 +619,6 @@ pub enum FeatureFlag {
     /// Enables loading and returning bundled skills in the SkillManager.
     BundledSkills,
 
-    /// Enables the Oz launch modal for introducing cloud agent features.
-    OzLaunchModal,
-
-    /// Enables the OpenWarp launch modal announcing Warp going open-source.
-    /// When enabled, the HOA onboarding flow is suppressed.
-    OpenWarpLaunchModal,
-
-    /// Enables the orchestration launch modal announcing multi-agent orchestration features.
-    OrchestrationLaunchModal,
-
-    /// Enables the launch modal announcing the Warp Agent CLI.
-    AgentCliLaunchModal,
-
     /// Updated tab styling (background colors, border, close button positioning, margins).
     NewTabStyling,
 
@@ -665,10 +627,6 @@ pub enum FeatureFlag {
 
     /// Enables passing user query arguments to skill invocations ($ARGUMENTS, $N).
     SkillArguments,
-
-    /// When enabled, a conversation is only considered "active" once a new query has been
-    /// sent since opening (rather than the moment its agent view is expanded).
-    ActiveConversationRequiresInteraction,
 
     /// Enables attaching conversations as context in Agent Mode via the @ menu.
     ConversationsAsContext,
@@ -786,10 +744,6 @@ pub enum FeatureFlag {
     /// Replaces the in-block warpification banner with a warpify footer.
     WarpifyFooter,
 
-    /// Guided onboarding flow for existing users introducing HOA features
-    /// (vertical tabs, agent inbox, tab configs).
-    HOAOnboardingFlow,
-
     /// Enables commit, push, and create-PR actions in the code review panel.
     GitOperationsInCodeReview,
 
@@ -822,12 +776,6 @@ pub enum FeatureFlag {
     /// conversation into a fresh cloud agent run with the current workspace
     /// snapshot attached. Requires `OzHandoff` to also be enabled.
     HandoffLocalCloud,
-
-    /// Enables creating API keys scoped to named agents in the API key
-    /// management UI. When enabled the "Team" option in the key-type
-    /// selector is replaced with "Agent" and users can pick which agent
-    /// identity the key authenticates as.
-    NamedAgents,
 
     /// Gates the v2 billing and usage page redesign.
     BillingAndUsagePageV2,
@@ -893,10 +841,6 @@ pub enum FeatureFlag {
     /// orchestration (`run_agents`) confirmation card and plan-card config
     /// block for choosing a runner when starting remote child agents.
     CloudAgentRunners,
-
-    /// Gates the account-first onboarding flow, including the reordered
-    /// pre-auth slides and post-auth account offer.
-    AccountFirstOnboarding,
 
     /// Automatically attaches the Warp-hosted Factory MCP server
     /// (`/api/v1/mcp/factory`) to agents as a built-in MCP server,
@@ -970,7 +914,6 @@ pub const DOGFOOD_FLAGS: &[FeatureFlag] = &[
     FeatureFlag::AgentModeAnalytics,
     FeatureFlag::LazySceneBuilding,
     FeatureFlag::SshDragAndDrop,
-    FeatureFlag::MultiWorkspace,
     FeatureFlag::ImeMarkedText,
     FeatureFlag::MSYS2Shells,
     FeatureFlag::RetryTruncatedCodeResponses,
@@ -984,7 +927,6 @@ pub const DOGFOOD_FLAGS: &[FeatureFlag] = &[
     FeatureFlag::LocalComputerUse,
     FeatureFlag::VideoRecording,
     FeatureFlag::WindowsVideoRecording,
-    FeatureFlag::OzLaunchModal,
     // These are enabled via 100% experiment on prod warp-server,
     // but we need to enable here for dogfood builds.
     FeatureFlag::CrossRepoContext,

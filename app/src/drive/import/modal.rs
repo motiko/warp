@@ -67,23 +67,6 @@ impl ImportModal {
         }
     }
 
-    pub fn open_with_target(
-        &mut self,
-        owner: Owner,
-        initial_folder_id: Option<SyncId>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        // TODO: This should take an owner OR folder.
-        self.owner = Some(owner);
-        self.folder_id = initial_folder_id;
-
-        self.import_modal.update(ctx, |import_modal, _ctx| {
-            import_modal.set_new_target(owner, initial_folder_id);
-        });
-
-        ctx.notify();
-    }
-
     pub fn open_file_picker(&mut self, ctx: &mut ViewContext<Self>) {
         let window_id = ctx.window_id();
         let import_body_id = self.import_modal.id();

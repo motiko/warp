@@ -91,6 +91,21 @@ pub struct HandoffPrepareInput {
 }
 
 impl HandoffPrepareInput {
+    #[cfg(test)]
+    pub fn with_require_in_progress_source(mut self, require_in_progress_source: bool) -> Self {
+        self.require_in_progress_source = require_in_progress_source;
+        self
+    }
+
+    #[cfg(test)]
+    pub fn with_expected_conversation_id(
+        mut self,
+        expected_conversation_id: Option<AIConversationId>,
+    ) -> Self {
+        self.expected_conversation_id = expected_conversation_id;
+        self
+    }
+
     pub fn new(
         terminal_surface_id: EntityId,
         history: ModelHandle<BlocklistAIHistoryModel>,
@@ -119,14 +134,6 @@ impl HandoffPrepareInput {
             cancellation_reason: CancellationReason::ManuallyCancelled,
             require_in_progress_source: false,
         }
-    }
-
-    pub fn with_expected_conversation_id(
-        mut self,
-        expected_conversation_id: Option<AIConversationId>,
-    ) -> Self {
-        self.expected_conversation_id = expected_conversation_id;
-        self
     }
 
     /// Uses the frontend-resolved source instead of the selected conversation.
@@ -171,11 +178,6 @@ impl HandoffPrepareInput {
 
     pub fn with_cancellation_reason(mut self, cancellation_reason: CancellationReason) -> Self {
         self.cancellation_reason = cancellation_reason;
-        self
-    }
-
-    pub fn with_require_in_progress_source(mut self, require_in_progress_source: bool) -> Self {
-        self.require_in_progress_source = require_in_progress_source;
         self
     }
 }

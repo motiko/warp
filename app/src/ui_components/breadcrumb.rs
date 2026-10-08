@@ -1,11 +1,9 @@
 use std::fmt::Debug;
 
 use itertools::{Itertools, Position};
-use warpui::elements::{
-    CrossAxisAlignment, Flex, Hoverable, MainAxisSize, MouseStateHandle, ParentElement, Shrinkable,
-};
+use warpui::Element;
+use warpui::elements::{CrossAxisAlignment, Flex, MainAxisSize, ParentElement, Shrinkable};
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
-use warpui::{AppContext, Element, EventContext};
 
 use crate::appearance::Appearance;
 
@@ -13,18 +11,11 @@ use crate::appearance::Appearance;
 pub trait Breadcrumb: Debug + 'static {
     /// The label to display for this breadcrumb.
     fn label(&self) -> String;
-
-    /// Whether or not this breadcrumb is enabled and interactive.
-    fn enabled(&self) -> bool;
 }
 
 impl Breadcrumb for String {
     fn label(&self) -> String {
         self.clone()
-    }
-
-    fn enabled(&self) -> bool {
-        false
     }
 }
 
@@ -34,69 +25,44 @@ impl Breadcrumb for () {
     fn label(&self) -> String {
         String::new()
     }
-
-    fn enabled(&self) -> bool {
-        false
-    }
 }
 
 /// State for a breadcrumb component.
 #[derive(Clone)]
 pub struct BreadcrumbState<T: Breadcrumb> {
     breadcrumb: T,
-    mouse_state_handle: MouseStateHandle,
 }
 
 impl<T: Breadcrumb> BreadcrumbState<T> {
     pub fn new(breadcrumb: T) -> Self {
-        Self {
-            breadcrumb,
-            mouse_state_handle: Default::default(),
-        }
+        Self { breadcrumb }
     }
 }
 
-/// Render a single breadcrumb.
 fn render_breadcrumb<T: Breadcrumb>(
     state: &BreadcrumbState<T>,
     is_last_item: bool,
     appearance: &Appearance,
-) -> Hoverable {
+) -> Box<dyn Element> {
     let suffix = if is_last_item { "" } else { " / " };
     let name = state.breadcrumb.label() + suffix;
+    let font_color = appearance
+        .theme()
+        .sub_text_color(appearance.theme().background());
 
-    let hoverable = Hoverable::new(state.mouse_state_handle.clone(), |mouse_state| {
-        let font_color = if mouse_state.is_hovered() || mouse_state.is_clicked() {
-            appearance.theme().active_ui_text_color()
-        } else {
-            appearance
-                .theme()
-                .sub_text_color(appearance.theme().background())
-        };
-
-        appearance
-            .ui_builder()
-            .span(name)
-            .with_style(UiComponentStyles {
-                font_color: Some(font_color.into()),
-                ..Default::default()
-            })
-            .build()
-            .finish()
-    });
-    if state.breadcrumb.enabled() {
-        hoverable
-    } else {
-        hoverable.disable()
-    }
+    appearance
+        .ui_builder()
+        .span(name)
+        .with_style(UiComponentStyles {
+            font_color: Some(font_color.into()),
+            ..Default::default()
+        })
+        .build()
+        .finish()
 }
 
-/// Render a row of interactive breadcrumbs.
-pub fn render_breadcrumbs<T, I>(
-    breadcrumbs: I,
-    appearance: &Appearance,
-    on_click: fn(&mut EventContext, &AppContext, &T) -> (),
-) -> Box<dyn Element>
+/// Render a row of breadcrumbs.
+pub fn render_breadcrumbs<T, I>(breadcrumbs: I, appearance: &Appearance) -> Box<dyn Element>
 where
     T: Breadcrumb,
     I: IntoIterator<Item = BreadcrumbState<T>>,
@@ -112,9 +78,7 @@ where
                     &breadcrumb,
                     matches!(position, Position::Last | Position::Only),
                     appearance,
-                )
-                .on_click(move |ctx, app, _| on_click(ctx, app, &breadcrumb.breadcrumb))
-                .finish(),
+                ),
             )
             .finish()
         });

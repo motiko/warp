@@ -1,6 +1,6 @@
 //! [`TerminalView`]-specific implementation for shared sessions.
 
-use chrono::{DateTime, Local};
+use chrono::Local;
 use itertools::Itertools;
 use session_sharing_protocol::common::{
     ParticipantId, ParticipantList, ParticipantPresenceUpdate, Role, RoleRequestId,
@@ -63,9 +63,8 @@ use crate::terminal::shared_session::{
     SharedSessionStatus, join_link,
 };
 use crate::terminal::view::{
-    ContextMenuAction, Event, InlineBannerItem, InlineBannerType, PendingUserQueryKind,
-    RichContentInsertionPosition, SharedSessionBanners, SizeUpdateBuilder, TerminalAction,
-    TerminalView,
+    ContextMenuAction, Event, PendingUserQueryKind, RichContentInsertionPosition,
+    SizeUpdateBuilder, TerminalAction, TerminalView,
 };
 use crate::view_components::{DismissibleToast, ToastFlavor};
 use crate::{TelemetryEvent, send_telemetry_from_ctx};
@@ -545,10 +544,6 @@ impl TerminalView {
         ctx.emit(Event::OpenShareSessionModal { open_source });
     }
 
-    pub fn open_share_session_denied_modal(&mut self, ctx: &mut ViewContext<Self>) {
-        ctx.emit(Event::OpenShareSessionDeniedModal);
-    }
-
     /// Focuses the view by telling the parent view to focus this session.
     /// For example, in the common case, the parent pane group would consume
     /// this event and focus the pane that this session lives in.
@@ -653,7 +648,6 @@ impl TerminalView {
         &mut self,
         sharer_id: ParticipantId,
         firebase_uid: UserUid,
-        scrollback_type: SharedSessionScrollbackType,
         session_id: SessionId,
         source_type: SessionSourceType,
         ctx: &mut ViewContext<Self>,
@@ -676,13 +670,6 @@ impl TerminalView {
             input.set_shared_session_presence_manager(presence_manager);
         });
         let share_source = self.pending_share_source.take();
-        let is_remote_control = matches!(share_source, Some(SharedSessionActionSource::FooterChip));
-        self.insert_shared_session_started_banner(
-            scrollback_type,
-            is_remote_control,
-            started_at,
-            ctx,
-        );
         let skip_sharing_dialog =
             matches!(share_source, Some(SharedSessionActionSource::FooterChip));
 
@@ -765,13 +752,6 @@ impl TerminalView {
         let presence_manager = adapter.presence_manager().clone();
         let role = presence_manager.as_ref(ctx).role();
         self.shared_session = Some(adapter);
-
-        self.insert_shared_session_started_banner(
-            SharedSessionScrollbackType::All,
-            false,
-            started_at,
-            ctx,
-        );
 
         self.input.update(ctx, |input, ctx| {
             input.on_session_share_joined(input_replica_id, presence_manager, ctx);
@@ -907,7 +887,6 @@ impl TerminalView {
         };
 
         self.shared_session = None;
-        self.insert_shared_session_ended_banner(ctx);
         self.on_shared_session_reconnection_status_changed(false, ctx);
 
         self.input().update(ctx, |input, ctx| {
@@ -1628,49 +1607,6 @@ impl TerminalView {
         });
     }
 
-    fn insert_shared_session_started_banner(
-        &mut self,
-        scrollback_type: SharedSessionScrollbackType,
-        is_remote_control: bool,
-        started_at: DateTime<Local>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let banner_id = self.inline_banners_state.next_banner_id();
-
-        let mut model = self.model.lock();
-
-        // TODO: technically the first block index could change between the time we insert
-        // the banner and the time we actually compute the scrollback.
-        let block_index = scrollback_type.first_block_index(&model);
-
-        // Remove any existing banners if any.
-        if let SharedSessionBanners::LastShared {
-            started_banner_id,
-            ended_banner_id,
-            ..
-        } = self.inline_banners_state.shared_session_banner_state
-        {
-            model
-                .block_list_mut()
-                .remove_inline_banner(started_banner_id);
-            model.block_list_mut().remove_inline_banner(ended_banner_id);
-        }
-
-        self.inline_banners_state.shared_session_banner_state = SharedSessionBanners::ActiveShare {
-            started_banner_id: banner_id,
-            started_at,
-            is_remote_control,
-        };
-
-        model.block_list_mut().insert_inline_banner_before_block(
-            block_index,
-            InlineBannerItem::new(banner_id, InlineBannerType::SharedSessionStart),
-            None,
-        );
-
-        ctx.notify();
-    }
-
     pub fn on_participant_presence_updated(
         &mut self,
         update: &ParticipantPresenceUpdate,
@@ -1786,40 +1722,6 @@ impl TerminalView {
         if existing_role != new_role {
             self.on_self_role_updated(new_role, ctx);
         }
-    }
-
-    pub fn insert_shared_session_ended_banner(&mut self, ctx: &mut ViewContext<Self>) {
-        let banner_id = self.inline_banners_state.next_banner_id();
-        let banner = InlineBannerItem::new(banner_id, InlineBannerType::SharedSessionEnd);
-
-        if let SharedSessionBanners::ActiveShare {
-            started_banner_id,
-            started_at,
-            is_remote_control,
-        } = self.inline_banners_state.shared_session_banner_state
-        {
-            self.inline_banners_state.shared_session_banner_state =
-                SharedSessionBanners::LastShared {
-                    started_banner_id,
-                    started_at,
-                    is_remote_control,
-                    ended_at: Local::now(),
-                    ended_banner_id: banner_id,
-                };
-        }
-
-        let mut model = self.model.lock();
-        if model.shared_session_status().is_active_viewer() {
-            // For viewers, the banner goes after the long running block so no content appears after the banner.
-            model
-                .block_list_mut()
-                .append_inline_banner_after_long_running(banner);
-        } else {
-            // For sharers, it goes before the long running block so the banner doesn't end up pinned at the bottom while the block above changes.
-            model.block_list_mut().append_inline_banner(banner);
-        }
-
-        ctx.notify();
     }
 
     pub(crate) fn insert_conversation_ended_tombstone_with_cta(

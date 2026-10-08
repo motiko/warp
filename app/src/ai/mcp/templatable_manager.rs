@@ -136,12 +136,6 @@ pub enum FigmaMcpStatus {
 }
 
 impl TemplatableMCPServerManager {
-    pub fn get_installed_templatable_servers(
-        &self,
-    ) -> &HashMap<Uuid, TemplatableMCPServerInstallation> {
-        &self.locally_installed_servers
-    }
-
     pub fn get_installed_server(
         &self,
         installation_uuid: &Uuid,
@@ -232,16 +226,6 @@ impl TemplatableMCPServerManager {
         }
     }
 
-    pub fn get_server_state(&self, installation_uuid: Uuid) -> Option<MCPServerState> {
-        self.server_states.get(&installation_uuid).copied()
-    }
-
-    pub fn get_server_error_message(&self, installation_uuid: Uuid) -> Option<&str> {
-        self.server_error_messages
-            .get(&installation_uuid)
-            .map(|s| s.as_str())
-    }
-
     pub fn resources(&self) -> impl Iterator<Item = &rmcp::model::Resource> {
         self.active_servers
             .values()
@@ -269,13 +253,6 @@ impl TemplatableMCPServerManager {
             .map(|(installation_uuid, _)| {
                 super::reconnecting_peer::ReconnectingPeer::new(*installation_uuid, spawner.clone())
             })
-    }
-
-    pub fn tools_for_server(&self, uuid: Uuid) -> Vec<rmcp::model::Tool> {
-        self.active_servers
-            .get(&uuid)
-            .map(|server| server.tools().clone())
-            .unwrap_or_default()
     }
 
     /// Returns the JSON Schema `input_schema` for a named tool across active MCP servers.

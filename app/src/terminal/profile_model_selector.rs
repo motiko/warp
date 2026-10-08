@@ -565,7 +565,7 @@ impl ProfileModelSelector {
                 .on_click(|ctx| {
                     ctx.dispatch_typed_action(WorkspaceAction::ShowSettingsPageWithSearch {
                         search_query: "api".to_string(),
-                        section: Some(SettingsSection::WarpAgent),
+                        section: Some(SettingsSection::AI),
                     });
                 })
         });
@@ -2313,9 +2313,7 @@ impl TypedActionView for ProfileModelSelector {
             }
             ProfileModelSelectorAction::ManageProfiles => {
                 self.set_profile_menu_visibility(false, ctx);
-                ctx.emit(ProfileModelSelectorEvent::OpenSettings(
-                    SettingsSection::AgentProfiles,
-                ));
+                ctx.emit(ProfileModelSelectorEvent::OpenSettings(SettingsSection::AI));
             }
             ProfileModelSelectorAction::ToggleProfileMenu => {
                 self.set_profile_menu_visibility(!self.is_profile_menu_open, ctx);

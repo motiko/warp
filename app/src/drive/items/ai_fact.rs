@@ -7,7 +7,6 @@ use super::{WarpDriveItem, WarpDriveItemId};
 use crate::ai::facts::{AIFact, AIMemory, CloudAIFact};
 use crate::appearance::Appearance;
 use crate::cloud_object::CloudObjectMetadata;
-use crate::drive::index::DriveIndexAction;
 use crate::drive::{CloudObjectTypeAndId, DriveObjectType};
 use crate::themes::theme::Fill;
 
@@ -49,10 +48,6 @@ impl WarpDriveItem for WarpDriveAIFact {
 
     fn secondary_icon(&self, _color: Option<Fill>) -> Option<Box<dyn Element>> {
         None
-    }
-
-    fn click_action(&self) -> Option<DriveIndexAction> {
-        Some(DriveIndexAction::OpenAIFactCollection)
     }
 
     fn preview(&self, appearance: &Appearance) -> Option<Box<dyn Element>> {

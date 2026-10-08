@@ -942,45 +942,6 @@ impl AgentManagementView {
         self.is_viewing_setup_guide
     }
 
-    pub(crate) fn apply_environment_filter_from_link(
-        &mut self,
-        environment_id: String,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        // This navigation should show the team/global task runs list.
-        self.filters.owners = OwnerFilter::All;
-        self.filters.reset_all_but_owner();
-        self.filters.environment = EnvironmentFilter::Specific(environment_id);
-        self.update_filter_buttons(ctx);
-
-        // Clear search query.
-        self.search_query.clear();
-        self.search_editor.update(ctx, |editor, ctx| {
-            editor.clear_buffer_and_reset_undo_stack(ctx);
-        });
-
-        // Reset the selected states for the dropdowns.
-        self.status_dropdown.update(ctx, |dropdown, ctx| {
-            dropdown.set_selected_by_index(0, ctx);
-        });
-        self.source_dropdown.update(ctx, |dropdown, ctx| {
-            dropdown.set_selected_by_index(0, ctx);
-        });
-        self.created_on_dropdown.update(ctx, |dropdown, ctx| {
-            dropdown.set_selected_by_index(0, ctx);
-        });
-        self.artifact_dropdown.update(ctx, |dropdown, ctx| {
-            dropdown.set_selected_by_index(0, ctx);
-        });
-        self.harness_dropdown.update(ctx, |dropdown, ctx| {
-            dropdown.set_selected_by_index(0, ctx);
-        });
-
-        self.update_environment_dropdown(ctx);
-        self.update_creator_dropdown(ctx);
-        self.on_filter_changed(ctx);
-    }
-
     /// Sync all tasks from the management model, and update the ListState
     fn get_tasks_from_model(&mut self, ctx: &mut ViewContext<Self>) {
         // Collect all card data we need
@@ -1471,7 +1432,6 @@ impl AgentManagementView {
                         );
                         ctx.dispatch_typed_action(&WorkspaceAction::NewTabInAgentMode {
                             entrypoint: AgentModeEntrypoint::AgentManagementView,
-                            zero_state_prompt_suggestion_type: None,
                         });
                     }
                 }

@@ -1135,77 +1135,6 @@ define_settings_group!(AISettings, settings: [
         private: true,
     }
 
-    // This is not a user-visible setting - it's merely a one-time flag to track if the Oz launch modal
-    // has been shown to the user.
-    //
-    // We model it as a setting so it's only shown once to a given user regardless of the number of
-    // devices they use.
-    did_check_to_trigger_oz_launch_modal: DidShowOzLaunchModal {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::No),
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
-    }
-
-    // This is not a user-visible setting - it's merely a one-time flag to track if the
-    // orchestration launch modal has been shown to the user.
-    //
-    // We model it as a setting so it's only shown once to a given user regardless of the number of
-    // devices they use.
-    did_check_to_trigger_orchestration_launch_modal: DidShowOrchestrationLaunchModal {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::No),
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
-    }
-
-    // This is not a user-visible setting - it's merely a one-time flag to track if the
-    // Warp Agent CLI launch modal has been shown to the user.
-    //
-    // We model it as a setting so it's only shown once to a given user regardless of the number of
-    // devices they use.
-    did_check_to_trigger_agent_cli_launch_modal: DidShowAgentCliLaunchModal {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::No),
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
-    }
-
-    // This is not a user-visible setting - it's merely a one-time flag to track if the
-    // free-AI-removal notice modal has been shown to (or silently marked as seen for) the user.
-    //
-    // We model it as a setting so it's only shown once to a given user regardless of the number of
-    // devices they use.
-    did_check_to_trigger_free_ai_removal_modal: DidShowFreeAiRemovalModal {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::No),
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
-    }
-
-    // This is not a user-visible setting - it's merely a one-time flag to track if the
-    // "You're using your ChatGPT plan" modal has been shown for the user's current ChatGPT
-    // connection. Reset when the user disconnects so a later reconnect shows it again.
-    //
-    // We model it as a setting so it's only shown once to a given user regardless of the number of
-    // devices they use.
-    did_show_chatgpt_plan_modal: DidShowChatGPTPlanModal {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::No),
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
-    }
-
     // Used to determine whether the "Latest updates" section of the agent view
     // zero state is expanded or collapsed by default.
     should_expand_oz_updates: ShouldExpandOzUpdates {
@@ -1241,17 +1170,6 @@ define_settings_group!(AISettings, settings: [
         storage_key: "CanUseWarpCreditsWithByok",
         toml_path: "cloud_platform.third_party_api_keys.can_use_warp_credits_with_byok",
         description: "Whether Warp credits can be used as a fallback for user-provided models.",
-    }
-
-    should_render_use_agent_footer_for_user_commands: ShouldRenderUseAgentToolbarForUserCommands {
-        type: bool,
-        default: true,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.warp_agent.other.should_render_use_agent_toolbar_for_user_commands",
-        description: "Whether to show the \"Use Agent\" footer for terminal commands.",
     }
 
     // Whether to render the CLI agent footer for commands like Claude, Codex, Gemini, etc.
@@ -1344,18 +1262,6 @@ define_settings_group!(AISettings, settings: [
     // When true, the help page is hidden (user dismissed it).
     // Free users never see the help page by default regardless of this setting.
     did_dismiss_cloud_setup_guide: DidDismissAgentManagementHelpPage {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
-    }
-
-    // Whether the ambient agent trial widget has been dismissed by the user.
-    //
-    // Not a user-visible setting - we model it as a setting so we can track state.
-    ambient_agent_trial_widget_dismissed: AmbientAgentTrialWidgetDismissed {
         type: bool,
         default: false,
         supported_platforms: SupportedPlatforms::ALL,
@@ -1501,21 +1407,6 @@ define_settings_group!(AISettings, settings: [
         private: true,
     }
 
-    // Whether Oz should add attribution (co-author line) to commit messages and PRs.
-    // This is the user-level preference; it may be overridden by the window's team's
-    // `enable_warp_attribution` AdminEnablementSetting (see
-    // `UserWorkspaces::get_agent_attribution_setting`).
-    agent_attribution_enabled: AgentAttributionEnabled {
-        type: bool,
-        default: true,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::No),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.warp_agent.other.agent_attribution_enabled",
-        description: "Whether the Warp Agent adds an attribution co-author line to commit messages and pull requests it creates.",
-    }
-
     should_force_disable_cloud_handoff: ShouldForceDisableCloudHandoff {
         type: bool,
         default: false,
@@ -1547,20 +1438,6 @@ define_settings_group!(AISettings, settings: [
         private: false,
         toml_path: "agents.warp_agent.other.auto_handoff_on_sleep_enabled",
         description: "Whether Warp automatically hands off local agent conversations to cloud when the computer is about to sleep.",
-    }
-
-    // This is not a user-visible setting - it's merely a one-time flag to track if the
-    // auto-handoff sleep modal has been shown to the user.
-    //
-    // We model it as a setting so it's only shown once to a given user regardless of the number of
-    // devices they use.
-    did_show_auto_handoff_sleep_modal: DidShowAutoHandoffSleepModal {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::No),
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
     }
 
     // Not a user-visible setting - it tracks which one-time feature-intro popups the

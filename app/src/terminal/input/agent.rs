@@ -1,5 +1,4 @@
 use warp_core::input_type::InputType;
-use warp_core::settings::Setting;
 use warp_core::ui::theme::color::internal_colors;
 use warpui::elements::{
     Align, AnchorPair, Border, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
@@ -12,8 +11,7 @@ use warpui::{AppContext, SingletonEntity as _, ViewHandle};
 
 use super::common::{
     add_command_xray_overlay, add_input_suggestions_overlays, add_voltron_overlay,
-    add_workflow_info_overlay, maybe_add_buy_credits_banner,
-    wrap_input_with_terminal_padding_and_focus_handler,
+    add_workflow_info_overlay, wrap_input_with_terminal_padding_and_focus_handler,
 };
 use super::{Input, InputAction, InputDropTargetData};
 use crate::BlocklistAIHistoryModel;
@@ -27,7 +25,6 @@ use crate::appearance::Appearance;
 use crate::context_chips::spacing::{self};
 use crate::editor::position_id_for_cursor;
 use crate::features::FeatureFlag;
-use crate::settings::InputModeSettings;
 use crate::terminal::settings::TerminalSettings;
 use crate::terminal::view::TerminalAction;
 use crate::terminal::view::ambient_agent::HostSelector;
@@ -83,25 +80,11 @@ impl Input {
         let appearance = Appearance::as_ref(app);
         let menu_positioning = self.menu_positioning(app);
 
-        let model = self.model.lock();
-
         // We should likely rework this stack to not need to use `with_constrain_absolute_children`,
         // by reworking the positioning of the children to not depend on this.
         let mut stack = Stack::new().with_constrain_absolute_children();
 
-        let input_mode = *InputModeSettings::as_ref(app).input_mode.value();
-
         let mut column = Flex::column();
-
-        if let Some(banner) =
-            self.render_input_banner(appearance, app, input_mode, /*is_compact_mode=*/ false)
-        {
-            column.add_child(
-                Container::new(banner)
-                    .with_margin_top(spacing::UDI_CHIP_MARGIN)
-                    .finish(),
-            );
-        }
 
         let ai_input_model = self.ai_input_model.as_ref(app);
 
@@ -322,16 +305,6 @@ impl Input {
 
         let mut outer_stack = Stack::new().with_constrain_absolute_children();
         outer_stack.add_child(column.finish());
-        maybe_add_buy_credits_banner(
-            &mut outer_stack,
-            &self.buy_credits_banner,
-            self.is_pane_focused(app),
-            self.terminal_view_id,
-            self.is_input_at_top(&model, app),
-            &self.team_scope(app),
-            &model,
-            app,
-        );
 
         SavePosition::new(outer_stack.finish(), &self.save_position_id()).finish()
     }
@@ -339,7 +312,6 @@ impl Input {
     fn render_cloud_mode_v2_composing_input(&self, app: &AppContext) -> Box<dyn Element> {
         let appearance = Appearance::as_ref(app);
         let menu_positioning = self.menu_positioning(app);
-        let model = self.model.lock();
 
         let mut stack = Stack::new();
 
@@ -483,16 +455,6 @@ impl Input {
 
         let mut outer_stack = Stack::new().with_constrain_absolute_children();
         outer_stack.add_child(input);
-        maybe_add_buy_credits_banner(
-            &mut outer_stack,
-            &self.buy_credits_banner,
-            self.is_pane_focused(app),
-            self.terminal_view_id,
-            self.is_input_at_top(&model, app),
-            &self.team_scope(app),
-            &model,
-            app,
-        );
 
         SavePosition::new(outer_stack.finish(), &self.save_position_id()).finish()
     }
@@ -636,23 +598,11 @@ impl Input {
             return Empty::new().finish();
         };
         let ambient_agent_model = ambient_agent_model.as_ref(app);
-        let mut stack = Stack::new().with_constrain_absolute_children();
+        let stack = Stack::new().with_constrain_absolute_children();
 
         // Don't render status bar when agent has failed or is waiting for session
         let show_status_bar = ambient_agent_model.error_message().is_none()
             && !ambient_agent_model.is_waiting_for_session();
-
-        let model = self.model.lock();
-        maybe_add_buy_credits_banner(
-            &mut stack,
-            &self.buy_credits_banner,
-            self.focus_handle.as_ref().is_none_or(|h| h.is_focused(app)),
-            self.terminal_view_id,
-            self.is_input_at_top(&model, app),
-            &self.team_scope(app),
-            &model,
-            app,
-        );
 
         let save_position =
             SavePosition::new(stack.finish(), &self.status_free_input_save_position_id()).finish();

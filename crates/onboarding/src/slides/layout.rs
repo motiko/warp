@@ -192,16 +192,6 @@ pub const FOREGROUND_LAYOUT_CODE_REVIEW: ForegroundLayout = ForegroundLayout {
     fit: ForegroundFit::CoverTopAligned,
 };
 
-/// Layout for third-party slides.
-/// No horizontal padding; contain() shows the full image; right-aligned so any
-/// leftover horizontal space appears on the left.
-/// We contain because the most important part is the bottom of the image which needs to be visible.
-pub const FOREGROUND_LAYOUT_THIRD_PARTY: ForegroundLayout = ForegroundLayout {
-    top_mode: TopMode::Ratio(118. / 800.),
-    h_padding: HPadding::Fixed(0.),
-    fit: ForegroundFit::ContainRightAligned,
-};
-
 /// Wraps an image slot with a dynamic top offset that keeps a chosen fraction
 /// of the image height centered in the panel.
 ///

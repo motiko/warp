@@ -51,9 +51,8 @@ fn terminal_view(app: &mut App) -> ViewHandle<TerminalView> {
 /// `ambient_agent_view_model()` is `Some(..)`.
 fn cloud_mode_terminal_view(app: &mut App) -> ViewHandle<TerminalView> {
     initialize_app_for_terminal_view(app);
-    let tips_model = app.add_model(|_| Default::default());
     let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, |ctx| {
-        TerminalView::new_for_test_with_cloud_mode(tips_model, None, true, ctx)
+        TerminalView::new_for_test_with_cloud_mode(None, true, ctx)
     });
     terminal
 }

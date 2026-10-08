@@ -31,7 +31,6 @@ const PROVIDER_BUTTON_ICON_TEXT_GAP: f32 = 8.;
 const ERROR_APOLOGY_TEXT: &str = "I'm sorry, I couldn't complete that request.";
 const INTERNAL_WARP_ERROR: &str = "Internal Warp error.";
 pub const FAILED_OUTPUT_USAGE_NOTICE_TEXT: &str = "This response won't count towards your usage.";
-pub const OUT_OF_CREDITS_SUBSCRIBE_LABEL: &str = "Subscribe";
 /// Disclosure shown in place of a ChatGPT subscription error once the user has switched the
 /// conversation to Warp-funded inference.
 pub const CHATGPT_CONTINUED_WITH_WARP_CREDITS_TEXT: &str = "Continued with Warp credits. Your \

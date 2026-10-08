@@ -5,7 +5,7 @@ use warpui::{App, SingletonEntity};
 
 use super::{AuthManager, AuthManagerEvent};
 use crate::ServerApiProvider;
-use crate::auth::auth_view_modal::AuthRedirectPayload;
+use crate::auth::auth_redirect::AuthRedirectPayload;
 use crate::auth::credentials::{Credentials, RefreshToken};
 use crate::auth::user::{FirebaseAuthTokens, TEST_USER_UID, User};
 use crate::auth::{AuthStateProvider, UserUid};

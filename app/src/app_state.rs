@@ -16,7 +16,6 @@ use crate::drive::OpenWarpDriveObjectSettings;
 use crate::root_view::quake_mode_window_id;
 use crate::server::ids::{ServerId, SyncId};
 use crate::settings_view::SettingsSection;
-use crate::settings_view::environments_page::EnvironmentsPage;
 use crate::tab::SelectedTabColor;
 use crate::terminal::ShellLaunchData;
 use crate::themes::theme::AnsiColorIdentifier;
@@ -140,7 +139,6 @@ pub enum LeafContents {
     AIDocument(AIDocumentPaneSnapshot),
     Code(CodePaneSnapShot),
     EnvVarCollection(EnvVarCollectionPaneSnapshot),
-    EnvironmentManagement(EnvironmentManagementPaneSnapshot),
     Workflow(WorkflowPaneSnapshot),
     Settings(SettingsPaneSnapshot),
     AIFact(AIFactPaneSnapshot),
@@ -171,10 +169,7 @@ impl LeafContents {
             // Network log: the backing log is an in-memory ring buffer that
             // starts empty on launch; persisting would also regress back to
             // an on-disk log via the app-state database.
-            LeafContents::NetworkLog
-            // Environment management panes are opened on-demand via workspace
-            // actions and have no persistable state.
-            | LeafContents::EnvironmentManagement(_) => false,
+            LeafContents::NetworkLog => false,
             LeafContents::Terminal(_)
             | LeafContents::Notebook(_)
             | LeafContents::AIDocument(_)
@@ -283,11 +278,6 @@ pub enum EnvVarCollectionPaneSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct EnvironmentManagementPaneSnapshot {
-    pub mode: EnvironmentsPage,
-}
-
-#[derive(Clone, Debug, PartialEq)]
 pub enum SettingsPaneSnapshot {
     Local {
         current_page: SettingsSection,
@@ -312,6 +302,7 @@ pub enum CodeReviewPaneSnapshot {
 pub enum LeftPanelDisplayedTab {
     FileTree,
     GlobalSearch,
+    /// Retired panels that older snapshots may still name; restored as the file tree.
     WarpDrive,
     ConversationListView,
 }
@@ -321,8 +312,6 @@ impl From<ToolPanelView> for LeftPanelDisplayedTab {
         match view {
             ToolPanelView::ProjectExplorer => LeftPanelDisplayedTab::FileTree,
             ToolPanelView::GlobalSearch { .. } => LeftPanelDisplayedTab::GlobalSearch,
-            ToolPanelView::WarpDrive => LeftPanelDisplayedTab::WarpDrive,
-            ToolPanelView::ConversationListView => LeftPanelDisplayedTab::ConversationListView,
         }
     }
 }

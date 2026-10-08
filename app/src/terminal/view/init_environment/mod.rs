@@ -1,5 +1,3 @@
-pub mod mode_selector;
-
 use warpui::elements::{
     ChildView, Container, CornerRadius, CrossAxisAlignment, Flex, MouseStateHandle, ParentElement,
     Radius, Text,

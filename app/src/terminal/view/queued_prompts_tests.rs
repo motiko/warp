@@ -87,9 +87,8 @@ fn drain_one(
 }
 
 fn add_window_with_cloud_mode_terminal(app: &mut App) -> ViewHandle<TerminalView> {
-    let tips_model = app.add_model(|_| Default::default());
     let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, |ctx| {
-        TerminalView::new_for_test_with_cloud_mode(tips_model, None, true, ctx)
+        TerminalView::new_for_test_with_cloud_mode(None, true, ctx)
     });
     terminal.update(app, |view, _| {
         view.model.lock().set_is_dummy_cloud_mode_session(true);

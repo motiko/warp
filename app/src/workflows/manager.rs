@@ -79,7 +79,7 @@ impl WorkflowManager {
             WorkflowOpenSource::Existing(workflow_id) => {
                 let workflow = CloudModel::as_ref(ctx).get_workflow(workflow_id).cloned();
                 if let Some(workflow) = workflow {
-                    view.update(ctx, |view, ctx| view.load(workflow, settings, mode, ctx));
+                    view.update(ctx, |view, ctx| view.load(workflow, mode, ctx));
                 } else {
                     // If the workflow doesn't exist, try waiting for initial load and trying again
                     view.update(ctx, |view, ctx| {
@@ -123,7 +123,6 @@ impl WorkflowManager {
                             *initial_folder_id,
                             ClientId::default(),
                         ),
-                        &OpenWarpDriveObjectSettings::default(),
                         mode,
                         ctx,
                     );

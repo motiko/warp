@@ -22,7 +22,6 @@ pub fn terminal_view_for_viewer(app: &mut App) -> ViewHandle<TerminalView> {
     let global_resource_handles = GlobalResourceHandles::mock(app);
     let GlobalResourceHandles {
         model_event_sender,
-        tips_completed,
         user_default_shell_unsupported_banner_model_handle,
         ..
     } = global_resource_handles.clone();
@@ -33,7 +32,6 @@ pub fn terminal_view_for_viewer(app: &mut App) -> ViewHandle<TerminalView> {
         let server_api = ServerApiProvider::as_ref(ctx).get();
         PaneGroup::new_for_shared_session_viewer(
             session_id,
-            tips_completed,
             user_default_shell_unsupported_banner_model_handle,
             server_api,
             model_event_sender,

@@ -163,12 +163,6 @@ impl ImportModalBody {
         }
     }
 
-    pub fn set_new_target(&mut self, owner: Owner, initial_folder_id: Option<SyncId>) {
-        // TODO: this should take an owner OR folder.
-        self.owner = Some(owner);
-        self.initial_folder_id = initial_folder_id;
-    }
-
     // Push a new update to the import queue to sync with the server.
     fn push_new_update(&mut self, arg: ImportQueueArgs, ctx: &mut ViewContext<Self>) {
         self.import_queue

@@ -12,12 +12,12 @@ use warp::integration_testing::settings::{
     press_settings_nav_down, press_settings_nav_up, type_settings_search,
 };
 use warp::integration_testing::terminal::wait_until_bootstrapped_single_pane_for_tab;
-use warp::settings_view::{SettingsSection, cli_agent_settings_widget_id};
+use warp::settings_view::{SettingsSection, language_servers_widget_id};
 
 use super::{Builder, new_builder};
 
-/// Label of the umbrella that groups the agent subpages.
-const AGENTS_UMBRELLA: &str = "Agents";
+/// Label of the umbrella that groups the code subpages.
+const CODE_UMBRELLA: &str = "Code";
 
 // ---------------------------------------------------------------------------
 // Mouse navigation
@@ -29,27 +29,27 @@ const AGENTS_UMBRELLA: &str = "Agents";
 pub fn test_settings_mouse_navigation_through_umbrella() -> Builder {
     new_builder()
         .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
-        .with_step(open_settings_page(SettingsSection::Account))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, false))
+        .with_step(open_settings_page(SettingsSection::Appearance))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, false))
         // Expanding the umbrella reveals its subpages but must not move the
-        // selection off Account.
-        .with_step(click_settings_umbrella(AGENTS_UMBRELLA))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, true))
-        .with_step(assert_settings_section(SettingsSection::Account))
+        // selection off Appearance.
+        .with_step(click_settings_umbrella(CODE_UMBRELLA))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, true))
+        .with_step(assert_settings_section(SettingsSection::Appearance))
         .with_step(assert_settings_nav_subpage_visible(
-            SettingsSection::Knowledge,
+            SettingsSection::LanguageServers,
             true,
         ))
         // Clicking a subpage selects it.
-        .with_step(click_settings_nav_subpage(SettingsSection::Knowledge))
-        .with_step(assert_settings_section(SettingsSection::Knowledge))
+        .with_step(click_settings_nav_subpage(SettingsSection::LanguageServers))
+        .with_step(assert_settings_section(SettingsSection::LanguageServers))
         // Collapsing while still on a subpage hides the row but keeps the
         // selection, so the content pane does not change out from under us.
-        .with_step(click_settings_umbrella(AGENTS_UMBRELLA))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, false))
-        .with_step(assert_settings_section(SettingsSection::Knowledge))
+        .with_step(click_settings_umbrella(CODE_UMBRELLA))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, false))
+        .with_step(assert_settings_section(SettingsSection::LanguageServers))
         .with_step(assert_settings_nav_subpage_visible(
-            SettingsSection::Knowledge,
+            SettingsSection::LanguageServers,
             false,
         ))
 }
@@ -63,11 +63,14 @@ pub fn test_settings_mouse_navigation_through_umbrella() -> Builder {
 pub fn test_settings_keyboard_navigation_down_into_collapsed_umbrella() -> Builder {
     new_builder()
         .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
-        .with_step(open_settings_page(SettingsSection::Account))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, false))
+        // Warpify sits directly above the Code umbrella.
+        .with_step(open_settings_page(SettingsSection::Warpify))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, false))
         .with_step(press_settings_nav_down())
-        .with_step(assert_settings_section(SettingsSection::WarpAgent))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, true))
+        .with_step(assert_settings_section(
+            SettingsSection::EditorAndCodeReview,
+        ))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, true))
 }
 
 /// Arrowing Up into a collapsed umbrella enters it at its *last* subpage,
@@ -75,14 +78,12 @@ pub fn test_settings_keyboard_navigation_down_into_collapsed_umbrella() -> Build
 pub fn test_settings_keyboard_navigation_up_into_collapsed_umbrella() -> Builder {
     new_builder()
         .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
-        // Billing and usage sits directly below the Agents umbrella.
-        .with_step(open_settings_page(SettingsSection::BillingAndUsage))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, false))
+        // AI sits directly below the Code umbrella.
+        .with_step(open_settings_page(SettingsSection::AI))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, false))
         .with_step(press_settings_nav_up())
-        .with_step(assert_settings_section(
-            SettingsSection::ThirdPartyCLIAgents,
-        ))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, true))
+        .with_step(assert_settings_section(SettingsSection::LanguageServers))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, true))
 }
 
 /// Collapsing an umbrella while one of its subpages is selected keeps arrow
@@ -91,15 +92,15 @@ pub fn test_settings_keyboard_navigation_up_into_collapsed_umbrella() -> Builder
 pub fn test_settings_keyboard_navigation_after_manual_collapse() -> Builder {
     new_builder()
         .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
-        .with_step(open_settings_page(SettingsSection::Knowledge))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, true))
+        .with_step(open_settings_page(SettingsSection::LanguageServers))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, true))
         // Collapse the umbrella while still viewing one of its subpages.
-        .with_step(click_settings_umbrella(AGENTS_UMBRELLA))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, false))
-        .with_step(assert_settings_section(SettingsSection::Knowledge))
+        .with_step(click_settings_umbrella(CODE_UMBRELLA))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, false))
+        .with_step(assert_settings_section(SettingsSection::LanguageServers))
         // Down should continue past the umbrella, not restart from the top.
         .with_step(press_settings_nav_down())
-        .with_step(assert_settings_section(SettingsSection::BillingAndUsage))
+        .with_step(assert_settings_section(SettingsSection::AI))
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +112,7 @@ pub fn test_settings_keyboard_navigation_after_manual_collapse() -> Builder {
 pub fn test_settings_search_filters_top_level_pages() -> Builder {
     new_builder()
         .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
-        .with_step(open_settings_page(SettingsSection::Account))
+        .with_step(open_settings_page(SettingsSection::Appearance))
         .with_step(type_settings_search("keyboard shortcut"))
         .with_step(assert_settings_nav_page_visible(
             SettingsSection::Keybindings,
@@ -121,7 +122,7 @@ pub fn test_settings_search_filters_top_level_pages() -> Builder {
             SettingsSection::About,
             false,
         ))
-        // Account no longer matches, so the selection follows the filter.
+        // Appearance no longer matches, so the selection follows the filter.
         .with_step(assert_settings_section(SettingsSection::Keybindings))
 }
 
@@ -130,21 +131,19 @@ pub fn test_settings_search_filters_top_level_pages() -> Builder {
 pub fn test_settings_search_filters_subpages() -> Builder {
     new_builder()
         .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
-        .with_step(open_settings_page(SettingsSection::Account))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, false))
-        .with_step(type_settings_search("codex"))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, true))
+        .with_step(open_settings_page(SettingsSection::Appearance))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, false))
+        .with_step(type_settings_search("project folder"))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, true))
         .with_step(assert_settings_nav_subpage_visible(
-            SettingsSection::ThirdPartyCLIAgents,
+            SettingsSection::LanguageServers,
             true,
         ))
         .with_step(assert_settings_nav_subpage_visible(
-            SettingsSection::Knowledge,
+            SettingsSection::EditorAndCodeReview,
             false,
         ))
-        .with_step(assert_settings_section(
-            SettingsSection::ThirdPartyCLIAgents,
-        ))
+        .with_step(assert_settings_section(SettingsSection::LanguageServers))
 }
 
 /// A search that matches only one subpage must still render that subpage's
@@ -156,19 +155,15 @@ pub fn test_settings_search_filters_subpages() -> Builder {
 pub fn test_settings_search_subpage_still_renders_content() -> Builder {
     new_builder()
         .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
-        .with_step(open_settings_page(SettingsSection::Account))
-        // The CLI agent widget lives on the Third party CLI agents subpage, and
-        // nothing has rendered it yet.
+        .with_step(open_settings_page(SettingsSection::Appearance))
         .with_step(assert_settings_widget_rendered(
-            cli_agent_settings_widget_id(),
+            language_servers_widget_id(),
             false,
         ))
-        .with_step(type_settings_search("codex"))
-        .with_step(assert_settings_section(
-            SettingsSection::ThirdPartyCLIAgents,
-        ))
+        .with_step(type_settings_search("project folder"))
+        .with_step(assert_settings_section(SettingsSection::LanguageServers))
         .with_step(assert_settings_widget_rendered(
-            cli_agent_settings_widget_id(),
+            language_servers_widget_id(),
             true,
         ))
 }
@@ -178,12 +173,12 @@ pub fn test_settings_search_subpage_still_renders_content() -> Builder {
 pub fn test_settings_search_clear_restores_umbrella_state() -> Builder {
     new_builder()
         .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
-        .with_step(open_settings_page(SettingsSection::Account))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, false))
-        .with_step(type_settings_search("codex"))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, true))
+        .with_step(open_settings_page(SettingsSection::Appearance))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, false))
+        .with_step(type_settings_search("project folder"))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, true))
         .with_step(clear_settings_search())
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, false))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, false))
         .with_step(assert_settings_nav_page_visible(
             SettingsSection::About,
             true,
@@ -195,37 +190,14 @@ pub fn test_settings_search_clear_restores_umbrella_state() -> Builder {
 pub fn test_settings_search_preserved_on_sidebar_click() -> Builder {
     new_builder()
         .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
-        .with_step(open_settings_page(SettingsSection::Account))
-        .with_step(type_settings_search("agent"))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, true))
-        .with_step(click_settings_nav_subpage(SettingsSection::WarpAgent))
-        .with_step(assert_settings_section(SettingsSection::WarpAgent))
+        .with_step(open_settings_page(SettingsSection::Appearance))
+        .with_step(type_settings_search("code"))
+        .with_step(assert_umbrella_expanded(CODE_UMBRELLA, true))
+        .with_step(click_settings_nav_subpage(SettingsSection::LanguageServers))
+        .with_step(assert_settings_section(SettingsSection::LanguageServers))
         // The query survives the click, and so does the filtered sidebar.
         .with_step(assert_settings_nav_page_visible(
             SettingsSection::About,
             false,
-        ))
-}
-
-// ---------------------------------------------------------------------------
-// MCP servers
-// ---------------------------------------------------------------------------
-
-/// MCP servers lives under the Agents umbrella but renders the standalone MCP
-/// page, so it has to highlight its row and expand its umbrella like any other
-/// subpage.
-///
-/// This previously failed because the command palette dispatched the backing
-/// page key rather than the nav target, so the content rendered with no row
-/// highlighted and the umbrella collapsed.
-pub fn test_settings_agent_mcp_servers_renders_standalone_page() -> Builder {
-    new_builder()
-        .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
-        .with_step(open_settings_page(SettingsSection::AgentMCPServers))
-        .with_step(assert_settings_section(SettingsSection::AgentMCPServers))
-        .with_step(assert_umbrella_expanded(AGENTS_UMBRELLA, true))
-        .with_step(assert_settings_nav_subpage_visible(
-            SettingsSection::AgentMCPServers,
-            true,
         ))
 }

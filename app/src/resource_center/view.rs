@@ -1,5 +1,4 @@
 use vec1::{Vec1, vec1};
-use warp_core::features::FeatureFlag;
 use warp_core::ui::builder::AnimatedButtonOptions;
 use warpui::elements::{
     Align, Border, ConstrainedBox, Container, CrossAxisAlignment, Element, Flex, Icon,
@@ -12,8 +11,8 @@ use warpui::ui_components::button::ButtonVariant;
 use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::windowing::{StateEvent, WindowManager};
 use warpui::{
-    AppContext, Entity, EntityId, FocusContext, ModelHandle, SingletonEntity, TypedActionView,
-    View, ViewContext, ViewHandle, WindowId,
+    AppContext, Entity, FocusContext, ModelHandle, SingletonEntity, TypedActionView, View,
+    ViewContext, ViewHandle, WindowId,
 };
 
 use super::keybindings_page::KeybindingsEvent;
@@ -21,7 +20,7 @@ use super::section_views::{
     FOOTER_ICON_SIZE, HEADER_FONT_SIZE, ICON_PADDING, KEYBOARD_ICON_SIZE, SCROLLBAR_OFFSET,
     SECTION_SPACING,
 };
-use super::{KeybindingsView, ResourceCenterMainEvent, ResourceCenterMainView, TipsCompleted};
+use super::{KeybindingsView, ResourceCenterMainView};
 use crate::appearance::Appearance;
 use crate::changelog_model::ChangelogModel;
 use crate::ui_components::buttons::icon_button;
@@ -112,16 +111,13 @@ pub enum ResourceCenterAction {
 impl ResourceCenterView {
     pub fn new(
         ctx: &mut ViewContext<Self>,
-        tips_completed: ModelHandle<TipsCompleted>,
         changelog_model_handle: ModelHandle<ChangelogModel>,
     ) -> Self {
         let main_view = ResourceCenterPageView {
             page: ResourceCenterPage::Main,
-            page_view_handle: ResourceCenterViewHandle::Main(Self::build_main_view(
-                ctx,
-                tips_completed,
-                changelog_model_handle,
-            )),
+            page_view_handle: ResourceCenterViewHandle::Main(
+                ctx.add_view(|ctx| ResourceCenterMainView::new(ctx, changelog_model_handle)),
+            ),
         };
         let keybindings_view = ResourceCenterPageView {
             page: ResourceCenterPage::Keybindings,
@@ -147,31 +143,6 @@ impl ResourceCenterView {
             current_view_index: 0,
             page_views,
             window_id: ctx.window_id(),
-        }
-    }
-
-    fn build_main_view(
-        ctx: &mut ViewContext<Self>,
-        tips_completed: ModelHandle<TipsCompleted>,
-        changelog_model_handle: ModelHandle<ChangelogModel>,
-    ) -> ViewHandle<ResourceCenterMainView> {
-        let main_view = ctx.add_typed_action_view(|ctx| {
-            ResourceCenterMainView::new(ctx, tips_completed.clone(), changelog_model_handle)
-        });
-
-        ctx.subscribe_to_view(&main_view, move |me, _, event, ctx| {
-            me.handle_main_event(event, ctx);
-        });
-
-        main_view
-    }
-
-    fn handle_main_event(&mut self, event: &ResourceCenterMainEvent, ctx: &mut ViewContext<Self>) {
-        match event {
-            ResourceCenterMainEvent::Close => {
-                ctx.emit(ResourceCenterEvent::Close);
-                ctx.notify();
-            }
         }
     }
 
@@ -232,19 +203,6 @@ impl ResourceCenterView {
     pub fn close(&mut self, ctx: &mut ViewContext<Self>) {
         ctx.notify();
         ctx.emit(ResourceCenterEvent::Close)
-    }
-
-    pub fn set_action_target(
-        &mut self,
-        window_id: WindowId,
-        input_id: Option<EntityId>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if let ResourceCenterViewHandle::Main(main_handle) = &self.page_views[0].page_view_handle {
-            main_handle.update(ctx, |main_view, ctx| {
-                main_view.set_action_target(window_id, input_id, ctx);
-            });
-        }
     }
 
     fn footer_item_click_action(
@@ -328,13 +286,7 @@ impl ResourceCenterView {
 
         let header_text = match current_page {
             Some(ResourceCenterPage::Keybindings) => "Keyboard Shortcuts".to_string(),
-            _ => {
-                if FeatureFlag::AvatarInTabBar.is_enabled() {
-                    String::new()
-                } else {
-                    "Warp Essentials".to_string()
-                }
-            }
+            _ => "Warp Essentials".to_string(),
         };
         let title = Shrinkable::new(
             1.0,

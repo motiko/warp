@@ -495,9 +495,6 @@ pub(super) struct AIBlockStateHandles {
     /// Mouse state handle for the invalid API key button
     invalid_api_key_button_handle: MouseStateHandle,
 
-    /// Mouse state handle for the Subscribe button shown on the out-of-credits error
-    subscribe_button_handle: MouseStateHandle,
-
     /// Per-action mouse state handles for the recovery buttons on a ChatGPT subscription
     /// error, indexed in the server's action order.
     chatgpt_subscription_action_handles: Vec<MouseStateHandle>,
@@ -4183,7 +4180,7 @@ impl AIBlock {
                 // Synchronous dispatch here can panic with "Circular view update".
                 ctx.dispatch_typed_action_deferred(WorkspaceAction::ShowSettingsPageWithSearch {
                     search_query: "aws bedrock".to_string(),
-                    section: Some(SettingsSection::WarpAgent),
+                    section: Some(SettingsSection::AI),
                 });
             }
         });
@@ -4225,7 +4222,7 @@ impl AIBlock {
                 // Synchronous dispatch here can panic with "Circular view update".
                 ctx.dispatch_typed_action_deferred(WorkspaceAction::ShowSettingsPageWithSearch {
                     search_query: "gemini enterprise".to_string(),
-                    section: Some(SettingsSection::WarpAgent),
+                    section: Some(SettingsSection::AI),
                 });
             }
         });
@@ -7085,7 +7082,7 @@ impl TypedActionView for AIBlock {
             AIBlockAction::ConfigureAwsLoginCommand => {
                 ctx.dispatch_typed_action(&WorkspaceAction::ShowSettingsPageWithSearch {
                     search_query: "aws bedrock".to_string(),
-                    section: Some(SettingsSection::WarpAgent),
+                    section: Some(SettingsSection::AI),
                 });
             }
             AIBlockAction::ToggleImportedCommentCollapsed {

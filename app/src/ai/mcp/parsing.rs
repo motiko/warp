@@ -199,6 +199,28 @@ fn templatize_field(
 }
 
 impl ParsedTemplatableMCPServerResult {
+    #[cfg(test)]
+    /// Parses the user json and returns a vector of ParsedTemplatableMCPServerResult
+    /// If the json is invalid, returns an error
+    /// It's up to the caller to handle cases where there are an unexpected number of servers
+    pub fn from_user_json(json: &str) -> serde_json::Result<Vec<Self>> {
+        // Some docs don't show curly braces around the json object, so add them if necessary.
+        let json = json.trim();
+        let json = if json.starts_with('{') {
+            json.to_owned()
+        } else {
+            format!("{{{json}}}")
+        };
+
+        let config: serde_json::Value = serde_json::from_str(&json)?;
+        let template_jsons = TemplatableMCPServer::find_template_map(config)?;
+
+        Ok(template_jsons
+            .iter()
+            .map(|(name, json)| Self::parse_result(name, json))
+            .collect())
+    }
+
     /// Parses MCP servers from a config file (e.g. `~/.claude.json`, `.mcp.json`).
     ///
     /// Unlike [`from_user_json`], this only recognises servers under a known
@@ -215,27 +237,6 @@ impl ParsedTemplatableMCPServerResult {
 
         let config: serde_json::Value = serde_json::from_str(&json)?;
         let template_jsons = TemplatableMCPServer::find_template_map_strict(&config);
-
-        Ok(template_jsons
-            .iter()
-            .map(|(name, json)| Self::parse_result(name, json))
-            .collect())
-    }
-
-    /// Parses the user json and returns a vector of ParsedTemplatableMCPServerResult
-    /// If the json is invalid, returns an error
-    /// It's up to the caller to handle cases where there are an unexpected number of servers
-    pub fn from_user_json(json: &str) -> serde_json::Result<Vec<Self>> {
-        // Some docs don't show curly braces around the json object, so add them if necessary.
-        let json = json.trim();
-        let json = if json.starts_with('{') {
-            json.to_owned()
-        } else {
-            format!("{{{json}}}")
-        };
-
-        let config: serde_json::Value = serde_json::from_str(&json)?;
-        let template_jsons = TemplatableMCPServer::find_template_map(config)?;
 
         Ok(template_jsons
             .iter()
@@ -356,11 +357,6 @@ pub fn resolve_json(installation: &TemplatableMCPServerInstallation) -> String {
         .collect();
 
     render_template(installation.template_json(), &variable_values_strings)
-}
-
-pub fn prettify_json(json: &str) -> String {
-    let value: serde_json::Value = serde_json::from_str(json).unwrap_or_default();
-    serde_json::to_string_pretty(&value).unwrap_or(json.to_string())
 }
 
 #[cfg(test)]

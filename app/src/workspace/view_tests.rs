@@ -26,7 +26,6 @@ use super::*;
 use crate::ai::AIRequestUsageModel;
 use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 use crate::ai::agent_conversations_model::AgentConversationsModel;
-use crate::ai::agent_tips::AITipModel;
 use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
 use crate::ai::blocklist::agent_view::orchestration_pill_bar_model::OrchestrationPillBarModel;
 use crate::ai::blocklist::{BlocklistAIHistoryModel, BlocklistAIPermissions};
@@ -54,7 +53,6 @@ use crate::pricing::PricingInfoModel;
 use crate::projects::persisted_workspace::PersistedWorkspace;
 #[cfg(not(target_family = "wasm"))]
 use crate::remote_server::codebase_index_model::RemoteCodebaseIndexModel;
-use crate::resource_center::Tip;
 use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::server::cloud_objects::listener::Listener;
 use crate::server::cloud_objects::update_manager::UpdateManager;
@@ -176,7 +174,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     app.add_singleton_model(SessionPermissionsManager::new);
     app.add_singleton_model(LLMPreferences::new);
     app.add_singleton_model(HarnessAvailabilityModel::new);
-    app.add_singleton_model(|ctx| AITipModel::new_for_agent_tips(ctx));
     app.add_singleton_model(|_| SettingsPaneManager::new());
     app.add_singleton_model(|_| AIFactManager::new());
 
@@ -211,7 +208,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     app.add_singleton_model(|ctx| {
         AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client(), ctx)
     });
-    app.add_singleton_model(OneTimeModalModel::new);
     // Register GlobalResourceHandlesProvider before ServerExperiments which depends on it
     let global_resource_handles = GlobalResourceHandles::mock(app);
     app.add_singleton_model(|_| GlobalResourceHandlesProvider::new(global_resource_handles));
@@ -241,9 +237,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
 
     app.update(experiments::init);
 
-    app.add_singleton_model(
-        crate::workspace::bonus_grant_notification_model::BonusGrantNotificationModel::new,
-    );
     app.add_singleton_model(|ctx| {
         CodebaseIndexManager::new_for_test(ServerApiProvider::as_ref(ctx).get(), ctx)
     });
@@ -278,91 +271,6 @@ pub(crate) fn mock_workspace(app: &mut App) -> ViewHandle<Workspace> {
         )
     });
     workspace
-}
-
-#[test]
-fn test_team_navigation_mode() {
-    assert_eq!(
-        team_navigation_mode(true, true, true, false),
-        TeamNavigationMode::TeamSwitcher
-    );
-    assert_eq!(
-        team_navigation_mode(true, true, false, true),
-        TeamNavigationMode::TeamSwitcher
-    );
-    assert_eq!(
-        team_navigation_mode(true, true, false, false),
-        TeamNavigationMode::Hidden
-    );
-    assert_eq!(
-        team_navigation_mode(false, false, false, true),
-        TeamNavigationMode::BrowseTeams
-    );
-    assert_eq!(
-        team_navigation_mode(false, false, false, false),
-        TeamNavigationMode::Hidden
-    );
-}
-
-#[cfg(not(target_family = "wasm"))]
-#[test]
-fn test_open_new_window_for_team_reuses_existing_team_window() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let source_workspace = mock_workspace(&mut app);
-        let existing_team_workspace = mock_workspace(&mut app);
-        let existing_team_window_id =
-            existing_team_workspace.update(&mut app, |_, ctx| ctx.window_id());
-        let team_uid: ServerId = 123.into();
-        app.update(|ctx| {
-            UserWorkspaces::handle(ctx).update(ctx, |user_workspaces, ctx| {
-                user_workspaces.register_window(existing_team_window_id, Some(team_uid), ctx);
-            });
-        });
-        let initial_window_count = app.window_ids().len();
-
-        source_workspace.update(&mut app, |workspace, ctx| {
-            workspace.handle_action(&WorkspaceAction::OpenNewWindowForTeam { team_uid }, ctx);
-        });
-
-        assert_eq!(app.window_ids().len(), initial_window_count);
-        app.read(|ctx| {
-            assert_eq!(
-                ctx.windows().last_window_shown_and_focused_for_test(),
-                Some(existing_team_window_id)
-            );
-        });
-    });
-}
-
-#[cfg(not(target_family = "wasm"))]
-#[test]
-fn test_open_new_window_for_team_creates_window_when_team_has_none() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let source_workspace = mock_workspace(&mut app);
-        let team_uid: ServerId = 123.into();
-        let initial_window_count = app.window_ids().len();
-
-        source_workspace.update(&mut app, |workspace, ctx| {
-            workspace.handle_action(&WorkspaceAction::OpenNewWindowForTeam { team_uid }, ctx);
-        });
-
-        assert_eq!(app.window_ids().len(), initial_window_count + 1);
-        app.read(|ctx| {
-            assert_eq!(
-                ctx.window_ids()
-                    .filter(|window_id| {
-                        UserWorkspaces::as_ref(ctx).team_uid_for_window(*window_id)
-                            == Some(team_uid)
-                    })
-                    .count(),
-                1
-            );
-        });
-    });
 }
 
 #[cfg(target_family = "wasm")]
@@ -496,7 +404,7 @@ fn restored_workspace(
             global_resource_handles,
             None,
             NewWorkspaceSource::Restored {
-                window_snapshot,
+                window_snapshot: Box::new(window_snapshot),
                 block_lists: Arc::new(HashMap::new()),
             },
             ctx,
@@ -578,203 +486,6 @@ fn test_theme_chooser_does_not_suppress_tab_bar_traffic_light_padding() {
     });
 }
 
-/// Regression for account-first onboarding users who select Warp Drive and
-/// conversation history, skip signup, and create an account later. The stored
-/// preferences should remain true while unavailable, then take effect
-/// automatically as account and AI availability change—without an off/on
-/// toggle.
-#[test]
-fn test_tools_panel_preferences_activate_after_signup_and_ai_enablement() {
-    let _skip_anon_guard = FeatureFlag::SkipFirebaseAnonymousUser.override_enabled(true);
-    let _conversation_list_guard =
-        FeatureFlag::AgentViewConversationListView.override_enabled(true);
-
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        // Preserve the user's onboarding intent while starting logged out with
-        // AI disabled (the account-skipped account-first completion state).
-        app.update(|ctx| {
-            WarpDriveSettings::handle(ctx).update(ctx, |settings, ctx| {
-                settings
-                    .enable_warp_drive
-                    .set_value(true, ctx)
-                    .expect("remember Warp Drive preference");
-            });
-            AISettings::handle(ctx).update(ctx, |settings, ctx| {
-                settings
-                    .show_conversation_history
-                    .set_value(true, ctx)
-                    .expect("remember conversation-history preference");
-                settings
-                    .is_any_ai_enabled
-                    .set_value(false, ctx)
-                    .expect("AI remains disabled after skipped signup");
-            });
-            let auth_state = AuthStateProvider::as_ref(ctx).get();
-            auth_state.set_user(None);
-            auth_state.set_credentials(None);
-        });
-
-        let workspace = mock_workspace(&mut app);
-        workspace.update(&mut app, |workspace, ctx| {
-            assert!(
-                workspace
-                    .left_panel_views
-                    .contains(&ToolPanelView::WarpDrive),
-                "the stored preference should keep the locked Warp Drive entry visible"
-            );
-            assert!(
-                workspace
-                    .left_panel_views
-                    .contains(&ToolPanelView::ConversationListView),
-                "the stored preference should keep the locked conversations entry visible"
-            );
-            workspace.left_panel_view.update(ctx, |left_panel, ctx| {
-                left_panel.handle_action_with_force_open(&LeftPanelAction::WarpDrive, false, ctx);
-                assert_eq!(
-                    left_panel.active_view_availability(ctx),
-                    left_panel::ToolPanelAvailability::RequiresAccount
-                );
-                drop(left_panel.render(ctx));
-
-                left_panel.handle_action_with_force_open(
-                    &LeftPanelAction::ConversationListView,
-                    false,
-                    ctx,
-                );
-                assert_eq!(
-                    left_panel.active_view_availability(ctx),
-                    left_panel::ToolPanelAvailability::RequiresAccount
-                );
-                drop(left_panel.render(ctx));
-            });
-            workspace.handle_left_panel_event(&LeftPanelEvent::SignInRequested, ctx);
-            assert!(
-                workspace
-                    .current_workspace_state
-                    .is_require_login_modal_open,
-                "locked-panel Sign in should open the existing auth modal"
-            );
-            // Keep the remainder of this state-transition test focused on the
-            // tool panel rather than modal rendering.
-            workspace
-                .current_workspace_state
-                .is_require_login_modal_open = false;
-        });
-        app.read(|ctx| {
-            // Availability must not erase the raw onboarding preferences.
-            assert!(*WarpDriveSettings::as_ref(ctx).enable_warp_drive);
-            assert!(*AISettings::as_ref(ctx).show_conversation_history);
-            assert!(!WarpDriveSettings::is_warp_drive_available(ctx));
-            assert!(!WarpDriveSettings::is_warp_drive_enabled(ctx));
-            assert!(!AISettings::as_ref(ctx).is_conversation_history_available(ctx));
-            assert!(!AISettings::as_ref(ctx).is_conversation_history_enabled(ctx));
-        });
-
-        // Signing up makes account-backed features available. AuthComplete
-        // must refresh the existing workspace even though no setting changed.
-        app.update(|ctx| {
-            AuthStateProvider::as_ref(ctx)
-                .get()
-                .apply_remote_server_auth_context(
-                    "test-token".to_string(),
-                    "test-user".to_string(),
-                    "test@warp.dev".to_string(),
-                );
-        });
-        workspace.update(&mut app, |workspace, ctx| {
-            workspace.handle_auth_manager_event(
-                AuthManager::handle(ctx),
-                &AuthManagerEvent::AuthComplete,
-                ctx,
-            );
-            assert!(
-                workspace
-                    .left_panel_views
-                    .contains(&ToolPanelView::WarpDrive),
-                "Drive entry remains visible and unlocks after signup"
-            );
-            assert!(
-                workspace
-                    .left_panel_views
-                    .contains(&ToolPanelView::ConversationListView),
-                "conversation entry remains visible while waiting for AI"
-            );
-            assert!(!workspace.auth_state.is_anonymous_or_logged_out());
-            assert!(WarpDriveSettings::is_warp_drive_enabled(ctx));
-            assert!(!AISettings::as_ref(ctx).is_conversation_history_enabled(ctx));
-            workspace.left_panel_view.update(ctx, |left_panel, ctx| {
-                left_panel.handle_action_with_force_open(&LeftPanelAction::WarpDrive, false, ctx);
-                assert_eq!(
-                    left_panel.active_view_availability(ctx),
-                    left_panel::ToolPanelAvailability::Available
-                );
-
-                left_panel.handle_action_with_force_open(
-                    &LeftPanelAction::ConversationListView,
-                    false,
-                    ctx,
-                );
-                assert_eq!(
-                    left_panel.active_view_availability(ctx),
-                    left_panel::ToolPanelAvailability::RequiresAi
-                );
-                drop(left_panel.render(ctx));
-            });
-        });
-
-        // Enabling AI later should make the preserved conversation-history
-        // preference effective through the existing AI-settings subscription.
-        app.update(|ctx| {
-            AISettings::handle(ctx).update(ctx, |settings, ctx| {
-                settings
-                    .is_any_ai_enabled
-                    .set_value(true, ctx)
-                    .expect("enable AI");
-            });
-        });
-        workspace.update(&mut app, |workspace, ctx| {
-            assert!(
-                workspace
-                    .left_panel_views
-                    .contains(&ToolPanelView::ConversationListView)
-            );
-            workspace.left_panel_view.update(ctx, |left_panel, ctx| {
-                left_panel.handle_action_with_force_open(
-                    &LeftPanelAction::ConversationListView,
-                    false,
-                    ctx,
-                );
-                assert_eq!(
-                    left_panel.active_view_availability(ctx),
-                    left_panel::ToolPanelAvailability::Available
-                );
-            });
-        });
-        app.read(|ctx| {
-            assert!(AISettings::as_ref(ctx).is_conversation_history_enabled(ctx));
-        });
-
-        // The raw setting still controls whether the toolbelt entry exists.
-        app.update(|ctx| {
-            AISettings::handle(ctx).update(ctx, |settings, ctx| {
-                settings
-                    .show_conversation_history
-                    .set_value(false, ctx)
-                    .expect("hide conversation history");
-            });
-        });
-        workspace.read(&app, |workspace, _| {
-            assert!(
-                !workspace
-                    .left_panel_views
-                    .contains(&ToolPanelView::ConversationListView)
-            );
-        });
-    });
-}
-
 fn assert_vertical_tabs_tools_panel_preserves_padding(config: HeaderToolbarChipSelection) {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
@@ -812,24 +523,19 @@ fn test_tools_panel_does_not_suppress_vertical_tab_bar_traffic_light_padding() {
     let _vertical_tabs_guard = FeatureFlag::VerticalTabs.override_enabled(true);
     for config in [
         HeaderToolbarChipSelection::Custom {
-            left: vec![HeaderToolbarItemKind::AgentManagement],
+            left: vec![],
             right: vec![
                 HeaderToolbarItemKind::TabsPanel,
                 HeaderToolbarItemKind::ToolsPanel,
                 HeaderToolbarItemKind::CodeReview,
-                HeaderToolbarItemKind::NotificationsMailbox,
             ],
         },
         HeaderToolbarChipSelection::Custom {
             left: vec![
                 HeaderToolbarItemKind::TabsPanel,
                 HeaderToolbarItemKind::ToolsPanel,
-                HeaderToolbarItemKind::AgentManagement,
             ],
-            right: vec![
-                HeaderToolbarItemKind::CodeReview,
-                HeaderToolbarItemKind::NotificationsMailbox,
-            ],
+            right: vec![HeaderToolbarItemKind::CodeReview],
         },
     ] {
         assert_vertical_tabs_tools_panel_preserves_padding(config);
@@ -1548,44 +1254,6 @@ fn reopen_closed_session_menu_item(
         Some(MenuItem::Item(fields)) if fields.label() == "Reopen closed session" => fields,
         _ => panic!("expected Reopen closed session to be the last new-session menu item"),
     }
-}
-
-#[test]
-fn test_reward_modal_no_overlap() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let workspace = mock_workspace(&mut app);
-
-        // Trigger the referral reward response
-        workspace.update(&mut app, |view, ctx| {
-            view.handle_referral_theme_status_event(
-                &ReferralThemeEvent::SentReferralThemeActivated,
-                ctx,
-            );
-
-            // This _should_ show the reward modal, since the changelog modal is _not_ active
-            assert!(view.current_workspace_state.is_reward_modal_open);
-        });
-    });
-}
-
-#[test]
-fn test_reward_modal_shows_for_received_referral() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let workspace = mock_workspace(&mut app);
-
-        workspace.update(&mut app, |view, ctx| {
-            view.handle_referral_theme_status_event(
-                &ReferralThemeEvent::ReceivedReferralThemeActivated,
-                ctx,
-            );
-
-            assert!(view.current_workspace_state.is_reward_modal_open);
-        });
-    });
 }
 
 #[test]
@@ -2786,73 +2454,6 @@ fn test_terminal_model_isnt_leaked() {
 }
 
 #[test]
-fn test_open_or_toggle_warp_drive() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let workspace = mock_workspace(&mut app);
-        workspace.update(&mut app, |workspace, ctx| {
-            // First, unconditionally open Warp Drive as a system action. WD should be open and welcome tips should not have opening warp drive.
-            workspace.open_or_toggle_warp_drive(
-                false, /* toggle */
-                false, /* explicit_user_action */
-                ctx,
-            );
-            assert!(
-                workspace.current_workspace_state.is_warp_drive_open,
-                "Warp Drive should be open"
-            );
-            assert!(
-                !workspace
-                    .tips_completed
-                    .as_ref(ctx)
-                    .features_used
-                    .contains(&Tip::Action(TipAction::OpenWarpDrive)),
-                "Warp drive welcome tip should not be completed"
-            );
-
-            // Next, toggle warp drive as a user action. WD should be closed and tip should not be filled out.
-            workspace.open_or_toggle_warp_drive(
-                true, /* toggle */
-                true, /* explicit_user_action */
-                ctx,
-            );
-            assert!(
-                !workspace.current_workspace_state.is_warp_drive_open,
-                "Warp Drive should be closed"
-            );
-            assert!(
-                !workspace
-                    .tips_completed
-                    .as_ref(ctx)
-                    .features_used
-                    .contains(&Tip::Action(TipAction::OpenWarpDrive)),
-                "Warp drive welcome tip should not be completed"
-            );
-
-            // Finally, toggle warp drive again as a user action. WD should be open and tip filled out.
-            workspace.open_or_toggle_warp_drive(
-                true, /* toggle */
-                true, /* explicit_user_action */
-                ctx,
-            );
-            assert!(
-                workspace.current_workspace_state.is_warp_drive_open,
-                "Warp Drive should be open"
-            );
-            assert!(
-                workspace
-                    .tips_completed
-                    .as_ref(ctx)
-                    .features_used
-                    .contains(&Tip::Action(TipAction::OpenWarpDrive)),
-                "Warp drive welcome tip should not be completed"
-            );
-        });
-    });
-}
-
-#[test]
 fn test_stop_sharing_session() {
     use crate::terminal::shared_session::manager::Manager;
     let _guard = FeatureFlag::CreatingSharedSessions.override_enabled(true);
@@ -3083,19 +2684,7 @@ fn test_switch_focus_panels() {
             );
         });
 
-        // Shift focus from terminal to left panel when WD is open
-        workspace.update(&mut app, |view, ctx| {
-            view.current_workspace_state.is_warp_drive_open = true;
-            view.focus_left_panel(ctx);
-        });
-        workspace.update(&mut app, |view, ctx| {
-            assert!(
-                view.left_panel_view.is_self_or_child_focused(ctx),
-                "Expected Warp Drive panel to be focused"
-            );
-        });
-
-        // Shift focus from WD to left panel when AI panel is open
+        // Shift focus from terminal to left panel when AI panel is open
         workspace.update(&mut app, |view, ctx| {
             view.current_workspace_state.is_ai_assistant_panel_open = true;
             view.focus_left_panel(ctx);
@@ -3130,7 +2719,7 @@ fn test_switch_focus_panels() {
             );
         });
 
-        // Shift focus from WD to right panel (terminal)
+        // Shift focus from AI panel to right panel (terminal)
         workspace.update(&mut app, |view, ctx| {
             view.focus_right_panel(ctx);
         });
@@ -5185,95 +4774,6 @@ fn test_pin_tab_on_grouped_tab_extracts_then_pins() {
             assert_eq!(workspace.tabs[2].pane_group.id(), id2);
             assert!(workspace.tabs[2].group_id.is_none());
             assert!(!workspace.tabs[2].pinned);
-        });
-    });
-}
-
-/// Regression for the tools-panel tab visibility toggles surfaced in the
-/// Appearance settings page: toggling a tab's backing setting must add/remove
-/// that tab from the tools panel live, and re-enabling Warp Drive must make it
-/// selectable again (the original report was that Warp Drive could vanish from
-/// the tools panel with no way back).
-#[test]
-fn test_tools_panel_warp_drive_toggle_updates_available_views() {
-    // Force the non-anonymous path so `is_warp_drive_enabled` follows the
-    // `enable_warp_drive` setting rather than the auth state.
-    let _skip_anon_guard = FeatureFlag::SkipFirebaseAnonymousUser.override_enabled(false);
-
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        let workspace = mock_workspace(&mut app);
-
-        // Warp Drive is enabled by default, so it is an available tools-panel
-        // tab and can be made the active view.
-        workspace.update(&mut app, |workspace, ctx| {
-            assert!(
-                workspace
-                    .left_panel_views
-                    .contains(&ToolPanelView::WarpDrive),
-                "Warp Drive should be an available tools-panel tab by default"
-            );
-            workspace.left_panel_view.update(ctx, |lp, ctx| {
-                lp.handle_action_with_force_open(&LeftPanelAction::WarpDrive, false, ctx);
-            });
-            assert_eq!(
-                workspace.left_panel_view.as_ref(ctx).active_view(),
-                ToolPanelView::WarpDrive,
-                "Warp Drive should be selectable as the active view"
-            );
-        });
-
-        // Turning the toggle off (via its backing setting) removes Warp Drive
-        // from the tools panel; if other tabs remain the active view falls back
-        // to one of them.
-        app.update(|ctx| {
-            WarpDriveSettings::handle(ctx).update(ctx, |settings, ctx| {
-                settings
-                    .enable_warp_drive
-                    .set_value(false, ctx)
-                    .expect("disable warp drive");
-            });
-        });
-        workspace.update(&mut app, |workspace, ctx| {
-            assert!(
-                !workspace
-                    .left_panel_views
-                    .contains(&ToolPanelView::WarpDrive),
-                "Disabling the setting should remove Warp Drive from the tools panel"
-            );
-            if !workspace.left_panel_views.is_empty() {
-                assert_ne!(
-                    workspace.left_panel_view.as_ref(ctx).active_view(),
-                    ToolPanelView::WarpDrive,
-                    "Active view should fall back to a remaining tab when Warp Drive is removed"
-                );
-            }
-        });
-
-        // Re-enabling restores Warp Drive as a selectable tab.
-        app.update(|ctx| {
-            WarpDriveSettings::handle(ctx).update(ctx, |settings, ctx| {
-                settings
-                    .enable_warp_drive
-                    .set_value(true, ctx)
-                    .expect("re-enable warp drive");
-            });
-        });
-        workspace.update(&mut app, |workspace, ctx| {
-            assert!(
-                workspace
-                    .left_panel_views
-                    .contains(&ToolPanelView::WarpDrive),
-                "Re-enabling the setting should restore Warp Drive to the tools panel"
-            );
-            workspace.left_panel_view.update(ctx, |lp, ctx| {
-                lp.handle_action_with_force_open(&LeftPanelAction::WarpDrive, false, ctx);
-            });
-            assert_eq!(
-                workspace.left_panel_view.as_ref(ctx).active_view(),
-                ToolPanelView::WarpDrive,
-                "Warp Drive should be selectable again after re-enabling"
-            );
         });
     });
 }

@@ -15,7 +15,6 @@ use super::settings::initialize_history_persistence_for_tests;
 use crate::ai::AIRequestUsageModel;
 use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 use crate::ai::agent_conversations_model::AgentConversationsModel;
-use crate::ai::agent_tips::AITipModel;
 use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
 use crate::ai::blocklist::agent_view::orchestration_pill_bar_model::OrchestrationPillBarModel;
 use crate::ai::blocklist::local_agent_task_sync_model::LocalAgentTaskSyncModel;
@@ -67,7 +66,7 @@ use crate::undo_close::UndoCloseStack;
 use crate::warp_managed_paths_watcher::WarpManagedPathsWatcher;
 use crate::workflows::local_workflows::LocalWorkflows;
 use crate::workspace::sync_inputs::SyncedInputState;
-use crate::workspace::{ActiveSession, OneTimeModalModel, WorkspaceRegistry};
+use crate::workspace::{ActiveSession, WorkspaceRegistry};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_workspaces::UserWorkspaces;
@@ -135,7 +134,6 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
     app.add_singleton_model(AuthManager::new_for_test);
     app.add_singleton_model(LLMPreferences::new);
     app.add_singleton_model(HarnessAvailabilityModel::new);
-    app.add_singleton_model(|ctx| AITipModel::new_for_agent_tips(ctx));
     app.add_singleton_model(ConnectedSelfHostedWorkersModel::new);
     app.add_singleton_model(SessionPermissionsManager::new);
     app.add_singleton_model(DirectoryWatcher::new);
@@ -175,7 +173,6 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
     app.add_singleton_model(SystemInfo::new);
 
     app.add_singleton_model(|_| RestoredAgentConversations::new_seeded(vec![]));
-    app.add_singleton_model(OneTimeModalModel::new);
     app.add_singleton_model(|_| WorkspaceRegistry::new());
     app.add_singleton_model(|_| IgnoredSuggestionsModel::new(vec![]));
     app.add_singleton_model(|_| PricingInfoModel::new());
@@ -205,8 +202,7 @@ pub fn add_window_with_id_and_terminal(
     app: &mut App,
     restored_blocks: Option<&[SerializedBlockListItem]>,
 ) -> (WindowId, ViewHandle<TerminalView>) {
-    let tips_model = app.add_model(|_| Default::default());
     app.add_window(WindowStyle::NotStealFocus, |ctx| {
-        TerminalView::new_for_test(tips_model, restored_blocks, ctx)
+        TerminalView::new_for_test(restored_blocks, ctx)
     })
 }

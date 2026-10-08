@@ -1231,7 +1231,6 @@ pub(super) fn render(props: Props, app: &AppContext) -> Box<dyn Element> {
                         invalid_api_key_button_handle: &props
                             .state_handles
                             .invalid_api_key_button_handle,
-                        subscribe_button_handle: &props.state_handles.subscribe_button_handle,
                         aws_bedrock_credentials_error_view: props
                             .aws_bedrock_credentials_error_view,
                         gemini_enterprise_credentials_error_view: props
@@ -1483,7 +1482,7 @@ fn render_search_codebase(
                                             ctx.dispatch_typed_action(
                                                 WorkspaceAction::ShowSettingsPageWithSearch {
                                                     search_query: "Autonomy".to_string(),
-                                                    section: Some(SettingsSection::WarpAgent),
+                                                    section: Some(SettingsSection::AI),
                                                 },
                                             );
                                         })),

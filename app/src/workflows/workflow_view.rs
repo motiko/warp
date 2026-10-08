@@ -39,8 +39,6 @@ use super::{CloudWorkflowModel, WorkflowSource, WorkflowType, WorkflowViewMode};
 use crate::ai::AIRequestUsageModel;
 use crate::ai::blocklist::secret_redaction::find_secrets_in_text;
 use crate::appearance::Appearance;
-use crate::auth::auth_state::AuthState;
-use crate::auth::{AuthStateProvider, UserUid};
 use crate::cloud_object::breadcrumbs::ContainingObject;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::model::view::CloudViewModel;
@@ -49,9 +47,7 @@ use crate::cloud_object::{
 };
 use crate::drive::cloud_object_styling::warp_drive_icon_color;
 use crate::drive::drive_helpers::has_feature_gated_anonymous_user_reached_workflow_limit;
-use crate::drive::items::WarpDriveItemId;
 use crate::drive::sharing::{ContentEditability, ShareableObject, SharingAccessLevel};
-use crate::drive::workflows::ai_assist::GeneratedCommandMetadataError;
 use crate::drive::workflows::enum_creation_dialog::{
     EnumCreationDialog, EnumCreationDialogEvent, WorkflowEnumData,
 };
@@ -78,7 +74,7 @@ use crate::server::ids::{ClientId, ServerId, SyncId};
 use crate::server::server_api::ServerApiProvider;
 use crate::server::server_api::ai::AIClient;
 use crate::server::telemetry::{
-    CloudObjectTelemetryMetadata, SharingDialogSource, TelemetryCloudObjectType, TelemetryEvent,
+    CloudObjectTelemetryMetadata, TelemetryCloudObjectType, TelemetryEvent,
 };
 use crate::settings::AISettings;
 use crate::settings::app_installation_detection::{
@@ -92,12 +88,12 @@ use crate::ui_components::icons::Icon;
 #[cfg(target_family = "wasm")]
 use crate::uri::web_intent_parser::open_url_on_desktop;
 use crate::util::bindings::CustomAction;
-use crate::view_components::{DismissibleToast, ToastLink, ToastType};
+use crate::view_components::{DismissibleToast, ToastType};
 use crate::workflows::CloudWorkflow;
 use crate::workflows::arguments::ArgumentsState;
 use crate::workflows::workflow::{Argument, Workflow};
-use crate::workspace::{ToastStack, WorkspaceAction};
-use crate::{FeatureFlag, UserWorkspaces, send_telemetry_from_ctx};
+use crate::workspace::ToastStack;
+use crate::{FeatureFlag, send_telemetry_from_ctx};
 
 mod alias_argument_selector;
 mod alias_bar;
@@ -211,7 +207,6 @@ impl WorkflowEditorErrorState {
 
 #[derive(Debug, Clone)]
 pub enum WorkflowAction {
-    ViewInWarpDrive(WarpDriveItemId),
     AddArgument,
     ToggleViewMode,
     RunWorkflow,
@@ -235,12 +230,6 @@ pub enum WorkflowViewEvent {
     Pane(PaneEvent),
     CreatedWorkflow(SyncId),
     UpdatedWorkflow(SyncId),
-    ViewInWarpDrive(WarpDriveItemId),
-    OpenDriveObjectShareDialog {
-        cloud_object_type_and_id: CloudObjectTypeAndId,
-        invitee_email: Option<String>,
-        source: SharingDialogSource,
-    },
     RunWorkflow {
         workflow: Arc<WorkflowType>,
         source: WorkflowSource,
@@ -310,7 +299,6 @@ pub struct WorkflowView {
     default_argument_id: usize,
     pub(super) ai_metadata_assist_state: AiAssistState,
     revision_ts: Option<Revision>,
-    pub(super) auth_state: Arc<AuthState>,
     pub(super) ai_client: Arc<dyn AIClient>,
     owner: Option<Owner>,
     initial_folder_id: Option<SyncId>,
@@ -457,7 +445,6 @@ impl WorkflowView {
             initial_folder_id: None,
             revision_ts: None,
             command_display_data: WorkflowCommandDisplayData::new_empty(),
-            auth_state: AuthStateProvider::as_ref(ctx).get().clone(),
             ai_client,
             pending_argument_editor_row: None,
             show_enum_creation_dialog: false,
@@ -573,12 +560,7 @@ impl WorkflowView {
             });
 
             if let Some(workflow) = CloudModel::as_ref(ctx).get_workflow_by_uid(&server_id.uid()) {
-                self.load(
-                    workflow.clone(),
-                    &OpenWarpDriveObjectSettings::default(),
-                    self.workflow_view_mode,
-                    ctx,
-                );
+                self.load(workflow.clone(), self.workflow_view_mode, ctx);
             }
             ctx.notify();
         }
@@ -592,12 +574,7 @@ impl WorkflowView {
             if self.workflow_id.into_client() == result.client_id
                 || self.workflow_id.uid() == result.server_id.unwrap_or_default().uid()
             {
-                self.load(
-                    workflow,
-                    &OpenWarpDriveObjectSettings::default(),
-                    self.workflow_view_mode,
-                    ctx,
-                );
+                self.load(workflow, self.workflow_view_mode, ctx);
             }
         }
     }
@@ -609,12 +586,7 @@ impl WorkflowView {
     fn reset(&mut self, ctx: &mut ViewContext<Self>) {
         let cloud_workflow = self.get_cloud_workflow(ctx);
         if let Some(workflow) = cloud_workflow {
-            self.load(
-                workflow,
-                &OpenWarpDriveObjectSettings::default(),
-                self.workflow_view_mode,
-                ctx,
-            );
+            self.load(workflow, self.workflow_view_mode, ctx);
         }
     }
 
@@ -645,7 +617,7 @@ impl WorkflowView {
                     log::warn!("Tried to load workflow without server id {workflow_id:?}");
                 }
             } else if let Some(workflow) = workflow {
-                me.load(workflow, &settings, mode, ctx);
+                me.load(workflow, mode, ctx);
             } else {
                 ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
                     toast_stack.add_ephemeral_toast_by_type(
@@ -677,13 +649,12 @@ impl WorkflowView {
                     ctx,
                 )
             });
-        let settings = settings.clone();
         ctx.spawn(fetch_cloud_object_rx, move |me, _, ctx| {
             if let Some(workflow) = CloudModel::as_ref(ctx)
                 .get_workflow(&SyncId::ServerId(workflow_id))
                 .cloned()
             {
-                me.load(workflow, &settings, mode, ctx);
+                me.load(workflow, mode, ctx);
             } else {
                 ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
                     toast_stack.add_ephemeral_toast_by_type(
@@ -700,7 +671,6 @@ impl WorkflowView {
     pub fn load(
         &mut self,
         workflow: CloudWorkflow,
-        settings: &OpenWarpDriveObjectSettings,
         mode: WorkflowViewMode,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -829,25 +799,6 @@ impl WorkflowView {
         self.update_breadcrumb(ctx);
         self.update_editors_interactivity(ctx);
         self.refresh_pane_overflow_menu(ctx);
-
-        if let Some(focused_folder_id) = settings.focused_folder_id.map(SyncId::ServerId) {
-            self.view_in_warp_drive(
-                WarpDriveItemId::Object(CloudObjectTypeAndId::Folder(focused_folder_id)),
-                ctx,
-            );
-        }
-
-        if let Some(invitee_email) = settings.invitee_email.clone() {
-            let object_id_to_share = settings
-                .focused_folder_id
-                .map(|id| CloudObjectTypeAndId::Folder(SyncId::ServerId(id)))
-                .unwrap_or(CloudObjectTypeAndId::Workflow(workflow.id));
-            ctx.emit(WorkflowViewEvent::OpenDriveObjectShareDialog {
-                cloud_object_type_and_id: object_id_to_share,
-                invitee_email: Some(invitee_email),
-                source: SharingDialogSource::InviteeRequest,
-            });
-        }
 
         if matches!(mode, WorkflowViewMode::View) {
             self.focus_first_argument_value(ctx);
@@ -1906,11 +1857,7 @@ impl WorkflowView {
         });
     }
 
-    fn render_edit_toggle_button(
-        &self,
-        editability: ContentEditability,
-        appearance: &Appearance,
-    ) -> Box<dyn Element> {
+    fn render_edit_toggle_button(&self, appearance: &Appearance) -> Box<dyn Element> {
         let base_text_styles = UiComponentStyles {
             ..Default::default()
         };
@@ -1949,16 +1896,7 @@ impl WorkflowView {
             _ => None,
         };
 
-        if let Some((mode_text, mut edit_button)) = text_and_button {
-            if matches!(editability, ContentEditability::RequiresLogin) {
-                let ui_builder = appearance.ui_builder().clone();
-                edit_button = edit_button.with_tooltip(move || {
-                    ui_builder
-                        .tool_tip("Sign in to edit".to_string())
-                        .build()
-                        .finish()
-                });
-            }
+        if let Some((mode_text, edit_button)) = text_and_button {
             let edit_button = edit_button.build();
 
             Flex::row()
@@ -2588,10 +2526,6 @@ impl WorkflowView {
         })
     }
 
-    fn view_in_warp_drive(&mut self, id: WarpDriveItemId, ctx: &mut ViewContext<Self>) {
-        ctx.emit(WorkflowViewEvent::ViewInWarpDrive(id));
-    }
-
     fn issue_request(&mut self, ctx: &mut ViewContext<Self>) {
         let ai_client = self.ai_client.clone();
         let command = self.content_editor.as_ref(ctx).buffer_text(ctx);
@@ -2629,46 +2563,13 @@ impl WorkflowView {
                             environment_variables: None,
                         };
 
-                        send_telemetry_from_ctx!(
-                            TelemetryEvent::AutoGenerateMetadataSuccess,
-                            ctx
-                        );
+                        send_telemetry_from_ctx!(TelemetryEvent::AutoGenerateMetadataSuccess, ctx);
 
                         pane.populate_missing_field_with_suggestion(workflow, ctx);
                         ctx.notify();
                     }
                     Err(err) => {
-                        let message = err.user_facing_message();
-                        if let GeneratedCommandMetadataError::RateLimited = err {
-                            let current_user_id = pane.auth_state.user_id().unwrap_or_default();
-                            if let Some(team) = UserWorkspaces::as_ref(ctx).team_for_view(ctx) {
-                                let current_user_email =
-                                    pane.auth_state.user_email().unwrap_or_default();
-                                let has_admin_permissions = team.has_admin_permissions(&current_user_email);
-                                if team.billing_metadata.can_upgrade_to_higher_tier_plan() {
-                                    if has_admin_permissions {
-                                        pane.display_upgrade_error(Some(team.uid), current_user_id, ctx);
-                                    } else {
-                                        pane.display_error_toast(
-                                            "Looks like you're out of AI credits. Contact a team admin to upgrade for more credits.".to_string(),
-                                            ctx,
-                                        );
-                                    }
-                                } else {
-                                    pane.display_error_toast(
-                                        message.clone(),
-                                        ctx,
-                                    );
-                                }
-                            } else {
-                                pane.display_upgrade_error(None, current_user_id, ctx);
-                            }
-                        } else {
-                            pane.display_error_toast(
-                                message.clone(),
-                                ctx,
-                            );
-                        }
+                        pane.display_error_toast(err.user_facing_message(), ctx);
 
                         send_telemetry_from_ctx!(
                             TelemetryEvent::AutoGenerateMetadataError {
@@ -2685,41 +2586,12 @@ impl WorkflowView {
                 AIRequestUsageModel::handle(ctx).update(ctx, |request_usage_model, ctx| {
                     request_usage_model.refresh_request_usage_async(ctx);
                 });
-            }
+            },
         );
 
         self.ai_metadata_assist_state = AiAssistState::RequestInFlight;
         self.disable_editors(ctx);
         ctx.notify();
-    }
-
-    fn display_upgrade_error(
-        &mut self,
-        team_uid: Option<ServerId>,
-        user_id: UserUid,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let upgrade_link = team_uid
-            .map(UserWorkspaces::upgrade_link_for_team)
-            .unwrap_or_else(|| UserWorkspaces::upgrade_link(user_id));
-
-        let window_id = ctx.window_id();
-        let toast_link = if self.auth_state.is_anonymous_or_logged_out() {
-            ToastLink::new("Upgrade for more credits.".into())
-                .with_onclick_action(WorkspaceAction::AttemptLoginGatedAIUpgrade)
-        } else {
-            ToastLink::new("Upgrade for more credits.".into()).with_href(upgrade_link)
-        };
-
-        crate::workspace::ToastStack::handle(ctx).update(ctx, |stack, ctx| {
-            stack.add_ephemeral_toast(
-                DismissibleToast::error("Looks like you're out of AI credits.".into())
-                    .with_link(toast_link),
-                window_id,
-                ctx,
-            );
-            ctx.notify();
-        });
     }
 
     // Populate only the missing field in the workflow editor with the generated suggestion from AI.
@@ -2943,18 +2815,10 @@ impl View for WorkflowView {
         row.add_child(
             Shrinkable::new(
                 2.,
-                Container::new(render_breadcrumbs(
-                    self.breadcrumbs.clone(),
-                    appearance,
-                    |ctx, _, breadcrumb| {
-                        ctx.dispatch_typed_action(WorkflowAction::ViewInWarpDrive(
-                            breadcrumb.kind.into_item_id(),
-                        ));
-                    },
-                ))
-                .with_horizontal_margin(CORE_HORIZONATAL_MARGIN)
-                .with_vertical_margin(vertical_margin / 2.)
-                .finish(),
+                Container::new(render_breadcrumbs(self.breadcrumbs.clone(), appearance))
+                    .with_horizontal_margin(CORE_HORIZONATAL_MARGIN)
+                    .with_vertical_margin(vertical_margin / 2.)
+                    .finish(),
             )
             .finish(),
         );
@@ -2978,7 +2842,7 @@ impl View for WorkflowView {
             row.add_child(
                 Shrinkable::new(
                     1.,
-                    Container::new(self.render_edit_toggle_button(editability, appearance))
+                    Container::new(self.render_edit_toggle_button(appearance))
                         .with_margin_right(CORE_HORIZONATAL_MARGIN)
                         .finish(),
                 )
@@ -3111,7 +2975,6 @@ impl TypedActionView for WorkflowView {
 
     fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
         match action {
-            WorkflowAction::ViewInWarpDrive(id) => self.view_in_warp_drive(*id, ctx),
             WorkflowAction::AddArgument => self.add_argument(ctx),
             WorkflowAction::ToggleViewMode => self.toggle_view_mode(ctx),
             WorkflowAction::CloseUnsavedDialog => self.hide_unsaved_changes_dialog(ctx),

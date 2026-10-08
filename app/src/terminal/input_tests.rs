@@ -108,13 +108,12 @@ use crate::test_util::assert_eventually;
 use crate::test_util::settings::{enable_ai_for_tests, initialize_settings_for_tests};
 use crate::themes::theme::AnsiColorIdentifier;
 use crate::warp_managed_paths_watcher::WarpManagedPathsWatcher;
-use crate::workspace::{ActiveSession, OneTimeModalModel, ToastStack, WorkspaceRegistry};
+use crate::workspace::{ActiveSession, ToastStack, WorkspaceRegistry};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_workspaces::{TeamContextForOperation, UserWorkspaces};
 use crate::{
-    AgentNotificationsModel, GlobalResourceHandles, GlobalResourceHandlesProvider,
-    ReferralThemeStatus, experiments,
+    AgentNotificationsModel, GlobalResourceHandles, GlobalResourceHandlesProvider, experiments,
 };
 
 fn pending_ctrl_r_handoff() -> PendingShellWidgetHandoff {
@@ -358,15 +357,11 @@ pub fn initialize_app(app: &mut App) {
     app.add_singleton_model(SkillManager::new);
 
     // Add GlobalResourceHandlesProvider for persistence
-    let tips_handle = app.add_model(|_| TipsCompleted::default());
-    let referral_theme_status = app.add_model(ReferralThemeStatus::new);
     let user_default_shell_unsupported_banner_model_handle =
         app.add_model(|_| UserDefaultShellUnsupportedBannerState::default_value());
     app.add_singleton_model(move |_ctx| {
         GlobalResourceHandlesProvider::new(GlobalResourceHandles {
             model_event_sender: None, // No persistence in tests
-            tips_completed: tips_handle,
-            referral_theme_status,
             user_default_shell_unsupported_banner_model_handle,
             settings_file_error: None,
         })
@@ -380,7 +375,6 @@ pub fn initialize_app(app: &mut App) {
     app.update(experiments::init);
     AltScreenReporting::register(app);
     app.add_singleton_model(|_| RestoredAgentConversations::new_seeded(vec![]));
-    app.add_singleton_model(OneTimeModalModel::new);
     app.add_singleton_model(|_| WorkspaceRegistry::new());
     app.add_singleton_model(|_| ToastStack);
     app.add_singleton_model(|_| PricingInfoModel::new());
@@ -391,7 +385,6 @@ pub fn initialize_app(app: &mut App) {
     });
     app.add_singleton_model(AgentConversationsModel::new);
     app.add_singleton_model(PersistedWorkspace::new_for_test);
-    app.add_singleton_model(|ctx| crate::ai::agent_tips::AITipModel::new_for_agent_tips(ctx));
     // `LocalShellState` captures the user's interactive login-shell PATH (used
     // for MCP/sbx executable resolution). Tests don't exercise that capture, so
     // register the singleton in its `NotLoaded` state to satisfy callers that
@@ -462,8 +455,6 @@ pub async fn add_window_with_bootstrapped_terminal_and_window_id(
     history_file_commands: Option<Vec<String>>,
     session_info: Option<SessionInfo>,
 ) -> (WindowId, ViewHandle<TerminalView>) {
-    let tips_model = app.add_model(|_| TipsCompleted::default());
-
     let shell_starter_source =
         ShellStarter::init(crate::terminal::available_shells::AvailableShell::default())
             .expect("Could not create a shell starter source or wsl name")
@@ -479,7 +470,7 @@ pub async fn add_window_with_bootstrapped_terminal_and_window_id(
     let history_file_commands = history_file_commands.unwrap_or_default();
 
     let (window_id, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-        TerminalView::new_for_test(tips_model, None, ctx)
+        TerminalView::new_for_test(None, ctx)
     });
 
     // TODO(vorporeal): There's a lot of fuckiness here.  `TerminalView::new_for_test`
@@ -1309,9 +1300,8 @@ fn test_history_up_for_shared_session_executor() {
         // Initialize as shared session executor
         // such that the history model isn't also initialized during bootstrapping
         // TODO(maggs): Improve testing utils for session sharing
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         terminal.update(&mut app, |view, _| {
             let mut model = view.model.lock();
@@ -1386,9 +1376,8 @@ fn maybe_route_ai_query_to_remote_target_proceeds_for_local_pane() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         terminal.update(&mut app, |view, _| {
             let mut model = view.model.lock();
@@ -1421,9 +1410,8 @@ fn maybe_route_ai_query_to_remote_target_proceeds_for_empty_buffer() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         terminal.update(&mut app, |view, _| {
             let mut model = view.model.lock();
@@ -1461,9 +1449,8 @@ fn maybe_route_ai_query_to_remote_target_blocks_read_only_viewer() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         terminal.update(&mut app, |view, _| {
             let mut model = view.model.lock();
@@ -1511,9 +1498,8 @@ fn unresolved_ambient_task_blocks_submission() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         let input = terminal.read(&app, |view, _| view.input().clone());
         let task_id: crate::ai::ambient_agents::AmbientAgentTaskId =
@@ -1536,9 +1522,8 @@ fn maybe_route_ai_query_to_remote_target_forwards_executor_viewer_prompt() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         terminal.update(&mut app, |view, _| {
             let mut model = view.model.lock();
@@ -1589,9 +1574,8 @@ fn attach_ambient_view_model_builds_composer_selectors_for_fresh_cloud_pane_in_v
         let _cloud_mode_input_v2 = FeatureFlag::CloudModeInputV2.override_enabled(true);
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         let terminal_view_id = terminal.read(&app, |view, _| view.id());
 
@@ -1626,9 +1610,8 @@ fn attach_ambient_view_model_skips_composer_selectors_for_actual_shared_session_
         let _cloud_mode_input_v2 = FeatureFlag::CloudModeInputV2.override_enabled(true);
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         let terminal_view_id = terminal.read(&app, |view, _| view.id());
 
@@ -1662,9 +1645,8 @@ fn teamless_cloud_mode_host_selector_ignores_team_worker_cache() {
         let _cloud_mode_input_v2 = FeatureFlag::CloudModeInputV2.override_enabled(true);
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         let terminal_view_id = terminal.read(&app, |view, _| view.id());
 
@@ -1719,9 +1701,8 @@ fn send_now_event_submits_through_active_pane_and_preserves_draft() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         terminal.update(&mut app, |view, _| {
             let mut model = view.model.lock();
@@ -9148,7 +9129,7 @@ fn test_remove_ignored_suggestion_on_ai_query_execution() {
             });
             input.clear_buffer_and_reset_undo_stack(ctx);
             input.user_insert(test_query, ctx);
-            input.submit_ai_query_local(None, ctx);
+            input.submit_ai_query_local(ctx);
         });
 
         // Verify the query is no longer ignored
@@ -10047,11 +10028,9 @@ fn unfreeze_agent_input_does_not_clear_buffer() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
-
         // Test for ActiveSharer
         let (_, sharer_terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         sharer_terminal.update(&mut app, |view, _| {
             let mut model = view.model.lock();
@@ -10081,9 +10060,8 @@ fn unfreeze_agent_input_does_not_clear_buffer() {
         );
 
         // Same for ActiveViewer
-        let tips_model2 = app.add_model(|_| TipsCompleted::default());
         let (_, viewer_terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model2, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         viewer_terminal.update(&mut app, |view, _| {
             let mut model = view.model.lock();
@@ -10153,9 +10131,8 @@ fn restore_cloud_followup_input_after_upload_failure_restores_prompt() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         terminal.update(&mut app, |view, _| {
             view.model.lock().block_list_mut().set_bootstrapped();
@@ -10233,9 +10210,8 @@ fn upload_files_then_submit_cloud_followup_restores_input_on_upload_error() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let tips_model = app.add_model(|_| TipsCompleted::default());
         let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
-            TerminalView::new_for_test(tips_model, None, ctx)
+            TerminalView::new_for_test(None, ctx)
         });
         terminal.update(&mut app, |view, _| {
             view.model.lock().block_list_mut().set_bootstrapped();

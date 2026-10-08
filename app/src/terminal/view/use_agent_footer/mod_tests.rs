@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use warp_core::settings::Setting as _;
 use warpui::{App, AppContext, SingletonEntity, ViewContext};
 
 use super::super::{AIBlockMetadata, RichContentMetadata, RichContentType};
@@ -16,7 +15,6 @@ use crate::ai::blocklist::model::{
 use crate::ai::blocklist::{AIBlock, ClientIdentifiers};
 use crate::ai::llms::LLMId;
 use crate::features::FeatureFlag;
-use crate::settings::AISettings;
 use crate::terminal::CLIAgent;
 use crate::terminal::cli_agent_sessions::{
     CLIAgentInputState, CLIAgentSession, CLIAgentSessionContext, CLIAgentSessionStatus,
@@ -191,16 +189,11 @@ fn insert_pending_ai_block(
 }
 
 #[test]
-fn use_agent_footer_renders_for_manual_handoff_even_when_user_command_footer_setting_disabled() {
+fn use_agent_footer_renders_for_manual_handoff() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
         enable_ai_for_tests(&mut app);
         FeatureFlag::AgentView.set_enabled(true);
-        AISettings::handle(&app).update(&mut app, |settings, ctx| {
-            let _ = settings
-                .should_render_use_agent_footer_for_user_commands
-                .set_value(false, ctx);
-        });
 
         let terminal = add_window_with_terminal(&mut app, None);
 
