@@ -450,22 +450,11 @@ impl AuthManager {
     }
 
     /// Generates a unique state parameter for the authentication flow.
+    #[cfg(test)]
     fn generate_auth_state(&mut self) -> String {
         let state = Uuid::new_v4().to_string();
         self.pending_auth_state = Some(state.clone());
         state
-    }
-
-    /// The upgrade confirmation page will kick the user back to the app with a refresh token
-    /// if we send a `state` query param to /upgrade
-    pub fn upgrade_url(&mut self) -> String {
-        let state = self.generate_auth_state();
-        format!(
-            "{}/upgrade?scheme={}&state={}",
-            ChannelState::server_root_url(),
-            ChannelState::url_scheme(),
-            state,
-        )
     }
 
     /// Validates and consumes the pending auth state token. Returns `true` if the

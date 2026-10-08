@@ -13,7 +13,6 @@ pub(crate) mod inline_action_header;
 pub(crate) mod inline_action_icons;
 pub(crate) mod item_highlight;
 pub(crate) mod keystroke;
-pub mod json_tree;
 pub(crate) mod menu_button;
 pub(crate) mod red_notification_dot;
 pub(crate) mod render_file_search_row;

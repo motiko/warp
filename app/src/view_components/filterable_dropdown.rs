@@ -164,15 +164,6 @@ where
         ctx.notify();
     }
 
-    /// Sets placeholder text shown (greyed) in the closed top bar when no item
-    /// is selected, and opts the dropdown into allowing an empty selection so
-    /// the placeholder is preserved rather than being replaced by the first
-    /// item after filtering.
-    pub fn set_placeholder(&mut self, placeholder: impl Into<String>, ctx: &mut ViewContext<Self>) {
-        self.placeholder = Some(placeholder.into());
-        ctx.notify();
-    }
-
     pub fn set_footer<F>(&mut self, builder: F, ctx: &mut ViewContext<Self>)
     where
         F: Fn(&AppContext) -> Box<dyn Element> + 'static,
@@ -183,13 +174,6 @@ where
         // standard `on_click` (LeftMouseUp) behaviour with no timing issues.
         self.dropdown.update(ctx, |menu, _| {
             menu.set_pinned_footer_builder(builder);
-        });
-    }
-
-    pub fn clear_footer(&mut self, ctx: &mut ViewContext<Self>) {
-        self.has_pinned_footer = false;
-        self.dropdown.update(ctx, |menu, _| {
-            menu.clear_pinned_footer_builder();
         });
     }
 

@@ -137,10 +137,6 @@ impl UserWorkspaces {
         TeamContext { team_uid }
     }
 
-    pub(crate) fn team_context_for_view<T: Entity>(&self, ctx: &ViewContext<T>) -> TeamContext<'_> {
-        self.team_context_for_window_id(ctx.window_id())
-    }
-
     /// Captures `view` as a reusable source of [`TeamContext`], for consumers that cannot name
     /// a view at the boundaries where they need one.
     pub fn team_context_resolver<T: Entity>(view: WeakViewHandle<T>) -> TeamContextResolver {
@@ -167,14 +163,6 @@ impl UserWorkspaces {
     }
 
     pub fn team_context_for_window(&self, window_id: WindowId) -> TeamContext<'_> {
-        self.team_context_for_window_id(window_id)
-    }
-
-    /// [`Self::team_context_for_view`] for tests, which build scopes for bare windows rather
-    /// than standing up a view for each one. Production exchanges a view or a [`ViewContext`]
-    /// for a scope; this is `#[cfg(test)]` precisely so that contract holds.
-    #[cfg(test)]
-    pub(crate) fn team_context_for_window_for_test(&self, window_id: WindowId) -> TeamContext<'_> {
         self.team_context_for_window_id(window_id)
     }
 

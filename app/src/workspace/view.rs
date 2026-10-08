@@ -450,13 +450,10 @@ pub(crate) const TOGGLE_RIGHT_PANEL_BINDING_NAME: &str = "workspace:toggle_right
 pub(crate) const TOGGLE_VERTICAL_TABS_PANEL_BINDING_NAME: &str =
     "workspace:toggle_vertical_tabs_panel";
 pub(crate) const OPEN_GLOBAL_SEARCH_BINDING_NAME: &str = "workspace:open_global_search";
-pub(crate) const TOGGLE_CONVERSATION_LIST_VIEW_BINDING_NAME: &str =
-    "workspace:toggle_conversation_list_view";
 pub(crate) const NEW_TAB_BINDING_NAME: &str = "workspace:new_tab";
 pub(crate) const NEW_TERMINAL_TAB_BINDING_NAME: &str = "workspace:new_terminal_tab";
 pub(crate) const NEW_FILE_BINDING_NAME: &str = "workspace:new_file";
 pub(crate) const NEW_WINDOW_BINDING_NAME: &str = "workspace:new_window";
-pub(crate) const NEW_AGENT_TAB_BINDING_NAME: &str = "workspace:new_agent_tab";
 pub(crate) const TOGGLE_TAB_CONFIGS_MENU_BINDING_NAME: &str = "workspace:toggle_tab_configs_menu";
 
 // Editable left panel toolbelt keybindings.
@@ -482,7 +479,6 @@ pub const NEW_TAB_BUTTON_POSITION_ID: &str = "new_tab_button";
 pub const NEW_SESSION_MENU_BUTTON_POSITION_ID: &str = "new_session_menu_button";
 
 // The max length of the title of a fork toast (after which we truncate it).
-const MAX_FORK_TOAST_TITLE_LENGTH: usize = 100;
 
 // The max length of the window title (matching conversation title truncation).
 const MAX_WINDOW_TITLE_LENGTH: usize = 80;
@@ -2059,7 +2055,7 @@ impl Workspace {
 
         let close_session_confirmation_dialog = Self::build_close_session_confirmation_dialog(ctx);
         let command_search_view =
-            ctx.add_typed_action_view(|ctx| CommandSearchView::new(ctx));
+            ctx.add_typed_action_view(CommandSearchView::new);
         ctx.subscribe_to_view(&command_search_view, |me, _, event, ctx| {
             me.handle_command_search_event(event, ctx);
         });
@@ -2293,18 +2289,6 @@ impl Workspace {
         if has_tab {
             ctx.notify();
         }
-    }
-
-    fn workspace_contains_terminal_view(
-        &self,
-        terminal_view_id: EntityId,
-        ctx: &AppContext,
-    ) -> bool {
-        self.tabs.iter().any(|tab| {
-            tab.pane_group
-                .as_ref(ctx)
-                .contains_terminal_view(terminal_view_id, ctx)
-        })
     }
 
     /// Handle session settings changes.

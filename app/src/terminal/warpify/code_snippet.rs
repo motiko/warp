@@ -1,4 +1,3 @@
-use warp_core::ui::theme::Fill;
 use warpui::elements::{
     Border, Container, CornerRadius, CrossAxisAlignment, Empty, Flex, MainAxisAlignment,
     MainAxisSize, MouseStateHandle, ParentElement, Radius, Text,
@@ -132,7 +131,7 @@ pub fn render_runnable_code_snippet(
     );
 
     Container::new(content.finish())
-        .with_border(Border::all(1.).with_border_fill(Fill::from(theme.outline())))
+        .with_border(Border::all(1.).with_border_fill(theme.outline()))
         .with_corner_radius(CornerRadius::with_all(Radius::Pixels(
             CODE_BLOCK_CORNER_RADIUS,
         )))

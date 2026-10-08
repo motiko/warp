@@ -239,22 +239,6 @@ impl UserWorkspaces {
         )
     }
 
-    pub(crate) fn upgrade_link_for_scope<S: TeamScope + ?Sized>(
-        &self,
-        scope: &S,
-        app: &AppContext,
-    ) -> String {
-        match scope.team_uid() {
-            Some(team_uid) => Self::upgrade_link_for_team(team_uid),
-            None => Self::upgrade_link(
-                AuthStateProvider::as_ref(app)
-                    .get()
-                    .user_id()
-                    .unwrap_or_default(),
-            ),
-        }
-    }
-
     pub fn warp_agent_cli_upgrade_link(user_id: Option<UserUid>) -> String {
         let upgrade_link = user_id.map_or_else(
             || {

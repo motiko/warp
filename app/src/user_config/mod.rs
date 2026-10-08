@@ -201,6 +201,7 @@ pub fn default_tab_configs_dir() -> PathBuf {
 /// Returns whether the path points to a tab config TOML file under one of Warp's
 /// tab config directories.
 #[cfg(feature = "local_fs")]
+#[cfg(test)]
 pub fn is_tab_config_toml(path: &Path) -> bool {
     let is_toml = path
         .extension()

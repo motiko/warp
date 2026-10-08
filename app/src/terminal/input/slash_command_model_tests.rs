@@ -22,7 +22,7 @@ fn test_parse_input_requires_slash_at_start() {
         let slash_command_data_source =
             input.read(&app, |input, _| input.slash_command_data_source.clone());
 
-        slash_command_data_source.read(&app, |data_source, ctx| {
+        slash_command_data_source.read(&app, |data_source, _ctx| {
             let command_name = data_source
                 .active_commands()
                 .next()

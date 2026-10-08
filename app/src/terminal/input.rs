@@ -33,7 +33,7 @@ use ordered_float::Float;
 use parking_lot::FairMutex;
 #[cfg(feature = "local_fs")]
 use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use session_sharing_protocol::common::ParticipantId;
 use settings::{Setting as _, ToggleableSetting};
 use string_offset::{ByteOffset, CharOffset};
@@ -59,8 +59,7 @@ use warpui::r#async::SpawnedFutureHandle;
 use warpui::clipboard::ClipboardContent;
 use warpui::color::ColorU;
 use warpui::elements::{
-    AnchorPair, ChildAnchor, Clipped, ConstrainedBox, Container, DispatchEventResult, DropTargetData, Element, EventHandler, MouseStateHandle, OffsetType, ParentAnchor,
-    ParentElement, ResizableStateHandle,
+    AnchorPair, ChildAnchor, Clipped, ConstrainedBox, Container, DispatchEventResult, DropTargetData, Element, EventHandler, MouseStateHandle, OffsetType, ParentAnchor, ResizableStateHandle,
     SavePosition, SelectionHandle, YAxisAnchor, resizable_state_handle,
 };
 pub use warpui::elements::{ParentElement as _, Stack};
@@ -69,7 +68,6 @@ use warpui::keymap::{BindingDescription, EditableBinding, FixedBinding, Keystrok
 use warpui::platform::OperatingSystem;
 use warpui::presenter::ChildView;
 use warpui::text_layout::TextStyle;
-use warpui::ui_components::components::UiComponent;
 use warpui::units::IntoPixels;
 use warpui::{
     AppContext, Entity, EntityId, FocusContext, ModelAsRef, ModelHandle, SingletonEntity,
@@ -266,7 +264,6 @@ const DYNAMIC_ENUM_HORIZONTAL_TEXT_PADDING: f32 = 5.;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "macos")] {
-        const CMD_ENTER_KEYBINDING: &str = "cmd-enter";
     } else {
         // On linux and windows, the CmdEnter EditorAction is bound to ctrl-shift-enter.
         const CMD_ENTER_KEYBINDING: &str =  "ctrl-shift-enter";
@@ -1924,18 +1921,6 @@ impl Input {
         input
     }
 
-    /// Shows a transient error toast for a follow-up submission that was blocked or redirected.
-    fn show_ephemeral_error_toast(&self, message: &str, ctx: &mut ViewContext<Self>) {
-        let window_id = ctx.window_id();
-        ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-            toast_stack.add_ephemeral_toast(
-                DismissibleToast::error(message.to_string()),
-                window_id,
-                ctx,
-            );
-        });
-    }
-
     fn open_slash_commands_menu(&mut self, ctx: &mut ViewContext<Self>) {
         if self
             .model
@@ -2112,11 +2097,10 @@ impl Input {
                     CommandExecutionSource::User,
                     true,
                     ctx,
-                ) {
-                    if !current_input.is_empty() {
+                )
+                    && !current_input.is_empty() {
                         self.input_contents_before_prompt_chip_command = Some(current_input);
                     }
-                }
             }
         }
     }
@@ -3236,7 +3220,7 @@ impl Input {
         // Only highlight an argument and show enum suggestions if history suggestions are not active
         if !matches!(
             self.suggestions_mode_model.as_ref(ctx).mode(),
-            InputSuggestionsMode::HistoryUp { .. } | InputSuggestionsMode::InlineHistoryMenu { .. },
+            InputSuggestionsMode::HistoryUp { .. } | InputSuggestionsMode::InlineHistoryMenu,
         ) {
             self.highlight_selected_workflow_argument(
                 self.get_text_style_ranges_for_workflow(ctx),
@@ -3651,7 +3635,7 @@ impl Input {
                         // Slash commands selection is handled separately
                         // This shouldn't be reached since slash commands doesn't use InputSuggestions
                     }
-                    InputSuggestionsMode::InlineHistoryMenu { .. } => {
+                    InputSuggestionsMode::InlineHistoryMenu => {
                         // Inline history menu selection is handled separately
                         // This shouldn't be reached since inline history menu doesn't use InputSuggestions
                     }
@@ -3780,7 +3764,7 @@ impl Input {
                 // For now, just close the menu
                 false
             }
-            InputSuggestionsMode::InlineHistoryMenu { .. } => {
+            InputSuggestionsMode::InlineHistoryMenu => {
                 // Inline history menu selection is handled separately
                 false
             }
@@ -3945,7 +3929,7 @@ impl Input {
                 });
                 true
             }
-            InputSuggestionsMode::InlineHistoryMenu { .. } => {
+            InputSuggestionsMode::InlineHistoryMenu => {
                 self.inline_history_menu_view.update(ctx, |view, ctx| {
                     view.select_up(ctx);
                 });
@@ -4122,7 +4106,7 @@ impl Input {
             | InputSuggestionsMode::CompletionSuggestions { .. }
             | InputSuggestionsMode::StaticWorkflowEnumSuggestions { .. }
             | InputSuggestionsMode::DynamicWorkflowEnumSuggestions { .. }
-            | InputSuggestionsMode::InlineHistoryMenu { .. }
+            | InputSuggestionsMode::InlineHistoryMenu
             | InputSuggestionsMode::Closed => false,
         };
 
@@ -4769,7 +4753,7 @@ impl Input {
                     InputSuggestionsMode::SlashCommands => {
                         // empty for now
                     }
-                    InputSuggestionsMode::InlineHistoryMenu { .. } => {
+                    InputSuggestionsMode::InlineHistoryMenu => {
                         let mismatched = self
                             .inline_history_menu_view
                             .as_ref(ctx)
@@ -4853,7 +4837,7 @@ impl Input {
                                 self.close_input_suggestions(true, ctx);
                             }
                         }
-                        InputSuggestionsMode::InlineHistoryMenu { .. } => {
+                        InputSuggestionsMode::InlineHistoryMenu => {
                             // Inline history menu handles its own selection state
                         }
                     }
@@ -6503,13 +6487,10 @@ impl Input {
         {
             self.inline_history_menu_view
                 .update(ctx, |view, ctx| view.accept_selected_item(ctx));
-            return;
         } else if self.suggestions_mode_model.as_ref(ctx).is_slash_commands() {
             self.inline_slash_commands_view
                 .update(ctx, |view, ctx| view.accept_selected_item(ctx));
-            return;
         } else if self.maybe_handle_enter_for_slash_command(ctx) {
-            return;
         } else if matches!(
             self.suggestions_mode_model.as_ref(ctx).mode(),
             InputSuggestionsMode::CompletionSuggestions { .. }
@@ -7294,14 +7275,6 @@ impl Input {
         self.is_voltron_open
     }
 
-    /// Returns whether the input box is currently pinned to the top of the screen.
-    fn is_input_at_top(&self, model: &TerminalModel, ctx: &AppContext) -> bool {
-        match InputModeSettings::as_ref(ctx).input_mode.value() {
-            InputMode::PinnedToBottom => false,
-            InputMode::PinnedToTop => true,
-            InputMode::Waterfall => model.is_block_list_empty(),
-        }
-    }
 }
 
 impl Entity for Input {

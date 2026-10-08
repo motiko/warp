@@ -8,10 +8,8 @@ pub enum DefaultSlashCommandBinding {
     PerPlatform(PerPlatformKeystroke),
 }
 
-pub fn default_binding_for_command(name: &'static str) -> DefaultSlashCommandBinding {
-    match name {
-        _ => DefaultSlashCommandBinding::None,
-    }
+pub fn default_binding_for_command(_name: &'static str) -> DefaultSlashCommandBinding {
+    DefaultSlashCommandBinding::None
 }
 
 pub fn binding_description(command: &StaticCommand) -> BindingDescription {

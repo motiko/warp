@@ -37,30 +37,3 @@ pub const LISTENER_RETRY_STRATEGY: RetryOption = RetryOption::linear(
     5,                       /* max retry count */
 )
 .with_jitter(0.6 /* max_jitter_multiplier */);
-
-/// Base backoff between retry attempts; each subsequent attempt multiplies by [`BACKOFF_FACTOR`].
-const INITIAL_BACKOFF: Duration = Duration::from_millis(500);
-
-/// Exponential growth factor for retry backoff.
-const BACKOFF_FACTOR: f32 = 2.0;
-
-/// Maximum jitter as a fraction of the backoff interval.
-const BACKOFF_JITTER: f32 = 0.3;
-
-/// Ceiling on the backoff exponent, so a caller with a larger budget than
-/// [`MAX_ATTEMPTS`] can't grow the interval without bound (or overflow the
-/// multiplication). At [`BACKOFF_FACTOR`] this caps a single wait at ~32s.
-const BACKOFF_MAX_EXPONENT: i32 = 6;
-
-/// Jittered exponential backoff to wait after `attempts_made` failed attempts, before
-/// making the next one.
-///
-/// `attempts_made` is 1-based: the wait after the first failure is [`INITIAL_BACKOFF`],
-/// and each subsequent wait multiplies by [`BACKOFF_FACTOR`].
-pub(crate) fn backoff_after_attempts(attempts_made: usize) -> Duration {
-    let exponent = i32::try_from(attempts_made.saturating_sub(1))
-        .unwrap_or(i32::MAX)
-        .min(BACKOFF_MAX_EXPONENT);
-    let delay = INITIAL_BACKOFF.mul_f32(BACKOFF_FACTOR.powi(exponent));
-    duration_with_jitter(delay, BACKOFF_JITTER)
-}

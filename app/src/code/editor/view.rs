@@ -515,15 +515,6 @@ impl CodeEditorView {
         ctx.notify();
     }
 
-    pub fn changed_lines(&self, app: &AppContext) -> Vec<Range<usize>> {
-        self.model
-            .as_ref(app)
-            .diff()
-            .as_ref(app)
-            .modified_lines()
-            .collect()
-    }
-
     pub fn close_find_bar(&mut self, should_focus_editor: bool, ctx: &mut ViewContext<Self>) {
         if let Some(find_bar) = &self.find_bar {
             let should_update = find_bar.update(ctx, |find_bar, _ctx| {
@@ -731,12 +722,6 @@ impl CodeEditorView {
         self.display_options.show_nav_bar = show_nav_bar;
     }
 
-    pub fn set_nav_bar_behavior(&self, behavior: NavBarBehavior, ctx: &mut ViewContext<Self>) {
-        self.nav_bar.update(ctx, |nav_bar, _ctx| {
-            nav_bar.set_behavior(behavior);
-        });
-    }
-
     pub fn set_show_current_line_highlights(
         &self,
         show_current_line_highlights: bool,
@@ -747,16 +732,8 @@ impl CodeEditorView {
         })
     }
 
-    pub fn set_scroll_wheel_behavior(&mut self, behavior: ScrollWheelBehavior) {
-        self.display_options.scroll_wheel_behavior = behavior;
-    }
-
     pub fn set_vertical_scrollbar_appearance(&mut self, appearance: ScrollableAppearance) {
         self.display_options.vertical_scrollbar_appearance = appearance;
-    }
-
-    pub fn set_horizontal_scrollbar_appearance(&mut self, appearance: ScrollableAppearance) {
-        self.display_options.horizontal_scrollbar_appearance = appearance;
     }
 
     pub fn set_show_find_references_provider(
@@ -926,10 +903,6 @@ impl CodeEditorView {
 
     pub(crate) fn starting_line_number(&self) -> Option<usize> {
         self.display_options.starting_line_number
-    }
-
-    pub(crate) fn set_starting_line_number(&mut self, starting_line_number: Option<usize>) {
-        self.display_options.starting_line_number = starting_line_number;
     }
 
     fn handle_searcher_event(&mut self, _event: &SearchEvent, ctx: &mut ViewContext<Self>) {
@@ -1531,12 +1504,6 @@ impl CodeEditorView {
         });
     }
 
-    pub fn system_append_autoscroll_vertical_only(&self, text: &str, ctx: &mut ViewContext<Self>) {
-        self.model.update(ctx, |model, ctx| {
-            model.system_insert_autoscroll_vertical_only(text, ctx);
-        });
-    }
-
     pub fn truncate(&self, len: usize, ctx: &mut ViewContext<Self>) {
         self.model.update(ctx, |model, ctx| {
             model.truncate(len, ctx);
@@ -1600,31 +1567,10 @@ impl CodeEditorView {
         self.model.as_ref(app).interaction_state() == InteractionState::Editable
     }
 
-    pub fn navigate_next_diff_hunk(&self, ctx: &mut ViewContext<Self>) {
-        self.nav_bar.update(ctx, |nav_bar, ctx| {
-            nav_bar.navigate_down(ctx);
-        });
-    }
-
-    pub fn navigate_previous_diff_hunk(&self, ctx: &mut ViewContext<Self>) {
-        self.nav_bar.update(ctx, |nav_bar, ctx| {
-            nav_bar.navigate_up(ctx);
-        });
-    }
-
     fn navigate_current_diff_hunk(&self, ctx: &mut ViewContext<Self>) {
         self.nav_bar.update(ctx, |nav_bar, ctx| {
             nav_bar.autoscroll(ctx);
         });
-    }
-
-    pub fn set_vertical_expansion_behavior(
-        &mut self,
-        behavior: VerticalExpansionBehavior,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.display_options.vertical_expansion_behavior = behavior;
-        ctx.notify();
     }
 
     pub fn selected_text(&self, ctx: &AppContext) -> Option<String> {
@@ -1919,12 +1865,6 @@ impl CodeEditorView {
             .map(|d| d.to_string())
             .unwrap_or_default();
         result_parts.join(&delimiter)
-    }
-
-    pub fn diff_hunks_changed_lines(&self, app: &AppContext) -> (usize, usize) {
-        let model = self.model.as_ref(app);
-        let diff = model.diff().as_ref(app);
-        diff.diff_status().get_diff_lines()
     }
 
     /// If there's a single selection, returns its starting and ending line numbers.

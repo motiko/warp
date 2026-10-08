@@ -329,10 +329,6 @@ impl CommentViewCard {
         }
     }
 
-    pub(crate) fn toggle_collapsed(&mut self) {
-        self.is_collapsed = !self.is_collapsed;
-    }
-
     pub(crate) fn is_collapsed(&self) -> bool {
         self.is_collapsed
     }

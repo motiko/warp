@@ -18,51 +18,6 @@ use crate::terminal::input::{Input, InputAction, InputSuggestionsMode, MenuPosit
 use crate::terminal::view::{PADDING_LEFT, TerminalAction};
 use crate::ui_components::icons::Icon;
 
-/// Renders vim status bar
-/// Used by: agent.rs, terminal.rs, universal.rs, legacy.rs
-pub(super) fn render_vim_status(vim_state: &VimState, appearance: &Appearance) -> Container {
-    let theme = appearance.theme();
-    let ansi_colors = theme.terminal_colors().bright;
-    let icon = match vim_state.mode {
-        VimMode::Normal => Icon::VimNormalMode.to_warpui_icon(ansi_colors.green.into()),
-        VimMode::Insert => {
-            use crate::themes::theme::Blend;
-            Icon::VimInsertMode.to_warpui_icon(
-                theme
-                    .background()
-                    .blend(&theme.foreground().with_opacity(50)),
-            )
-        }
-        VimMode::Visual(_) => Icon::VimVisualMode.to_warpui_icon(ansi_colors.blue.into()),
-        VimMode::Replace => Icon::VimReplaceMode.to_warpui_icon(ansi_colors.red.into()),
-    };
-    Container::new(
-        Flex::row()
-            .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_children([
-                Container::new(
-                    Text::new_inline(
-                        vim_state.showcmd.to_owned(),
-                        appearance.monospace_font_family(),
-                        12.,
-                    )
-                    .with_color(appearance.theme().nonactive_ui_text_color().into())
-                    .finish(),
-                )
-                .with_margin_right(8.)
-                .with_margin_bottom(2.)
-                .finish(),
-                ConstrainedBox::new(icon.finish())
-                    .with_width(12.)
-                    .with_height(12.)
-                    .finish(),
-            ])
-            .finish(),
-    )
-    .with_margin_right(8.)
-    .with_margin_bottom(4.)
-}
-
 /// Wraps the given column, assumed to represent the full input content, with appropriate
 /// left padding to be consistent with the terminal content, as well as an event handler to
 /// focus the input view when clicked.

@@ -12,10 +12,8 @@ use warpui::{App, ModelHandle};
 
 use super::{HistoryEntry, HistoryEvent, PersistedCommand, ShellHost};
 use crate::terminal::History;
-use crate::terminal::model::bootstrap::BootstrapStage;
 use crate::terminal::model::session::command_executor::testing::TestCommandExecutor;
 use crate::terminal::model::session::{BootstrapSessionType, Session, SessionId, SessionInfo};
-use crate::terminal::model::test_utils::TestBlockBuilder;
 use crate::terminal::shell::ShellType;
 use crate::test_util::{Stub, VirtualFS};
 

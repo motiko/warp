@@ -221,7 +221,7 @@ fn test_async_find_cancellation() {
         assert!(has_active, "Config should still be set after cancellation");
 
         // Clear results should reset everything.
-        test_model.update(&mut app, |model, ctx| {
+        test_model.update(&mut app, |model, _ctx| {
             model
                 .async_find_controller
                 .as_mut()

@@ -186,12 +186,6 @@ impl ServerApi {
         )
     }
 
-    /// Returns ambient agent headers to attach to requests.
-    async fn ambient_agent_headers(&self) -> Result<Vec<(String, String)>> {
-        self.ambient_headers(AmbientHeaderPolicy::inherit_all())
-            .await
-    }
-
     pub fn send_graphql_request<'a, QF, O: warp_graphql::client::Operation<QF> + Send + 'a>(
         &'a self,
         operation: O,
@@ -207,64 +201,11 @@ impl ServerApi {
         )
     }
 
+    #[cfg(test)]
     fn team_uid_header_value(team_scope: RequestTeamScope) -> Option<String> {
         team_scope
             .team_uid()
             .map(|team_uid| team_uid.uid().to_string())
-    }
-
-    /// Sends a POST request to a public API endpoint and returns the raw response on success.
-    async fn post_public_api_response<B>(
-        &self,
-        path: &str,
-        body: &B,
-    ) -> Result<http_client::Response>
-    where
-        B: Serialize,
-    {
-        self.post_public_api_response_for_team(path, body, None)
-            .await
-    }
-
-    async fn post_public_api_response_for_team<B>(
-        &self,
-        path: &str,
-        body: &B,
-        team_scope: Option<RequestTeamScope>,
-    ) -> Result<http_client::Response>
-    where
-        B: Serialize,
-    {
-        let auth_token = self
-            .get_or_refresh_access_token()
-            .await
-            .context("Failed to get access token for API request")?;
-
-        let url = format!("{}/api/v1/{}", ChannelState::server_root_url(), path);
-
-        let mut request = self.base_client.http_client().post(&url).json(body);
-        if let Some(token) = auth_token.as_bearer_token() {
-            request = request.bearer_auth(token);
-        }
-
-        for (name, value) in self.ambient_agent_headers().await? {
-            request = request.header(name, value);
-        }
-        if let Some(team_uid) = team_scope.and_then(Self::team_uid_header_value) {
-            request = request.header(TEAM_UID_HEADER, team_uid);
-        }
-
-        let response = request
-            .send()
-            .await
-            .with_context(|| format!("Failed to send API request to {url}"))?;
-
-        if response.status().is_success() {
-            Ok(response)
-        } else {
-            self.observe_iap_challenge(&response);
-            Err(Self::error_from_response(response).await)
-        }
     }
 
     /// Converts a non-success public API response into the most specific client error
@@ -272,6 +213,7 @@ impl ServerApi {
     /// (via [`anyhow::Error::context`]) so callers retrying through
     /// [`is_transient_http_error`](super::retry_strategies::is_transient_http_error) fail
     /// fast on a deterministic 4xx instead of defaulting to a transient retry.
+    #[cfg(test)]
     async fn error_from_response(response: http_client::Response) -> anyhow::Error {
         let status = response.status();
         // Get the response text first since we may need to try multiple deserializations.
@@ -284,24 +226,6 @@ impl ServerApi {
             Err(_) => anyhow::Error::new(status_error)
                 .context(format!("API request failed with status {status}")),
         }
-    }
-
-    /// Sends a POST request to a public API endpoint.
-    ///
-    /// # Arguments
-    /// * `path` - Endpoint path relative to `/api/v1` (e.g., "agent/run")
-    /// * `body` - Request body to serialize as JSON
-    async fn post_public_api<B, R>(&self, path: &str, body: &B) -> Result<R>
-    where
-        B: Serialize,
-        R: serde::de::DeserializeOwned,
-    {
-        let response = self.post_public_api_response(path, body).await?;
-        let url = response.url().clone();
-        response
-            .json::<R>()
-            .await
-            .with_context(|| format!("Failed to deserialize response from {url}"))
     }
 
     /// Sends an authenticated empty POST request to /client/login, which signals to the server

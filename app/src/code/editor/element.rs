@@ -1153,8 +1153,8 @@ impl<V: EditorView> EditorWrapper<V> {
                 ));
             }
 
-            if should_show_diff_hunk_icons {
-                if let Some(revert_hunk_button) = self
+            if should_show_diff_hunk_icons
+                && let Some(revert_hunk_button) = self
                     .revert_hunk_button
                     .as_ref()
                     .filter(|_| show_revert_diff_hunk)
@@ -1166,7 +1166,6 @@ impl<V: EditorView> EditorWrapper<V> {
                         appearance,
                     ));
                 }
-            }
 
             let offset = if self.expand_diff_indicator_width_on_hover {
                 vec2f(VERTICAL_DIFF_HUNK_INDICATOR_HOVERED_WIDTH, 0.)

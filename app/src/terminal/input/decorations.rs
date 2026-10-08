@@ -133,37 +133,34 @@ impl Input {
             return;
         }
 
-        match self.completion_session_context(ctx) {
-            Some(completion_context) => {
-                let editor = self.editor.as_ref(ctx);
-                let buffer_text = editor.buffer_text(ctx);
+        if let Some(completion_context) = self.completion_session_context(ctx) {
+            let editor = self.editor.as_ref(ctx);
+            let buffer_text = editor.buffer_text(ctx);
 
-                if matches!(&self.last_parsed_tokens, Some(last_parsed_tokens) if buffer_text == last_parsed_tokens.buffer_text)
-                {
-                    self.apply_decorations(ctx);
-                    return;
-                }
-
-                if let Some(handle) = self.decorations_future_handle.take() {
-                    handle.abort_handle().abort();
-                }
-
-                let completion_session = completion_context.session.clone();
-
-                self.decorations_future_handle = Some(ctx.spawn_abortable(
-                    async move {
-                        parse_current_commands_and_tokens(buffer_text, &completion_context).await
-                    },
-                    move |input, parsed_tokens, ctx| {
-                        input.last_parsed_tokens = Some(parsed_tokens);
-                        input.apply_decorations(ctx);
-                    },
-                    move |_, _| {
-                        completion_session.cancel_active_commands();
-                    },
-                ));
+            if matches!(&self.last_parsed_tokens, Some(last_parsed_tokens) if buffer_text == last_parsed_tokens.buffer_text)
+            {
+                self.apply_decorations(ctx);
+                return;
             }
-            None => {}
+
+            if let Some(handle) = self.decorations_future_handle.take() {
+                handle.abort_handle().abort();
+            }
+
+            let completion_session = completion_context.session.clone();
+
+            self.decorations_future_handle = Some(ctx.spawn_abortable(
+                async move {
+                    parse_current_commands_and_tokens(buffer_text, &completion_context).await
+                },
+                move |input, parsed_tokens, ctx| {
+                    input.last_parsed_tokens = Some(parsed_tokens);
+                    input.apply_decorations(ctx);
+                },
+                move |_, _| {
+                    completion_session.cancel_active_commands();
+                },
+            ));
         }
     }
 

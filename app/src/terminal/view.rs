@@ -43,7 +43,6 @@ use std::time::Duration;
 use action::RememberForWarpification;
 pub use action::TerminalAction;
 use async_channel::{Receiver, Sender};
-use base64::Engine as _;
 pub use block_banner::{BLOCK_BANNER_HEIGHT, WithinBlockBanner};
 use block_banner::{WarpifyBannerState, render_warpification_banner};
 use bookmarks::render_floating_block_snapshot;
@@ -129,7 +128,7 @@ use warpui::windowing::WindowManager;
 use warpui::{
     AccessibilityData, AppContext, BlurContext, CursorInfo, Element, Entity, EntityId,
     EventContext, FocusContext, ModelAsRef, ModelHandle, SingletonEntity, Tracked, TypedActionView,
-    View, ViewAsRef, ViewContext, ViewHandle, WeakModelHandle, WeakViewHandle, WindowId,
+    View, ViewContext, ViewHandle, WeakModelHandle, WeakViewHandle, WindowId,
     end_trace_after_next, record_trace_event, windowing,
 };
 
@@ -516,11 +515,7 @@ const SELECT_ALL_BINDING_NAME: &str = "editor_view:select_all";
 const MOVE_LINE_START_BINDING_NAME: &str = "editor_view:move_to_line_start";
 const MOVE_LINE_END_BINDING_NAME: &str = "editor_view:move_to_line_end";
 
-const DEFAULT_AI_BLOCK_HEIGHT: f32 = 96.;
-
 pub const DEFAULT_ASK_AI_AUTOSUGGESTION_TEXT: &str = "What happened here?";
-
-const WARP_MD_PATH: &str = "WARP.md";
 
 /// `shell_plugins` tags reported by bootstrap when ctrl-r identifies a supported shell plugin.
 /// fzf provides ctrl-r, ctrl-t, and alt-c, while atuin only provides ctrl-r.
@@ -2097,28 +2092,6 @@ impl TerminalView {
         }
     }
 
-    /// Marks rich content views as dirty if their metadata matches the given predicate.
-    ///
-    /// Rich content heights are stored in the blocklist sumtree. When a view's rendered height
-    /// changes (e.g., due to state changes that affect its layout), the sumtree entry becomes
-    /// stale. Marking items as dirty ensures they are re-measured on the next layout frame,
-    /// which happens unconditionally before viewport iteration. This is important for items
-    /// that may have 0 height in the sumtree, as the viewport iterator would otherwise skip
-    /// them entirely.
-    fn mark_all_rich_content_items_dirty_where(
-        &self,
-        model: &mut TerminalModel,
-        predicate: impl Fn(&RichContentMetadata) -> bool,
-    ) {
-        for content in &self.rich_content_views {
-            if content.metadata().is_some_and(&predicate) {
-                model
-                    .block_list_mut()
-                    .mark_rich_content_dirty(content.view_id());
-            }
-        }
-    }
-
     /// Receives a SyncEvent and performs actions dictated by that event
     /// on this terminal view.
     pub fn receive_sync_input_event(&mut self, event: &SyncEvent, ctx: &mut ViewContext<Self>) {
@@ -3122,14 +3095,6 @@ impl TerminalView {
         terminal_view
     }
 
-    /// Schedule a callback to run after the next [`ModelEvent::AfterBlockCompleted`] received.
-    fn on_next_block_completed<F>(&mut self, callback: F)
-    where
-        F: FnOnce(&mut Self, &mut ViewContext<Self>) + 'static,
-    {
-        self.block_completed_callbacks.push(Box::new(callback));
-    }
-
     fn handle_git_repo_status_event(&mut self, ctx: &mut ViewContext<Self>) {
         if let Some(deferred) = self.deferred_code_review_open.take() {
             self.toggle_code_review_pane(
@@ -3372,13 +3337,6 @@ impl TerminalView {
         self.size_info.pane_width_px().as_f32() > MINIMUM_WIDTH_TO_AUTO_OPEN_PANE
     }
 
-    /// Returns true if conditions are met to auto-open the code review panel:
-    /// - Inside a git repository
-    /// - Window is wide enough to support the code review panel
-    fn can_auto_open_code_review_panel(&self, _ctx: &ViewContext<Self>) -> bool {
-        self.current_repo_path.is_some() && self.can_auto_open_panel()
-    }
-
     fn toggle_or_open_code_review_pane(
         &mut self,
         delta_pref: GitDeltaPreference,
@@ -3464,29 +3422,6 @@ impl TerminalView {
             Event::OpenCodeReviewPane,
             ctx,
         )
-    }
-
-    /// Gets the DiffMode for the given branch name by fetching the main branch name
-    /// for this session and comparing it to the given branch name.
-    #[cfg_attr(not(feature = "local_fs"), allow(unused_variables))]
-    fn diff_mode_for_branch(
-        &self,
-        base_branch: Option<&str>,
-        ctx: &mut ViewContext<Self>,
-    ) -> DiffMode {
-        match base_branch {
-            Some(branch) => {
-                #[cfg(feature = "local_fs")]
-                let main_branch = self
-                    .git_status_metadata(ctx)
-                    .map(|m| m.main_branch_name.clone())
-                    .and_then(|mb| mb.strip_prefix("origin/").map(String::from));
-                #[cfg(not(feature = "local_fs"))]
-                let main_branch: Option<String> = None;
-                DiffMode::from_branch(branch, main_branch.as_deref())
-            }
-            None => DiffMode::MainBranch,
-        }
     }
 
     fn handle_windowing_state_update(
@@ -9413,21 +9348,6 @@ impl TerminalView {
     ) {
         ctx.emit(Event::OpenCodeInWarp { source, layout });
     }
-    #[cfg(feature = "local_fs")]
-    fn open_file_path_with_target(
-        &mut self,
-        path: PathBuf,
-        target: FileTarget,
-        line_and_column_num: Option<LineAndColumnArg>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        ctx.notify();
-        ctx.emit(Event::OpenFileWithTarget {
-            path,
-            target,
-            line_col: line_and_column_num,
-        });
-    }
 
     fn maybe_open_link(&mut self, position: &WithinModel<Point>, ctx: &mut ViewContext<Self>) {
         let Some(link) = self.highlighted_link.as_ref() else {
@@ -9674,30 +9594,6 @@ impl TerminalView {
 
     pub fn is_selecting(&self) -> bool {
         self.is_selecting
-    }
-
-    /// Ensures that `block_list_mouse_states` has entries for every block index
-    /// currently in the block list. Blocks created outside the normal
-    /// `BlockCompleted` event path (e.g. restored conversation command blocks)
-    /// would otherwise lack mouse states, which prevents the label hover
-    /// tooltip, bookmark button, and filter button from rendering.
-    fn ensure_mouse_states_for_all_blocks(&mut self) {
-        let block_count = self.model.lock().block_list().active_block_index() + BlockIndex::from(1);
-        for i in 0..block_count.0 {
-            let idx = BlockIndex::from(i);
-            self.block_list_mouse_states
-                .label_mouse_states
-                .entry(idx)
-                .or_default();
-            self.block_list_mouse_states
-                .bookmark_mouse_states
-                .entry(idx)
-                .or_default();
-            self.block_list_mouse_states
-                .filter_mouse_states
-                .entry(idx)
-                .or_default();
-        }
     }
 
     #[cfg(test)]
@@ -10409,22 +10305,6 @@ impl TerminalView {
             ctx,
         );
         ctx.notify();
-    }
-
-    fn scroll_to_rich_content_view(&mut self, view_id: EntityId, ctx: &mut ViewContext<Self>) {
-        let Some(index) = self
-            .model
-            .lock()
-            .block_list()
-            .removable_blocklist_item_position(&RemovableBlocklistItem::RichContent(view_id))
-            .copied()
-        else {
-            return;
-        };
-        self.update_scroll_position_locking(
-            ScrollPositionUpdate::ScrollToTopOfRichContent { index },
-            ctx,
-        );
     }
 
     /// Clears selected text across all types of blocks. Never invoke
@@ -11839,7 +11719,9 @@ impl TerminalView {
             Some(block) => block,
         };
 
-        let prompt = if block.honor_ps1() {
+        
+
+        if block.honor_ps1() {
             block.prompt_contents_to_string(false)
         } else if block.prompt_snapshot().is_some() {
             // Note that we're checking not only for the flag being enabled but also ensuring the
@@ -11878,9 +11760,7 @@ impl TerminalView {
                     .git_branch()
                     .map_or_else(String::new, |b| format!(" git:({b})")),
             )
-        };
-
-        prompt
+        }
     }
 
     /// Returns the duration as an std::time::Duration struct
@@ -14019,22 +13899,6 @@ impl TerminalView {
         });
     }
 
-    pub(super) fn toggle_file_tree(
-        &mut self,
-        source: crate::server::telemetry::FileTreeSource,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        use crate::server::telemetry::TelemetryEvent;
-
-        self.toggle_left_panel_file_tree(false, ctx);
-        send_telemetry_from_ctx!(
-            TelemetryEvent::FileTreeToggled {
-                source,
-                is_code_mode_v2: true,
-            },
-            ctx
-        );
-    }
 }
 
 impl Entity for TerminalView {
@@ -15300,11 +15164,10 @@ impl View for TerminalView {
         }
 
         let active_block = model_lock.block_list().active_block();
-        if active_block.is_active_and_long_running() {
-            if !model_lock.is_alt_screen_active() {
+        if active_block.is_active_and_long_running()
+            && !model_lock.is_alt_screen_active() {
                 context.set.insert("LongRunningCommand");
             }
-        }
 
         // Add keyboard protocol context if enabled.
         if model_lock.is_term_mode_set(TermMode::KEYBOARD_PROTOCOL) {

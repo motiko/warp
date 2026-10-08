@@ -94,10 +94,6 @@ impl NavBar {
         }
     }
 
-    pub fn set_behavior(&mut self, behavior: NavBarBehavior) {
-        self.behavior = behavior;
-    }
-
     fn diff_hunk_count(&self, app: &AppContext) -> usize {
         self.model.as_ref(app).diff().as_ref(app).diff_hunk_count()
     }

@@ -1116,7 +1116,7 @@ pub(crate) struct HistoryInputSuggestion<'a> {
 impl HistoryInputSuggestion<'_> {
     /// The timestamp this history entry was created. Useful for sorting.
     pub fn start_time(&self) -> DateTime<Local> {
-        self.entry.start_ts.unwrap_or(DateTime::default())
+        self.entry.start_ts.unwrap_or_default()
     }
 
     /// Text to display for the suggestion.

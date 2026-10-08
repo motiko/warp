@@ -15,10 +15,6 @@ pub fn phenomenon_foreground_color() -> ColorU {
     PhenomenonStyle::foreground()
 }
 
-pub fn phenomenon_accent_color() -> ColorU {
-    PhenomenonStyle::accent()
-}
-
 pub fn phenomenon_body_text_color() -> ColorU {
     PhenomenonStyle::body_text()
 }

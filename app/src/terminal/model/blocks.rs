@@ -1226,6 +1226,7 @@ impl BlockList {
         Some(block)
     }
 
+    #[cfg(test)]
     fn remove_block_at_index(&mut self, block_index: BlockIndex) -> Option<Block> {
         debug_assert!(block_index != self.active_block_index());
 
@@ -1257,6 +1258,7 @@ impl BlockList {
     }
 
     /// Removes command blocks at stable pre-removal indices.
+    #[cfg(test)]
     fn remove_command_blocks_at_indices(&mut self, indices_to_remove: Vec<BlockIndex>) {
         if indices_to_remove.is_empty() {
             return;
@@ -2930,13 +2932,6 @@ impl BlockList {
         }
 
         contents.trim().to_string()
-    }
-
-    pub(crate) fn removable_blocklist_item_position(
-        &self,
-        item: &RemovableBlocklistItem,
-    ) -> Option<&TotalIndex> {
-        self.removable_blocklist_item_positions.get(item)
     }
 
     /// Returns the current absolute row range for one rich-content view.
