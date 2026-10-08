@@ -259,7 +259,7 @@ diesel::table! {
         id -> Integer,
         is_pending -> Bool,
         object_type -> Text,
-        revision_ts -> Nullable<BigInt>,
+        revision_ts -> Nullable<Integer>,
         server_id -> Nullable<Text>,
         client_id -> Nullable<Text>,
         shareable_object_id -> Integer,
