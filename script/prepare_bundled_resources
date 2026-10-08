@@ -93,7 +93,6 @@ ADDITIONAL_LICENSES=(
     "Claude API Skill|Apache-2.0|resources/bundled/skills/claude-api/LICENSE.txt"
     "Skill Creator Skill (create-skill)|Apache-2.0|resources/bundled/skills/create-skill/LICENSE.txt"
     "Base16 syntax theme|MIT|app/assets/bundled/syntax_theme/LICENSE-BASE16.txt"
-    "rudder-sdk-rust|MIT|app/src/server/telemetry/LICENSE-RUDDER-SDK-RUST.txt"
     "Windows Terminal|MIT|app/assets/windows/LICENSE-WINDOWS-TERMINAL"
     "GitHub Desktop|MIT|app/src/code_review/GITHUB-DESKTOP-LICENSE"
 )
