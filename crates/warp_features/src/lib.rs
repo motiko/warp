@@ -682,8 +682,6 @@ pub enum FeatureFlag {
     /// instead of individual pane rows.
     VerticalTabsSummaryMode,
 
-    /// Gates the v2 billing and usage page redesign.
-    BillingAndUsagePageV2,
     /// Enables configurable expanded context windows for eligible GPT models.
     GPTConfigurableContextWindow,
 
@@ -744,11 +742,6 @@ pub enum FeatureFlag {
     /// setup or API key required.
     FactoryMcp,
 
-    /// Gates client-side display of the real dollar cost (from `RequestCost.cost_in_cents`)
-    /// alongside credits in the GUI footer. Mirrors the server-side
-    /// `PricingTransparencyEnabled` flag in warp-server, but is a fully independent
-    /// flag — the two do not sync automatically.
-    PricingTransparency,
 
     /// Uses fzf or atuin for history search instead of Warp's command search.
     ShellWidgetHandoff,
@@ -835,7 +828,6 @@ pub const DOGFOOD_FLAGS: &[FeatureFlag] = &[
     FeatureFlag::JupyterNotebookRendering,
     FeatureFlag::McpJsonTreeView,
     FeatureFlag::BoxDrawingGlyphs,
-    FeatureFlag::PricingTransparency,
     FeatureFlag::WarpingModelName,
     FeatureFlag::LrcActivitySignal,
     FeatureFlag::StoredScreenshots,
