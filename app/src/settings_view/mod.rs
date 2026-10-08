@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use about_page::{AboutPageEvent, AboutPageView};
+use about_page::AboutPageView;
 use ai_page::{AIPageAction, AIPageEvent, AIPageView};
 use appearance_page::{AppearancePageAction, AppearanceSettingsPageView};
 use code_editor_review_page::{EditorAndCodeReviewPageAction, EditorAndCodeReviewPageView};
@@ -201,8 +201,6 @@ pub(super) fn render_model_chips(
 pub enum SettingsViewEvent {
     Pane(PaneEvent),
     StartResize,
-    CheckForUpdate,
-    LaunchNetworkLogging,
     OpenLspLogs { log_path: PathBuf },
 }
 
@@ -1012,9 +1010,6 @@ impl SettingsView {
         });
 
         let about_page_handle = ctx.add_typed_action_view(AboutPageView::new);
-        ctx.subscribe_to_view(&about_page_handle, |_, _, event, ctx| match event {
-            AboutPageEvent::CheckForUpdate => ctx.emit(SettingsViewEvent::CheckForUpdate),
-        });
 
         let ai_page_handle = ctx.add_typed_action_view(AIPageView::new);
         ctx.subscribe_to_view(&ai_page_handle, |_, _, event, ctx| match event {
@@ -1434,9 +1429,6 @@ impl SettingsView {
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
-            PrivacyPageViewEvent::LaunchNetworkLogging => {
-                ctx.emit(SettingsViewEvent::LaunchNetworkLogging);
-            }
             PrivacyPageViewEvent::ShowAddRegexModal => {
                 // Modal rendering is handled in get_modal_content_for_page
                 ctx.notify();

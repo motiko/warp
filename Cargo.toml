@@ -38,7 +38,6 @@ build_cache = { path = "crates/build_cache" }
 channel_versions = { path = "crates/channel_versions", default-features = false }
 command = { path = "crates/command" }
 field_mask = { path = "crates/field_mask" }
-firebase = { path = "crates/firebase" }
 fuzzy_match = { path = "crates/fuzzy_match" }
 handlebars = { path = "crates/handlebars" }
 http_client = { path = "crates/http_client" }
@@ -85,7 +84,6 @@ warp_logging = { path = "crates/warp_logging" }
 warp_ripgrep = { path = "crates/warp_ripgrep" }
 warp_search_core = { path = "crates/warp_search_core" }
 warp_server_auth = { path = "crates/warp_server_auth" }
-warp_server_client = { path = "crates/warp_server_client" }
 warp_terminal = { path = "crates/warp_terminal" }
 warp_util = { path = "crates/warp_util" }
 warp_web_event_bus = { path = "crates/warp_web_event_bus" }
@@ -93,7 +91,6 @@ warpui = { path = "crates/warpui" }
 warpui_core = { path = "crates/warpui_core" }
 warpui_extras = { path = "crates/warpui_extras", default-features = false }
 watcher = { path = "crates/watcher" }
-websocket = { path = "crates/websocket" }
 workflow_types = { path = "crates/workflow_types" }
 
 # Workspace-level dependencies used by multiple crates. Prefer adding dependencies
@@ -157,7 +154,6 @@ gloo = { version = "0.11.0", default-features = false, features = [
   "futures",
   "utils",
 ] }
-graphql-ws-client = { version = "0.11.1", default-features = false }
 hashbrown = "0.17.1"
 hex = "0.4.3"
 # This matches the version of hyper used by reqwest.

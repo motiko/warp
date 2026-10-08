@@ -9,7 +9,7 @@ pub use warp_terminal::event::{ExecutedExecutorCommandEvent, ParseGeneratorOutpu
 use warp_util::lazy::Lazy;
 
 use super::history::HistoryEntry;
-use super::model::ansi::{ExternalShellWidgetSelectionValue, FinishUpdateValue};
+use super::model::ansi::ExternalShellWidgetSelectionValue;
 use super::model::block::BlockId;
 use super::model::lifecycle::LifecycleRecoveryRecord;
 use super::model::session::{SessionId, SessionInfo};
@@ -119,7 +119,6 @@ pub enum Event {
     },
     /// Emitted when the assisted auto-update has completed and we're ready to
     /// relaunch the app.
-    FinishUpdate(FinishUpdateValue),
     ExternalShellWidgetSelection(ExternalShellWidgetSelectionValue),
     ShellSpawned(ShellType),
     ImageReceived {
@@ -444,7 +443,6 @@ impl Debug for Event {
                     "RemoteServerFailed(session: {session_id:?}, error: {error})"
                 )
             }
-            Event::FinishUpdate(data) => write!(f, "FinishUpdate({})", data.update_id),
             Event::ExternalShellWidgetSelection(data) => {
                 write!(
                     f,

@@ -20,8 +20,6 @@ pub enum ContextFlag {
     ForceSidePanelOpen,
     ShowRewardModal,
     HideOpenOnDesktopButton,
-    PromptForVersionUpdates,
-    NetworkLogConsole,
     RunWorkflow,
     LaunchConfigurations,
     WarpEssentials,
@@ -64,9 +62,7 @@ impl ContextFlag {
         disable_flag(Self::RunWorkflow);
         disable_flag(Self::CreateNewSession);
         disable_flag(Self::CloseWindow);
-        disable_flag(Self::PromptForVersionUpdates);
         disable_flag(Self::WarpEssentials);
-        disable_flag(Self::NetworkLogConsole);
         disable_flag(Self::ShowMCPServers);
     }
 
@@ -77,9 +73,7 @@ impl ContextFlag {
         disable_flag(Self::RunWorkflow);
         disable_flag(Self::CreateNewSession);
         disable_flag(Self::CloseWindow);
-        disable_flag(Self::PromptForVersionUpdates);
         disable_flag(Self::WarpEssentials);
-        disable_flag(Self::NetworkLogConsole);
         disable_flag(Self::AllowSettingsModalToClose);
         disable_flag(Self::ShowSlowShellStartupBanner);
         disable_flag(Self::DynamicBrowserUrl);
@@ -92,8 +86,6 @@ impl ContextFlag {
         disable_flag(Self::ForceSidePanelOpen);
         disable_flag(Self::ShowRewardModal);
         disable_flag(Self::HideOpenOnDesktopButton);
-        disable_flag(Self::PromptForVersionUpdates);
-        disable_flag(Self::NetworkLogConsole);
         disable_flag(Self::LaunchConfigurations);
         disable_flag(Self::WarpEssentials);
         disable_flag(Self::ShowMCPServers);
@@ -111,8 +103,6 @@ impl FromStr for ContextFlag {
             "ForceSidePanelOpen" => Ok(Self::ForceSidePanelOpen),
             "ShowRewardModal" => Ok(Self::ShowRewardModal),
             "HideOpenOnDesktopButton" => Ok(Self::HideOpenOnDesktopButton),
-            "PromptForVersionUpdates" => Ok(Self::PromptForVersionUpdates),
-            "NetworkLogConsole" => Ok(Self::NetworkLogConsole),
             "RunWorkflow" => Ok(Self::RunWorkflow),
             "LaunchConfigurations" => Ok(Self::LaunchConfigurations),
             "WarpEssentials" => Ok(Self::WarpEssentials),

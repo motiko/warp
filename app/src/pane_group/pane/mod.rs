@@ -12,7 +12,6 @@ pub(super) mod code_pane;
 pub(super) mod file_pane;
 pub(super) mod get_started_pane;
 pub(super) mod get_started_view;
-pub(super) mod network_log_pane;
 pub(super) mod settings_pane;
 pub(super) mod terminal_pane;
 pub mod view;
@@ -39,7 +38,6 @@ use crate::menu::MenuItem;
 use crate::pane_group::focus_state::PaneFocusHandle;
 use crate::pane_group::pane::get_started_view::GetStartedView;
 use crate::rich_text::file::FileNotebookView;
-use crate::server::network_log_view::NetworkLogView;
 use crate::settings::PaneSettings;
 use crate::settings_view::SettingsView;
 use crate::terminal::TerminalView;
@@ -113,7 +111,6 @@ pub(crate) enum IPaneType {
     Code,
     Settings,
     GetStarted,
-    NetworkLog,
     DeferredPlaceholder,
     /// A pane type only for tests.
     #[cfg(test)]
@@ -128,7 +125,6 @@ impl Display for IPaneType {
             IPaneType::Code => write!(f, "Code"),
             IPaneType::Settings => write!(f, "Settings"),
             IPaneType::GetStarted => write!(f, "GetStarted"),
-            IPaneType::NetworkLog => write!(f, "Network Log"),
             IPaneType::DeferredPlaceholder => write!(f, "Placeholder"),
             #[cfg(test)]
             IPaneType::Dummy => write!(f, "Dummy"),
@@ -175,11 +171,6 @@ impl PaneId {
         Self::new_from_ctx(IPaneType::GetStarted, ctx)
     }
 
-    /// Creates a [`PaneId`] from a [`ViewContext<PaneView<NetworkLogView>>`].
-    pub fn from_network_log_pane_ctx(ctx: &ViewContext<PaneView<NetworkLogView>>) -> Self {
-        Self::new_from_ctx(IPaneType::NetworkLog, ctx)
-    }
-
     /// Creates a [`PaneId`] from a [`PaneView<TerminalView>`] entity ID.
     pub fn from_terminal_pane_view(
         terminal_pane_view: &ViewHandle<terminal_pane::TerminalPaneView>,
@@ -208,13 +199,6 @@ impl PaneId {
         get_started_pane_view: &ViewHandle<PaneView<GetStartedView>>,
     ) -> Self {
         Self::new(IPaneType::GetStarted, get_started_pane_view)
-    }
-
-    /// Creates a [`PaneId`] from a [`PaneView<NetworkLogView>`] entity ID.
-    pub fn from_network_log_pane_view(
-        network_log_pane_view: &ViewHandle<PaneView<NetworkLogView>>,
-    ) -> Self {
-        Self::new(IPaneType::NetworkLog, network_log_pane_view)
     }
 
     /// Creates a [`PaneId`] for a dummy pane.
@@ -272,9 +256,6 @@ impl PaneId {
             }
             IPaneType::GetStarted => {
                 ChildView::<PaneView<GetStartedView>>::with_id(self.0.pane_view_id).finish()
-            }
-            IPaneType::NetworkLog => {
-                ChildView::<PaneView<NetworkLogView>>::with_id(self.0.pane_view_id).finish()
             }
             IPaneType::DeferredPlaceholder => warpui::elements::Empty::new().finish(),
             #[cfg(test)]

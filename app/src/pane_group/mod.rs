@@ -58,9 +58,6 @@ use crate::pane_group::pane::get_started_pane::GetStartedPane;
 use crate::persistence::ModelEvent;
 use crate::quit_warning::UnsavedStateSummary;
 use crate::rich_text::file::FileNotebookView;
-#[cfg(target_family = "wasm")]
-use crate::server::ids::SyncId;
-use crate::server::server_api::ServerApi;
 use crate::server::telemetry::{PaletteSource, TelemetryEvent};
 use crate::session_management::SessionNavigationData;
 use crate::settings::PaneSettings;
@@ -70,12 +67,10 @@ use crate::terminal::available_shells::{AvailableShell, AvailableShells};
 use crate::terminal::general_settings::{GeneralSettings, GeneralSettingsChangedEvent};
 #[cfg(feature = "local_tty")]
 use crate::terminal::local_tty::TerminalManager as LocalTtyTerminalManager;
-#[cfg(all(feature = "local_tty", not(feature = "remote_tty")))]
+#[cfg(feature = "local_tty")]
 use crate::terminal::local_tty::{TerminalViewSurfaceConfig, create_terminal_view_surface};
 use crate::terminal::model::block::SerializedBlock;
 use crate::terminal::model::session::Session;
-#[cfg(feature = "remote_tty")]
-use crate::terminal::remote_tty::TerminalManager as RemoteTtyTerminalManager;
 use crate::terminal::session_settings::{NewSessionSource, SessionSettings};
 use crate::terminal::view::ssh_file_upload::FileUploadId;
 use crate::terminal::view::{
@@ -106,7 +101,6 @@ mod tests;
 
 pub use pane::code_pane::CodePane;
 pub use pane::file_pane::FilePane;
-pub use pane::network_log_pane::NetworkLogPane;
 pub use pane::settings_pane::SettingsPane;
 pub use pane::terminal_pane::TerminalPane;
 pub use pane::{
@@ -664,7 +658,6 @@ pub struct PaneGroup {
     /// Mapping from pane IDs to their contents.
     pane_contents: HashMap<PaneId, Box<dyn AnyPaneContent>>,
 
-    server_api: Arc<ServerApi>,
 
     dragged_border: Option<DraggedBorder>,
     user_default_shell_changed_banner: ViewHandle<Banner<PaneGroupAction>>,
@@ -697,13 +690,6 @@ pub enum PaneState {
 pub enum SplitPaneState {
     InSplitPane(PaneState),
     NotInSplitPane,
-}
-
-// Helper to group together certain structs necessary to instantiate a new terminal view.
-#[derive(Clone)]
-pub struct TerminalViewResources {
-    pub server_api: Arc<ServerApi>,
-    pub model_event_sender: Option<SyncSender<ModelEvent>>,
 }
 
 impl SplitPaneState {
@@ -778,7 +764,6 @@ struct LeftmostPaneId {
 
 /// The [`InitialLayoutCallback`] provides state to pane group constructors
 /// to build the initial layout of the pane group. Specifically, it provides
-/// - resources ([`TerminalViewResources`]) to help construct terminal views,
 /// - a mutable mapping from [`PaneId`] to [`AnyPaneContent`],
 /// - a mutable list of [`PaneId`]s representing the pane history,
 /// - the view bounds, and
@@ -786,7 +771,6 @@ struct LeftmostPaneId {
 /// It expects a return type of [`(PaneData, InitialFocus)`].
 type InitialLayoutCallback = Box<
     dyn FnOnce(
-        TerminalViewResources,
         &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
         &mut Vec<PaneId>,
         RectF,
@@ -985,7 +969,6 @@ impl PaneGroup {
     #[allow(clippy::too_many_arguments)]
     fn pane_tree_from_template(
         root: PaneTemplateType,
-        resources: TerminalViewResources,
         ctx: &mut ViewContext<PaneGroup>,
         pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
         is_left_pane: bool,
@@ -996,7 +979,6 @@ impl PaneGroup {
         let (leftmost_pane_id, pane_data, initial_focus) =
             PaneGroup::pane_tree_from_template_recursive(
                 root,
-                resources,
                 ctx,
                 pane_contents,
                 is_left_pane,
@@ -1021,7 +1003,6 @@ impl PaneGroup {
     #[allow(clippy::too_many_arguments)]
     fn pane_tree_from_template_recursive(
         root: PaneTemplateType,
-        resources: TerminalViewResources,
         ctx: &mut ViewContext<PaneGroup>,
         pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
         is_left_pane: bool,
@@ -1056,7 +1037,6 @@ impl PaneGroup {
                         Some(cwd).filter(|p| p.exists()),
                         HashMap::new(),
                         uuid.as_bytes(),
-                        resources,
                         None,
                         user_default_shell_unsupported_banner_model_handle,
                         view_size,
@@ -1125,7 +1105,6 @@ impl PaneGroup {
                     let (child_leftmost_pane_id, child, child_focus) =
                         PaneGroup::pane_tree_from_template_recursive(
                             node.clone(),
-                            resources.clone(),
                             ctx,
                             pane_contents,
                             // Focus and activate the leftmost pane of the entire tree.
@@ -1155,7 +1134,6 @@ impl PaneGroup {
     fn restore_pane_tree(
         root: PaneNodeSnapshot,
         block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
-        resources: TerminalViewResources,
         ctx: &mut ViewContext<PaneGroup>,
         pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
@@ -1166,7 +1144,6 @@ impl PaneGroup {
             PaneNodeSnapshot::Leaf(leaf) => Self::restore_pane_leaf(
                 leaf,
                 block_lists,
-                resources,
                 ctx,
                 pane_contents,
                 user_default_shell_unsupported_banner_model_handle,
@@ -1195,7 +1172,6 @@ impl PaneGroup {
                     match PaneGroup::restore_pane_tree(
                         node,
                         block_lists.clone(),
-                        resources.clone(),
                         ctx,
                         pane_contents,
                         user_default_shell_unsupported_banner_model_handle.clone(),
@@ -1229,7 +1205,6 @@ impl PaneGroup {
     fn restore_pane_leaf(
         leaf: LeafSnapshot,
         block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
-        resources: TerminalViewResources,
         ctx: &mut ViewContext<PaneGroup>,
         pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
@@ -1262,7 +1237,6 @@ impl PaneGroup {
                     startup_directory,
                     HashMap::new(),
                     uuid.0.as_slice(),
-                    resources,
                     block_list,
                     user_default_shell_unsupported_banner_model_handle,
                     view_size,
@@ -1362,26 +1336,6 @@ impl PaneGroup {
             }
             LeafContents::CodeReview(_) => {
                 Err(anyhow::anyhow!("Code review panes are no longer supported"))
-            }
-            LeafContents::NetworkLog => {
-                // Network log panes are intentionally not restored. Two
-                // reasons:
-                //
-                // 1. The in-memory log starts empty on each launch, so a
-                //    restored pane would display a blank editor anyway.
-                // 2. More importantly, persisting the pane's contents would
-                //    effectively regress back to a persisted, on-disk
-                //    network log (via the SQLite app-state database) on app
-                //    shutdown, defeating the purpose of moving the log off
-                //    disk in the first place.
-                //
-                // `save_pane_state` in `persistence/sqlite.rs` skips network
-                // log panes entirely, so reaching this arm indicates a
-                // programmer error on the persistence side. Users reopen the
-                // pane on demand via Privacy settings or the keybinding.
-                Err(anyhow::anyhow!(
-                    "Network log pane should not have been persisted, as it cannot be restored"
-                ))
             }
             LeafContents::GetStarted => {
                 if !FeatureFlag::GetStartedTab.is_enabled() {
@@ -1691,7 +1645,7 @@ impl PaneGroup {
                             }
                         });
                 }
-                // TODO: Potentially handle remote_tty and mock TerminalManager cases here as well?
+                // TODO: Potentially handle mock TerminalManager cases here as well?
             });
     }
 
@@ -1729,7 +1683,6 @@ impl PaneGroup {
 
     fn new_internal(
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
-        server_api: Arc<ServerApi>,
         model_event_sender: Option<SyncSender<ModelEvent>>,
         initial_layout_callback: InitialLayoutCallback,
         ctx: &mut ViewContext<Self>,
@@ -1739,17 +1692,11 @@ impl PaneGroup {
 
         let mut pane_contents = HashMap::new();
 
-        let resources = TerminalViewResources {
-            server_api: server_api.clone(),
-            model_event_sender: model_event_sender.clone(),
-        };
-
         let view_bounds = Self::estimated_view_bounds(ctx);
 
         let mut pane_history = Vec::new();
 
         let (pane_data, initial_focus) = initial_layout_callback(
-            resources,
             &mut pane_contents,
             &mut pane_history,
             view_bounds,
@@ -1829,7 +1776,6 @@ impl PaneGroup {
             focus_state,
             pane_history,
             pane_contents,
-            server_api,
             dragged_border: None,
             user_default_shell_changed_banner,
             active_file_model,
@@ -1853,7 +1799,6 @@ impl PaneGroup {
     #[allow(clippy::too_many_arguments)]
     fn initial_single_terminal_pane(
         options: NewTerminalOptions,
-        resources: TerminalViewResources,
         unsupported_banner_model_handle: ModelHandle<BannerState>,
         view_bounds: RectF,
         model_event_sender: Option<SyncSender<ModelEvent>>,
@@ -1866,7 +1811,6 @@ impl PaneGroup {
             options.initial_directory,
             options.env_vars,
             uuid.as_bytes(),
-            resources,
             None,
             unsupported_banner_model_handle,
             view_bounds.size(),
@@ -1898,7 +1842,6 @@ impl PaneGroup {
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_panes_layout(
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
-        server_api: Arc<ServerApi>,
         panes_layout: PanesLayout,
         block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
         model_event_sender: Option<SyncSender<ModelEvent>>,
@@ -1908,15 +1851,13 @@ impl PaneGroup {
             user_default_shell_unsupported_banner_model_handle.clone();
         let model_event_sender_clone = model_event_sender.clone();
 
-        let initial_layout = move |resources,
-                                   pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
+        let initial_layout = move |pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
                                    pane_history: &mut Vec<PaneId>,
                                    view_bounds: RectF,
                                    ctx: &mut ViewContext<Self>| {
             match panes_layout {
                 PanesLayout::Template(template) => Self::pane_tree_from_template(
                     template,
-                    resources,
                     ctx,
                     pane_contents,
                     true, // initialize as the leftmost pane
@@ -1927,7 +1868,6 @@ impl PaneGroup {
                 PanesLayout::Snapshot(panes_snapshot) => Self::restore_pane_tree(
                     *panes_snapshot,
                     block_lists,
-                    resources.clone(),
                     ctx,
                     pane_contents,
                     unsupported_banner_model_handle.clone(),
@@ -1938,7 +1878,6 @@ impl PaneGroup {
                     log::warn!("Error restoring pane tree: {err:#}");
                     Self::initial_single_terminal_pane(
                         NewTerminalOptions::default(),
-                        resources,
                         unsupported_banner_model_handle,
                         view_bounds,
                         model_event_sender_clone,
@@ -1949,7 +1888,6 @@ impl PaneGroup {
                 }),
                 PanesLayout::SingleTerminal(options) => Self::initial_single_terminal_pane(
                     *options,
-                    resources,
                     unsupported_banner_model_handle,
                     view_bounds,
                     model_event_sender_clone,
@@ -1962,7 +1900,6 @@ impl PaneGroup {
 
         Self::new_internal(
             user_default_shell_unsupported_banner_model_handle,
-            server_api,
             model_event_sender.clone(),
             Box::new(initial_layout),
             ctx,
@@ -1972,13 +1909,11 @@ impl PaneGroup {
     pub fn new_from_existing_pane(
         pane: Box<dyn AnyPaneContent>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
-        server_api: Arc<ServerApi>,
         model_event_sender: Option<SyncSender<ModelEvent>>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         let pane_id = pane.as_pane().id();
-        let initial_layout = move |_,
-                                   pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
+        let initial_layout = move |pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
                                    pane_history: &mut Vec<PaneId>,
                                    _: RectF,
 
@@ -1993,7 +1928,6 @@ impl PaneGroup {
         };
         Self::new_internal(
             user_default_shell_unsupported_banner_model_handle,
-            server_api,
             model_event_sender,
             Box::new(initial_layout),
             ctx,
@@ -3378,7 +3312,6 @@ impl PaneGroup {
         startup_directory: Option<PathBuf>,
         mut env_vars: HashMap<OsString, OsString>,
         terminal_session_uuid: &[u8],
-        resources: TerminalViewResources,
         restored_blocks: Option<&Vec<SerializedBlock>>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         initial_size: Vector2F,
@@ -3392,17 +3325,7 @@ impl PaneGroup {
         add_session_focus_env_vars(&mut env_vars, terminal_session_uuid);
 
         cfg_if::cfg_if! {
-            if #[cfg(feature = "remote_tty")] {
-                let terminal_init = RemoteTtyTerminalManager::create_model(
-                    resources,
-                    initial_size,
-                    model_event_sender,
-                    ctx.window_id(),
-                    ctx,
-                );
-                let terminal_manager = terminal_init.manager;
-                let terminal_view = terminal_init.view;
-            } else if #[cfg(feature = "local_tty")] {
+            if #[cfg(feature = "local_tty")] {
                 let has_restored_command_blocks =
                     restored_blocks.is_some_and(|blocks| !blocks.is_empty());
                 let model_event_sender_for_surface = model_event_sender.clone();
@@ -3419,7 +3342,6 @@ impl PaneGroup {
                     |surface_init, ctx| {
                         create_terminal_view_surface(
                             TerminalViewSurfaceConfig {
-                                resources,
                                 model_event_sender: model_event_sender_for_surface,
                                 window_id,
                                 should_use_live_appearance: false,
@@ -3441,7 +3363,6 @@ impl PaneGroup {
                         display_name: ShellName::blank(),
                         shell_type: ShellType::Zsh
                     },
-                    resources,
                     None,
                     initial_size,
                     ctx.window_id(),
@@ -3524,17 +3445,11 @@ impl PaneGroup {
         ctx: &mut ViewContext<Self>,
     ) -> TerminalPaneId {
         let uuid = Uuid::new_v4();
-        let resources = TerminalViewResources {
-            server_api: self.server_api.clone(),
-            model_event_sender: self.model_event_sender.clone(),
-        };
-
         let view_bounds = Self::estimated_view_bounds(ctx);
         let (view, terminal_manager) = PaneGroup::create_session(
             startup_directory,
             HashMap::new(),
             uuid.as_bytes(),
-            resources,
             None,
             self.user_default_shell_unsupported_banner_model_handle
                 .clone(),

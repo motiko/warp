@@ -528,7 +528,7 @@ fn validate_custom_uri_errors_do_not_leak_query_string() {
 
     // Unexpected path for a host that doesn't allow arbitrary paths.
     let url = Url::parse(&format!(
-        "{}://auth/not_the_redirect?refresh_token=LEAKED",
+        "{}://home/not_the_redirect?refresh_token=LEAKED",
         ChannelState::url_scheme()
     ))
     .unwrap();

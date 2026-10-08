@@ -15,14 +15,11 @@ use watcher::HomeDirectoryWatcher;
 
 use super::*;
 use crate::auth::AuthStateProvider;
-use crate::auth::auth_manager::AuthManager;
-use crate::changelog_model::ChangelogModel;
 use crate::context_chips::prompt::Prompt;
 use crate::network::NetworkStatus;
 use crate::projects::persisted_workspace::PersistedWorkspace;
 use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::search::files::model::FileSearchModel;
-use crate::server::server_api::ServerApiProvider;
 use crate::server::telemetry::context_provider::AppTelemetryContextProvider;
 use crate::settings::PrivacySettings;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
@@ -39,25 +36,18 @@ use crate::warp_managed_paths_watcher::WarpManagedPathsWatcher;
 use crate::workflows::local_workflows::LocalWorkflows;
 use crate::workspace::sync_inputs::SyncedInputState;
 use crate::workspace::{ActiveSession, WorkspaceRegistry};
-use crate::workspaces::team_tester::TeamTesterStatus;
-use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::{GlobalResourceHandles, GlobalResourceHandlesProvider, experiments};
 
 fn initialize_app(app: &mut App) {
     initialize_settings_for_tests(app);
 
-    app.add_singleton_model(|_ctx| ServerApiProvider::new_for_test());
-    app.add_singleton_model(|ctx| ChangelogModel::new(ServerApiProvider::as_ref(ctx).get()));
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
     app.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
-    app.add_singleton_model(AuthManager::new_for_test);
     app.add_singleton_model(|_ctx| PtySpawner::new_for_test());
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(|_| SystemStats::new());
     app.add_singleton_model(UserWorkspaces::default_mock);
-    app.add_singleton_model(TeamTesterStatus::mock);
-    app.add_singleton_model(TeamUpdateManager::mock);
     app.add_singleton_model(|_| DetectedRepositories::default());
     app.add_singleton_model(HomeDirectoryWatcher::new_for_test);
     app.add_singleton_model(DirectoryWatcher::new);
@@ -113,7 +103,6 @@ fn mock_pane_group(app: &mut App, options: MockOptions) -> ViewHandle<PaneGroup>
             let block_lists = Arc::new(HashMap::new());
             PaneGroup::new_with_panes_layout(
                 user_default_shell_changed_banner_dismissal_model_handle,
-                ServerApiProvider::as_ref(ctx).get(),
                 options.layout,
                 block_lists,
                 None,
@@ -1000,7 +989,6 @@ fn test_focused_pane_is_synchronized_with_application_focus() {
                 let pane_group = ctx.add_typed_action_view(|ctx| {
                     PaneGroup::new_with_panes_layout(
                         user_default_shell_changed_banner_dismissal_model_handle,
-                        ServerApiProvider::as_ref(ctx).get(),
                         panes_layout,
                         block_lists,
                         None,

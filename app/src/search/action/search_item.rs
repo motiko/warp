@@ -20,7 +20,6 @@ use crate::search::item::SearchItem;
 use crate::search::result_renderer::ItemHighlightState;
 use crate::ui_components::icons::Icon;
 use crate::util::bindings::{BindingGroup, CommandBinding};
-use crate::workflows::workflow_icon_color;
 
 /// A matched binding from a search query.
 #[derive(Debug)]
@@ -183,13 +182,9 @@ impl SearchItemIcon for BindingGroup {
             Self::WarpAi => Icon::Agent,
             Self::Close => Icon::X,
             Self::Navigation => Icon::Navigation,
-            Self::Workflow => Icon::Workflow,
-            Self::Notebooks => Icon::Notebook,
             Self::Folders => Icon::Folder,
             Self::KeyboardShortcuts => Icon::Keyboard,
-            Self::AutoUpdate => Icon::AutoUpdate,
             Self::Notifications => Icon::Bell,
-            Self::EnvVarCollection => Icon::EnvVarCollection,
             Self::Terminal => Icon::Terminal,
         }
     }
@@ -200,14 +195,10 @@ impl SearchItemIcon for BindingGroup {
             | Self::Navigation
             | Self::Close
             | Self::KeyboardShortcuts
-            | Self::AutoUpdate
             | Self::Folders
             | Self::Terminal
             | Self::Notifications
-            | Self::Notebooks
-            | Self::EnvVarCollection
             | Self::WarpAi => appearance.theme().foreground().into_solid(),
-            Self::Workflow => workflow_icon_color(appearance),
         }
     }
 }

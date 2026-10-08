@@ -28,7 +28,6 @@ use crate::code_review::editor_state::CodeReviewEditorState;
 use crate::code_review::git_repo_model::GitRepoModels;
 use crate::pane_group::WorkingDirectoriesModel;
 use crate::projects::persisted_workspace::PersistedWorkspace;
-use crate::server::server_api::ServerApiProvider;
 use crate::server::telemetry::context_provider::AppTelemetryContextProvider;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::terminal::local_shell::LocalShellState;
@@ -79,7 +78,6 @@ fn initialize_test_app(app: &mut App) {
     // Add mocks required by rich text editor (used in the CommentEditor)
     app.add_singleton_model(|_| ActiveSession::default());
     app.add_singleton_model(NotebookKeybindings::new);
-    app.add_singleton_model(|_| ServerApiProvider::new_for_test());
 }
 
 /// Creates a LocalCodeEditorView with the given content

@@ -6,11 +6,9 @@ pub use overrides::{get_overrides, set_overrides};
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, Sequence)]
 pub enum FeatureFlag {
-    Changelog,
     CocoaSentry,
     CrashReporting,
     DebugMode,
-    Autoupdate,
     LogExpensiveFramesInSentry,
     WithSandboxTelemetry,
     RecordAppActiveEvents,
@@ -170,8 +168,6 @@ pub enum FeatureFlag {
     /// If enabled, the default theme is set to Adeberry for new users.
     DefaultAdeberryTheme,
 
-    /// New, less intrusive autoupdate UI.
-    AutoupdateUIRevamp,
 
     /// Enables Kitty image rendering
     KittyImages,
@@ -539,8 +535,6 @@ pub enum FeatureFlag {
     /// Enables conversation artifacts.
     ConversationArtifacts,
 
-    /// Gates populating/reading oz updates from channel versions in the changelog model.
-    OzChangelogUpdates,
 
     /// Enables loading and returning bundled skills in the SkillManager.
     BundledSkills,
@@ -602,10 +596,6 @@ pub enum FeatureFlag {
     /// from code review + code editor for House Of Agents work
     HoaCodeReview,
 
-    /// When enabled, the "Skip for now" login flow does not create a Firebase
-    /// anonymous user. The user remains fully logged out (no credentials) and
-    /// login-gated features are disabled until they sign in.
-    SkipFirebaseAnonymousUser,
 
     /// Enables tab configs — user-definable TOML templates for launching custom tab layouts.
     TabConfigs,

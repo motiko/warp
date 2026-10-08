@@ -127,7 +127,6 @@ pub enum WorkspaceAction {
         width: f32,
     },
     TabHoverWidthEnd,
-    ToggleTabBarOverflowMenu,
     CloseTab(usize),
     CloseActiveTab,
     CloseOtherTabs(usize),
@@ -227,10 +226,7 @@ pub enum WorkspaceAction {
         anchor: NewSessionMenuAnchor,
     },
     SelectNewSessionMenuItem(NewSessionMenuItem),
-    AutoupdateFailureLink,
-    ApplyUpdate,
     CopyVersion(&'static str),
-    DownloadNewVersion,
     ConfigureKeybindingSettings {
         keybinding_name: Option<String>,
     },
@@ -264,7 +260,6 @@ pub enum WorkspaceAction {
     },
     JoinSlack,
     ViewUserDocs,
-    ViewLatestChangelog,
     ViewPrivacyPolicy,
     SendFeedback,
     /// Open the log directory in the system file explorer with the current log file selected.
@@ -274,7 +269,6 @@ pub enum WorkspaceAction {
     ToggleBlockSnackbar,
     ToggleErrorUnderlining,
     ToggleSyntaxHighlighting,
-    CheckForUpdate,
     SetA11yVerbosityLevel(AccessibilityVerbosity),
     ToggleNotifications,
     ToggleTabColor {
@@ -339,9 +333,6 @@ pub enum WorkspaceAction {
     /// if the focused pane is the rendered file viewer (`FilePane`), otherwise the focused
     /// terminal session's working directory. No-op if neither yields a path.
     CopyCurrentPath,
-    /// An action only registered in dev and local builds, which writes the user's current access
-    /// token to the system clipboard to aid debugging and development.
-    CopyAccessTokenToClipboard,
     DismissWorkspaceBanner(WorkspaceBanner),
     /// An action only registered in dev and local builds, which crashes the
     /// app (via a Sentry helper method) immediately when called.
@@ -521,9 +512,6 @@ pub enum WorkspaceAction {
     },
     /// Opens the settings.toml file in a code editor pane.
     OpenSettingsFile,
-    /// Opens (or focuses) the in-app network log pane as a right-split of the
-    /// active pane group. Gated on `ContextFlag::NetworkLogConsole`.
-    OpenNetworkLogPane,
 }
 
 impl WorkspaceAction {
@@ -608,10 +596,7 @@ impl WorkspaceAction {
             | OpenVerticalTabsPanel => true, // actions that actually change a state of the state of user's
             // workspace would most likely require a save, so that if the app gets
             // restarted, the user can continue working
-            AutoupdateFailureLink
-            | ApplyUpdate
-            | CopyVersion(_)
-            | DownloadNewVersion
+            CopyVersion(_)
             | ConfigureKeybindingSettings { .. }
             | ShowSettings
             | ShowSettingsPage(_)
@@ -628,7 +613,6 @@ impl WorkspaceAction {
             | TogglePalette { mode: _, source: _ }
             | JoinSlack
             | ViewUserDocs
-            | ViewLatestChangelog
             | ViewPrivacyPolicy
             | SendFeedback
             | ChangeCursor(_)
@@ -644,8 +628,6 @@ impl WorkspaceAction {
             | ToggleTabConfigsMenu
             | ToggleNewSessionMenu { .. }
             | SelectNewSessionMenuItem(_)
-            | ToggleTabBarOverflowMenu
-            | CheckForUpdate
             | SetA11yVerbosityLevel(_)
             | ToggleNotifications
             | DispatchToSettingsTab { .. }
@@ -677,7 +659,6 @@ impl WorkspaceAction {
             | ToggleVerticalTabsShowDetailsOnHover
             | CopyTextToClipboard(_)
             | CopyCurrentPath
-            | CopyAccessTokenToClipboard
             | OpenTabConfigRepoPicker { .. }
             | OpenNewWorktreeModal
             | OpenNewWorktreeRepoPicker
@@ -733,7 +714,7 @@ impl WorkspaceAction {
             | TabConfigSidecarEditConfig { .. }
             | TabConfigSidecarRemoveConfig { .. }
             | OpenSettingsFile
-            | OpenNetworkLogPane => false,
+            => false,
             #[cfg(not(target_family = "wasm"))]
             ViewLogs => false,
             #[cfg(target_os = "macos")]

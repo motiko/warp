@@ -19,46 +19,24 @@ pub struct ChannelConfig {
     /// Configuration for telemetry sending, or [`None`] if telemetry should be
     /// disabled for this build.
     pub telemetry_config: Option<TelemetryConfig>,
-    /// Configuration for autoupdate functionality.
-    pub autoupdate_config: Option<AutoupdateConfig>,
     /// Configuration for crash reporting.
     pub crash_reporting_config: Option<CrashReportingConfig>,
     /// Configuration for statically-bundled MCP OAuth credentials.
     pub mcp_static_config: Option<McpStaticConfig>,
 }
 
-/// Configuration for GCP Identity-Aware Proxy authentication, present only on staging builds.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct IapConfig {
-    /// The IAP OAuth2 client ID used as the audience for identity tokens.
-    pub audiences: Cow<'static, str>,
-    /// The service account email to impersonate when acquiring IAP credentials.
-    pub service_account_email: Cow<'static, str>,
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct WarpServerConfig {
     /// The root URL for the standard server pool.
     pub server_root_url: Cow<'static, str>,
-    /// The URL for the RTC server, which serves real-time updates for Warp Drive objects.
-    pub rtc_server_url: Cow<'static, str>,
-    /// The API key to use when making requests to Firebase Authentication endpoints.
-    pub firebase_auth_api_key: Cow<'static, str>,
-    /// Configuration for GCP Identity-Aware Proxy authentication, present only on
-    /// staging builds. [`None`] on production builds.
-    #[serde(default)]
-    pub iap_config: Option<IapConfig>,
 }
 
 impl WarpServerConfig {
-    /// A configuration with no server at all: every URL is empty and there is no auth key, so
-    /// the build has nothing to talk to.
+    /// A configuration with no server at all: the URL is empty, so the build has nothing to
+    /// talk to.
     pub fn offline() -> Self {
         Self {
             server_root_url: "".into(),
-            rtc_server_url: "".into(),
-            firebase_auth_api_key: "".into(),
-            iap_config: None,
         }
     }
 }
@@ -88,45 +66,6 @@ impl OzConfig {
 pub struct TelemetryConfig {
     /// The name of the file in which not-yet-sent telemetry events will be stored.
     pub telemetry_file_name: Cow<'static, str>,
-    /// Configuration for Rudderstack, for reporting telemetry events.
-    pub rudderstack_config: Option<RudderStackConfig>,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct RudderStackConfig {
-    pub write_key: Cow<'static, str>,
-    pub root_url: Cow<'static, str>,
-    pub ugc_write_key: Cow<'static, str>,
-}
-
-impl RudderStackConfig {
-    pub fn non_ugc_destination(&self) -> RudderStackDestination {
-        RudderStackDestination {
-            root_url: self.root_url.clone(),
-            write_key: self.write_key.clone(),
-        }
-    }
-
-    pub fn ugc_destination(&self) -> RudderStackDestination {
-        RudderStackDestination {
-            root_url: self.root_url.clone(),
-            write_key: self.ugc_write_key.clone(),
-        }
-    }
-}
-
-#[derive(Default)]
-pub struct RudderStackDestination {
-    pub root_url: Cow<'static, str>,
-    pub write_key: Cow<'static, str>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct AutoupdateConfig {
-    /// The base URL for fetching autoupdate versions and updated release bundles.
-    pub releases_base_url: Cow<'static, str>,
-    /// Whether or not to display menu items relating to autoupdate.
-    pub show_autoupdate_menu_items: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

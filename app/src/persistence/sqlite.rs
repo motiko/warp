@@ -2,7 +2,6 @@ use std::collections::{HashMap, VecDeque};
 use std::convert::TryInto;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Once};
 use std::{fs, thread};
 
@@ -23,16 +22,16 @@ use pathfinder_geometry::rect::RectF;
 use pathfinder_geometry::vector::Vector2F;
 use persistence::model::AMBIENT_AGENT_PANE_KIND;
 use uuid::Uuid;
-use warp_errors::{report_error, report_if_error};
+use warp_errors::report_error;
 use warpui::AppContext;
 use warpui::platform::FullscreenState;
 use warpui::windowing::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH};
 
 use super::block_list::{delete_blocks, save_block};
 use super::model::{
-    self, AI_DOCUMENT_PANE_KIND, AI_FACT_PANE_KIND, CODE_PANE_KIND, CurrentUserInformation,
+    self, AI_DOCUMENT_PANE_KIND, AI_FACT_PANE_KIND, CODE_PANE_KIND,
     ENV_VAR_COLLECTION_PANE_KIND, EXECUTION_PROFILE_EDITOR_PANE_KIND, MCP_SERVER_PANE_KIND,
-    NOTEBOOK_PANE_KIND, NewApp, NewCommand, NewServerExperiment, NewTab, NewTabGroup, NewTeam,
+    NOTEBOOK_PANE_KIND, NewApp, NewCommand, NewTab, NewTabGroup, NewTeam,
     NewWindow, NewWorkspace, NewWorkspaceMetadata, NewWorkspaceTeam, Project, SETTINGS_PANE_KIND,
     TERMINAL_PANE_KIND, Tab, TabGroup, WORKFLOW_PANE_KIND, Window,
     WorkspaceMetadata as WorkspaceMetadataModel,
@@ -48,12 +47,10 @@ use crate::app_state::{
     TabSnapshot, TerminalPaneSnapshot, WindowSnapshot,
 };
 use crate::auth::UserUid;
-use crate::auth::auth_manager::PersistedCurrentUserInformation;
 use crate::code::editor_management::CodeSource;
 use crate::persistence::block_list::get_all_restored_blocks;
 use crate::persistence::model::{CODE_REVIEW_PANE_KIND, GET_STARTED_PANE_KIND, NewTeamSettings};
 use crate::projects::persisted_workspace::EnablementState;
-use crate::server::experiments::ServerExperiment;
 use crate::server::ids::ServerId;
 use crate::server::telemetry::TelemetryEvent;
 use crate::settings_view::SettingsSection;
@@ -446,45 +443,11 @@ fn ensure_owner_only_file(_path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn remove(sender: SyncSender<ModelEvent>) {
-    // Instruct the writer thread to remove the database and pause processing
-    // events.
-    // Ideally, we'd drop any other events in the channel, but it's not worth the complexity right
-    // now. Having the writer thread remove the database file prevents race conditions if the
-    // thread is in the middle of another update.
-    report_if_error!(
-        sender
-            .send(ModelEvent::PauseAndRemoveDatabase)
-            .context("Error requesting database deletion")
-    );
-}
-
-pub(super) fn reconstruct(sender: SyncSender<ModelEvent>) {
-    report_if_error!(
-        sender
-            .send(ModelEvent::ReconstructAndResume)
-            .context("Error resuming SQLite thread")
-    );
-}
-
-fn reconstruct_database(path: &Path) -> Result<SqliteConnection> {
-    // If the DB still exists, logout might have failed. However, it's more likely that something
-    // else wrote to it before the user logged back in.
-    if std::fs::metadata(path).is_ok() {
-        log::info!("Reconstructing database, but it already exists");
-    }
-
-    // Always reinitialize DB - setup_database will only create it if it doesn't exist.
-    setup_database(path)
-}
-
-fn start_writer(conn: SqliteConnection, database_path: PathBuf) -> Result<WriterHandles> {
+fn start_writer(mut conn: SqliteConnection, database_path: PathBuf) -> Result<WriterHandles> {
     let (tx, rx) = std::sync::mpsc::sync_channel(CHANNEL_SIZE);
-    let mut current_conn = conn;
     let handle = thread::Builder::new()
         .name("SQLite Writer".into())
         .spawn(move || {
-            let mut paused = false;
             loop {
                 let events = match rx.recv() {
                     Ok(event) => {
@@ -505,41 +468,12 @@ fn start_writer(conn: SqliteConnection, database_path: PathBuf) -> Result<Writer
 
                 for event in events {
                     match event {
-                        ModelEvent::ReconstructAndResume => {
-                            match reconstruct_database(&database_path) {
-                                Ok(conn) => {
-                                    current_conn = conn;
-                                    paused = false;
-                                    log::info!("SQLite Writer is resumed");
-                                }
-                                Err(err) => {
-                                    report_db_error("reconstruction", err, &database_path);
-                                }
-                            }
-                        }
-                        ModelEvent::PauseAndRemoveDatabase => {
-                            paused = true;
-                            log::info!("SQLite Writer is paused");
-
-                            if let Err(err) = std::fs::remove_file(&database_path) {
-                                report_error!(
-                                    anyhow::Error::new(err)
-                                        .context("Error removing SQLite database")
-                                );
-                            } else {
-                                log::info!("Removed SQLite database");
-                            }
-                        }
                         ModelEvent::Terminate => {
                             log::info!("Shutting down SQLite writer thread");
                             return;
                         }
                         event => {
-                            if paused {
-                                log::info!("Ignoring event as SQLite Writer is on pause");
-                                continue;
-                            }
-                            if let Err(err) = handle_model_event(event, &mut current_conn) {
+                            if let Err(err) = handle_model_event(event, &mut conn) {
                                 report_db_error("Model", err, &database_path);
                             }
                         }
@@ -551,15 +485,11 @@ fn start_writer(conn: SqliteConnection, database_path: PathBuf) -> Result<Writer
 }
 
 /// Handles a single [`ModelEvent`] by dispatching to an event-specific function.
-/// Events which affect the SQLite writer event loop _must_ instead be handled by the event loop itself:
-/// * [`ModelEvent::PauseAndRemoveDatabase`]
-/// * [`ModelEvent::ReconstructAndResume`]
-/// * [`ModelEvent::Terminate`]
+/// [`ModelEvent::Terminate`] affects the SQLite writer event loop and _must_ instead be handled by
+/// the event loop itself.
 fn handle_model_event(event: ModelEvent, connection: &mut SqliteConnection) -> anyhow::Result<()> {
     match event {
-        ModelEvent::PauseAndRemoveDatabase
-        | ModelEvent::ReconstructAndResume
-        | ModelEvent::Terminate => {
+        ModelEvent::Terminate => {
             panic!("Unhandled control-flow event {event:?}");
         }
         ModelEvent::SaveBlock(BlockCompleted {
@@ -604,13 +534,6 @@ fn handle_model_event(event: ModelEvent, connection: &mut SqliteConnection) -> a
         }
         ModelEvent::UpdateFinishedCommand { metadata } => {
             update_finished_command(connection, metadata).context("error updating finished command")
-        }
-        ModelEvent::SaveExperiments { experiments } => {
-            save_experiments(connection, experiments).context("error saving experiments")
-        }
-        ModelEvent::UpsertCurrentUserInformation { user_information } => {
-            upsert_current_user_information(connection, user_information)
-                .context("error upserting user information")
         }
         ModelEvent::AddIgnoredSuggestion {
             suggestion,
@@ -891,19 +814,6 @@ fn save_app_state(conn: &mut SqliteConnection, app_state: &AppState) -> Result<(
                         parent_pane_node_id,
                     } = pane_nodes.pop_front().expect("Should have node");
 
-                    // Skip leaves whose content types don't get a
-                    // corresponding `pane_leaves` row on save. Otherwise the
-                    // `pane_nodes` insert below would create an orphan row
-                    // (is_leaf=true, but no matching row in `pane_leaves`),
-                    // and `read_node` would fail to resolve the leaf on
-                    // restore, causing the entire surrounding tab to be
-                    // dropped. See `LeafContents::is_persisted`.
-                    if let PaneNodeSnapshot::Leaf(leaf) = pane_node
-                        && !leaf.contents.is_persisted()
-                    {
-                        continue;
-                    }
-
                     let is_leaf = matches!(pane_node, PaneNodeSnapshot::Leaf(_));
                     let new_pane_node = model::NewPaneNode {
                         tab_id: *tab_id,
@@ -974,18 +884,6 @@ fn save_pane_state(
         LeafContents::Settings(_) => SETTINGS_PANE_KIND,
         LeafContents::CodeReview(_) => CODE_REVIEW_PANE_KIND,
         LeafContents::GetStarted => GET_STARTED_PANE_KIND,
-        LeafContents::NetworkLog => {
-            // This pane type is filtered out before this function is
-            // called; see `LeafContents::is_persisted` and the skip in
-            // `save_app_state`. Reaching this arm would mean a `pane_nodes`
-            // row had already been inserted with no corresponding
-            // `pane_leaves` row, which would break restoration.
-            debug_assert!(
-                false,
-                "save_pane_state called for non-persisted LeafContents variant"
-            );
-            return Ok(());
-        }
     };
 
     let leaf = model::NewPane {
@@ -1095,9 +993,6 @@ fn save_pane_state(
         }
         LeafContents::GetStarted => {
             // Stateless
-        }
-        LeafContents::NetworkLog => {
-            // Unreachable: filtered by `is_persisted` in `save_app_state`.
         }
     }
 
@@ -1809,7 +1704,6 @@ fn read_sqlite_data(
             workspaces: Default::default(),
             current_workspace_uid: None,
             command_history: Default::default(),
-            experiments: Default::default(),
             codebase_indices: Default::default(),
             workspace_language_servers: Default::default(),
             projects: Default::default(),
@@ -2123,14 +2017,6 @@ fn read_sqlite_data(
         Vec::new()
     };
 
-    let server_experiments = schema::server_experiments::dsl::server_experiments
-        .load_iter::<model::ServerExperiment, DefaultLoadingMode>(conn)?
-        .filter_map(|server_experiment| server_experiment.ok())
-        .filter_map(|server_experiment| {
-            ServerExperiment::from_string(server_experiment.experiment).ok()
-        })
-        .collect();
-
     let codebase_indices = get_all_codebase_index_metadata(conn)?;
     let workspace_language_servers = get_all_workspace_language_servers_by_workspace(conn)?;
     let projects = get_all_projects(conn)?;
@@ -2141,7 +2027,6 @@ fn read_sqlite_data(
         workspaces,
         current_workspace_uid,
         command_history: commands,
-        experiments: server_experiments,
         codebase_indices,
         workspace_language_servers,
         projects,
@@ -2218,44 +2103,6 @@ fn update_finished_command(
                 exit_code.eq(completed_command.exit_code.value()),
                 completed_ts.eq(completed_command.completed_ts.naive_utc()),
             ))
-            .execute(conn)?;
-        Ok(())
-    })
-}
-
-fn save_experiments(
-    conn: &mut SqliteConnection,
-    experiments: Vec<ServerExperiment>,
-) -> Result<(), Error> {
-    conn.transaction::<(), Error, _>(|conn| {
-        diesel::delete(schema::server_experiments::dsl::server_experiments).execute(conn)?;
-
-        let new_experiments = experiments
-            .into_iter()
-            .map(|experiment| NewServerExperiment {
-                experiment: experiment.to_string(),
-            })
-            .collect_vec();
-
-        diesel::insert_into(schema::server_experiments::dsl::server_experiments)
-            .values(new_experiments)
-            .execute(conn)?;
-        Ok(())
-    })
-}
-
-fn upsert_current_user_information(
-    conn: &mut SqliteConnection,
-    user_information: PersistedCurrentUserInformation,
-) -> Result<(), Error> {
-    conn.transaction::<(), Error, _>(|conn| {
-        diesel::delete(schema::current_user_information::dsl::current_user_information)
-            .execute(conn)?;
-
-        diesel::insert_into(schema::current_user_information::dsl::current_user_information)
-            .values(CurrentUserInformation {
-                email: user_information.email,
-            })
             .execute(conn)?;
         Ok(())
     })

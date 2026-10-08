@@ -8,9 +8,7 @@ mod app_menus;
 mod app_services;
 mod app_state;
 mod auth;
-mod autoupdate;
 mod banner;
-mod changelog_model;
 mod chip_configurator;
 mod code;
 mod code_review;
@@ -110,7 +108,6 @@ pub mod settings_view;
 pub mod tab_configs;
 pub mod terminal;
 pub mod themes;
-use auth::auth_manager::AuthManager;
 use auth::auth_state::{AuthState, AuthStateProvider};
 use code::editor_management::CodeManager;
 use code::opened_files::OpenedFilesModel;
@@ -122,7 +119,6 @@ use quit_warning::UnsavedStateSummary;
 use repo_metadata::{
     RepoMetadataModel, repositories::DetectedRepositories, watcher::DirectoryWatcher,
 };
-use server::network_log_pane_manager::NetworkLogPaneManager;
 use server::telemetry::context_provider::AppTelemetryContextProvider;
 #[cfg(feature = "local_fs")]
 use settings::import::model::ImportedConfigModel;
@@ -136,7 +132,6 @@ pub use util::bindings::cmd_or_ctrl_shift;
 use watcher::HomeDirectoryWatcher;
 
 use crate::uri::web_intent_parser::maybe_rewrite_web_url_to_intent;
-use crate::view_components::DismissibleToast;
 pub mod workflows;
 pub mod workspace;
 
@@ -154,7 +149,6 @@ use interval_timer::IntervalTimer;
 use itertools::Itertools;
 #[cfg(feature = "integration_tests")]
 pub use persistence::testing as sqlite_testing;
-use server::server_api::ServerApiProvider;
 use settings::{ExtraMetaKeys, PrivacySettings};
 use terminal::input;
 use terminal::session_settings::SessionSettings;
@@ -171,8 +165,6 @@ use warp_errors::{report_error, report_if_error};
 #[cfg(feature = "local_fs")]
 use warp_files::FileModel;
 use warp_logging::{LogDestination, LogFrontend};
-use warp_server_client::iap::{IapManager, IapManagerEvent, IapState};
-use warp_server_client::network_logging::NetworkLogModel;
 use warpui::integration::TestDriver;
 use warpui::platform::TerminationMode;
 use warpui::platform::app::{ApproveTerminateResult, TerminationRequestSource};
@@ -185,8 +177,6 @@ use self::features::FeatureFlag;
 #[cfg(not(target_family = "wasm"))]
 use crate::antivirus::AntivirusInfo;
 use crate::app_state::AppState;
-use crate::autoupdate::{AutoupdateState, RelaunchModel};
-use crate::changelog_model::ChangelogModel;
 use crate::code::global_buffer_model::GlobalBufferModel;
 #[cfg(feature = "local_fs")]
 use crate::code::language_server_shutdown_manager::LanguageServerShutdownManager;
@@ -204,7 +194,6 @@ use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::root_view::{
     OpenFromRestoredArg, OpenPath, quake_mode_window_id, quake_mode_window_is_open,
 };
-use crate::server::experiments::ServerExperiments;
 pub use crate::server::telemetry::TelemetryEvent;
 use crate::server::telemetry::{AppStartupInfo, CloseTarget, PaletteSource};
 use crate::session_management::{RunningSessionSummary, SessionNavigationData};
@@ -224,8 +213,6 @@ use crate::vim_registers::VimRegisters;
 use crate::warp_managed_paths_watcher::{WarpManagedPathsWatcher, ensure_warp_watch_roots_exist};
 use crate::workflows::local_workflows::LocalWorkflows;
 use crate::workspace::{ActiveSession, PaneViewLocator, ToastStack, Workspace, WorkspaceAction};
-use crate::workspaces::team_tester::TeamTesterStatus;
-use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
 /// Our embedded application assets.
@@ -450,20 +437,13 @@ pub fn run() -> Result<()> {
     let args = warp_cli::Args::from_env();
 
     // Server URL overrides are only honored on internal dev channels. Release channels silently
-    // ignore `--server-root-url` / `--ws-server-url` (and their `WARP_*` env-var equivalents) so shipped builds can't be redirected away from their
-    // baked-in server URLs. See `Channel::allows_server_url_overrides`.
-    if ChannelState::channel().allows_server_url_overrides() {
-        if let Some(url) = args.server_root_url()
-            && let Err(e) = ChannelState::override_server_root_url(url.to_owned())
-        {
-            eprintln!("Error: Invalid server root URL: {e:#}");
-        }
-
-        if let Some(url) = args.ws_server_url()
-            && let Err(e) = ChannelState::override_ws_server_url(url.to_owned())
-        {
-            eprintln!("Error: Invalid websocket server URL: {e:#}");
-        }
+    // ignore `--server-root-url` (and its `WARP_*` env-var equivalent) so shipped builds can't be
+    // redirected away from their baked-in server URLs. See `Channel::allows_server_url_overrides`.
+    if ChannelState::channel().allows_server_url_overrides()
+        && let Some(url) = args.server_root_url()
+        && let Err(e) = ChannelState::override_server_root_url(url.to_owned())
+    {
+        eprintln!("Error: Invalid server root URL: {e:#}");
     }
 
     if let Some(command) = args.command() {
@@ -689,8 +669,6 @@ fn run_internal(mut launch_mode: LaunchMode) -> Result<()> {
             Ok(_) => std::process::exit(0),
             // If Warp isn't already running, we're good to go.
             Err(app_services::linux::StartupArgsForwardingError::NoExistingInstance) => {}
-            // If we just finished an auto-update, we should continue running.
-            Err(app_services::linux::StartupArgsForwardingError::IgnoredAfterAutoUpdate) => {}
             Err(
                 app_services::linux::StartupArgsForwardingError::IgnoredForCrashRecoveryProcess,
             ) => {}
@@ -715,8 +693,6 @@ fn run_internal(mut launch_mode: LaunchMode) -> Result<()> {
             Ok(_) => std::process::exit(0),
             // If Warp isn't already running, we're good to go.
             Err(app_services::windows::StartupArgsForwardingError::NoExistingInstance) => {}
-            // If we just finished an auto-update, we should continue running.
-            Err(app_services::windows::StartupArgsForwardingError::IgnoredAfterAutoUpdate) => {}
             Err(
                 app_services::windows::StartupArgsForwardingError::IgnoredForCrashRecoveryProcess,
             ) => {}
@@ -965,37 +941,9 @@ pub(crate) fn initialize_app(
     let auth_state = Arc::new(AuthState::initialize_logged_out(ctx));
     timer.mark_interval_end("AUTH_MANAGER_SET_USER");
 
-    // NetworkLogModel must be registered before ServerApiProvider so that
-    // `NetworkLogModel::install_on_clients` can reach it when forwarding items
-    // captured by the HTTP client hooks.
-    ctx.add_singleton_model(|_ctx| NetworkLogModel::default());
-
-    // Create a shared IAP state for staging builds. The same `Arc<IapState>`
-    // is handed to both `ServerApi` (for sync reads on the request path) and
-    // `IapManager` (which owns refresh logic on the main thread).
-    #[cfg(not(target_family = "wasm"))]
-    let iap_state = ChannelState::iap_config().map(|cfg| Arc::new(IapState::new(&cfg)));
-    #[cfg(target_family = "wasm")]
-    let iap_state: Option<Arc<IapState>> = None;
-
-    let server_api_provider = ctx.add_singleton_model({
-        let auth_state = auth_state.clone();
-        let iap_state = iap_state.clone();
-        move |ctx| ServerApiProvider::new(auth_state, iap_state, ctx)
-    });
-
-    let server_api = server_api_provider.as_ref(ctx).get();
     ctx.add_singleton_model(|_ctx| AuthStateProvider::new(auth_state.clone()));
 
     ctx.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
-
-    ctx.add_singleton_model(|ctx| {
-        AuthManager::new(
-            server_api.clone(),
-            server_api_provider.as_ref(ctx).get_auth_client(),
-            ctx,
-        )
-    });
 
     ctx.add_singleton_model(|_ctx| GPUState::new());
 
@@ -1045,7 +993,6 @@ pub(crate) fn initialize_app(
         current_workspace_uid,
         app_state,
         command_history,
-        experiments,
         persisted_workspaces,
         workspace_language_servers,
         persisted_projects,
@@ -1057,7 +1004,6 @@ pub(crate) fn initialize_app(
                 sqlite_data.current_workspace_uid,
                 sqlite_data.app_state,
                 sqlite_data.command_history,
-                sqlite_data.experiments,
                 sqlite_data.codebase_indices,
                 sqlite_data.workspace_language_servers,
                 sqlite_data.projects,
@@ -1074,14 +1020,8 @@ pub(crate) fn initialize_app(
                 Default::default(),
                 Default::default(),
                 Default::default(),
-                Default::default(),
             )
         });
-
-    // Initialize a global model to track server-side experiment state.
-    // This depends on the [`GlobalResourceHandlesProvider`] and so it must
-    // be initialized after it.
-    ctx.add_singleton_model(|ctx| ServerExperiments::new_from_cache(experiments, ctx));
 
     ctx.add_singleton_model(|ctx| {
         UserWorkspaces::new(cached_workspaces, current_workspace_uid, ctx)
@@ -1108,30 +1048,9 @@ pub(crate) fn initialize_app(
     }
     timer.mark_interval_end("INIT_CRASH_REPORTING");
 
-    if let LaunchMode::App { .. } = launch_mode {
-        autoupdate::check_and_report_update_errors(ctx);
-    }
-
     ctx.set_fallback_font_source_provider(|url| ::asset_cache::url_source(url));
 
     ctx.set_default_binding_validator(is_binding_cross_platform);
-
-    // Attempt to clean up any old executable, whether or not we were explicitly
-    // launched as part of the auto-update process. We may have failed to remove
-    // the executable on a previous launch of the app and should try again.
-    //
-    // On macOS this deletes `Contents/MacOS/old` from inside the installed app
-    // bundle, so it runs behind the same `can_autoupdate` guard as the rest of
-    // the autoupdate machinery: an execution mode that never autoupdates must
-    // not mutate that bundle. The bundled CLI runs the GUI executable from
-    // inside `Warp.app`, so without this it would rewrite a bundle it does not
-    // own. See APP-2946.
-    if FeatureFlag::Autoupdate.is_enabled()
-        && AppExecutionMode::as_ref(ctx).can_autoupdate()
-        && let Err(e) = autoupdate::remove_old_executable()
-    {
-        report_error!(e.context("Failed to remove old executable"));
-    }
 
     experiments::init(ctx);
 
@@ -1139,7 +1058,6 @@ pub(crate) fn initialize_app(
     App::record_last_active_timestamp();
 
     ctx.add_singleton_model(|_| SettingsPaneManager::new());
-    ctx.add_singleton_model(|_| NetworkLogPaneManager::default());
     #[cfg(target_os = "macos")]
     if launch_mode.is_gui() {
         AppearanceManager::as_ref(ctx).set_app_icon(ctx);
@@ -1164,7 +1082,7 @@ pub(crate) fn initialize_app(
 
     ctx.add_singleton_model(remote_server::manager::RemoteServerManager::new);
     #[cfg(not(target_family = "wasm"))]
-    remote_server::wire_auth_token_rotation(ctx);
+    remote_server::wire_privacy_preferences(ctx);
 
     log::info!(
         "Starting warp with channel state {} and version {:?}",
@@ -1205,7 +1123,6 @@ pub(crate) fn initialize_app(
         // Set the first frame callback to record the app's startup time.
         // This is only sent for logged-in users so that new users don't skew performance metrics.
         let is_screen_reader_enabled = ctx.is_screen_reader_enabled();
-        let from_relaunch = launch_mode.args().finish_update;
         ctx.on_first_frame_drawn(move |ctx| {
             let timing_data = IntervalTimer::handle(ctx).update(ctx, |timer, _| {
                 timer.mark_interval_end("FIRST_FRAME_DRAWN");
@@ -1214,7 +1131,6 @@ pub(crate) fn initialize_app(
             let event = TelemetryEvent::AppStartup(AppStartupInfo {
                 is_session_restoration_on: user_defaults_on_startup.should_restore_session,
                 is_screen_reader_enabled,
-                from_relaunch,
                 is_crash_reporting_enabled,
                 timing_data,
             });
@@ -1341,8 +1257,6 @@ pub(crate) fn initialize_app(
     let display_count = ctx.windows().display_count();
     ctx.add_singleton_model(|_| DisplayCount(display_count));
 
-    ctx.add_singleton_model(|_| RelaunchModel::new());
-    ctx.add_singleton_model(|_| ChangelogModel::new(server_api.clone()));
     ctx.add_singleton_model(|_| NetworkStatus::new());
     ctx.add_singleton_model(|_| SystemStats::new());
     ctx.add_singleton_model(|_| KeybindingChangedNotifier::new());
@@ -1363,18 +1277,6 @@ pub(crate) fn initialize_app(
 
     ctx.add_singleton_model(|_| AudibleBell::new());
 
-    // This model has to be registered after the user workspaces model because it relies on it,
-    // and before the TeamUpdateManager model because it relies on the TeamTester model.
-    ctx.add_singleton_model(TeamTesterStatus::new);
-
-    ctx.add_singleton_model(|ctx| {
-        TeamUpdateManager::new(
-            server_api_provider.as_ref(ctx).get_team_client(),
-            persistence_writer.sender(),
-            ctx,
-        )
-    });
-
     window_settings::migrate_legacy_background_backdrop(ctx);
     ai::custom_endpoints::init(launch_mode, ctx);
 
@@ -1392,58 +1294,11 @@ pub(crate) fn initialize_app(
         ctx.add_singleton_model(system::SystemInfo::new);
     }
 
-    // `IapManager` drives IAP token refresh for staging builds.
-    // Register it after `LocalShellState`: the Manager needs to know where the gcloud
-    // cli lives & thus needs PATH config set by ~/.zshrc et al.
-    //
-    // On wasm `iap_state` is always `None`, making this an inert no-op: `IapManager::new`
-    // early-returns from its refresh loop and `iap_state()` yields no proxy-auth header.
-    ctx.add_singleton_model(move |ctx| {
-        let path_resolver = Box::new(|_ctx: &mut AppContext| {
-            #[cfg(feature = "local_tty")]
-            let path_future = LocalShellState::handle(_ctx).update(_ctx, |shell_state, ctx| {
-                shell_state.get_interactive_path_env_var(ctx)
-            });
-
-            #[cfg(not(feature = "local_tty"))]
-            let path_future =
-                futures::FutureExt::boxed_local(futures::future::ready(None::<String>));
-
-            path_future
-        });
-        IapManager::new(iap_state, path_resolver, ctx)
-    });
-    // Subscribe to IAP manager events to show toasts when refresh fails.
-    ctx.subscribe_to_model(&IapManager::handle(ctx), |_, e, ctx| {
-        match e {
-            IapManagerEvent::RefreshFailed {
-                message,
-                is_first_failure_of_streak,
-            } if *is_first_failure_of_streak => {
-                let window_id = ctx
-                    .windows()
-                    .active_window()
-                    .or_else(|| ctx.windows().ordered_window_ids().first().copied());
-                let Some(window_id) = window_id else {
-                    return;
-                };
-                let toast: DismissibleToast<WorkspaceAction> =
-                    DismissibleToast::error(format!("IAP credential refresh failed: {message}"));
-                ToastStack::handle(ctx).update(ctx, |stack, ctx| {
-                    stack.add_ephemeral_toast(toast, window_id, ctx);
-                });
-            }
-            _ => {}
-        };
-    });
-
     // Add a singleton model that holds the current prompt configuration.
     ctx.add_singleton_model(Prompt::new);
 
     // Add a singleton model for resizable modals whose size should be persisted through restarts.
     ctx.add_singleton_model(|_| ResizableData::default());
-
-    AutoupdateState::register(ctx, server_api.clone());
 
     ctx.add_singleton_model(LocalWorkflows::new);
 
@@ -1453,7 +1308,7 @@ pub(crate) fn initialize_app(
 
     ctx.add_singleton_model(DefaultTerminal::new);
 
-    let lsp_http_client = server_api_provider.as_ref(ctx).get_http_client();
+    let lsp_http_client = Arc::new(http_client::Client::new());
     ctx.add_singleton_model(|ctx| {
         PersistedWorkspace::new(
             persisted_workspaces,
@@ -1553,11 +1408,7 @@ pub(crate) fn app_callbacks(is_integration_test: bool) -> warpui::platform::AppC
             #[cfg(all(feature = "local_tty", windows))]
             terminal::local_tty::shutdown_all_pty_event_loops(ctx);
 
-            // Tear down app services before spawning the new process, to
-            // ensure that the new process doesn't find the old process while
-            // attempting to enforce our single-instance policy on Linux.
             app_services::teardown(ctx);
-            autoupdate::spawn_child_if_necessary(ctx);
 
             // Tear down any application profilers that are running, writing
             // results to disk.
@@ -1639,18 +1490,6 @@ pub(crate) fn app_callbacks(is_integration_test: bool) -> warpui::platform::AppC
                 },
                 ctx
             );
-
-            // If there's a pending autoupdate, apply that before showing the unsaved changes
-            // dialog. We apply the update first so that the dialog can force-terminate.
-            let applying_update = autoupdate::apply_pending_update(ctx, |ctx| {
-                // Once the deferred update is applied, re-terminate the app. This termination is
-                // cancellable so that we still show the unsaved changes dialog.
-                log::info!("Deferred autoupdate applied, terminating app");
-                ctx.terminate_app(TerminationMode::Cancellable, None);
-            });
-            if applying_update {
-                return ApproveTerminateResult::Cancel;
-            }
 
             let summary = UnsavedStateSummary::for_app(ctx);
             // Don't show dialog on integration test. Machine can't press buttons.
@@ -1767,8 +1606,6 @@ pub(crate) fn app_callbacks(is_integration_test: bool) -> warpui::platform::AppC
 }
 
 fn on_close_app_cancelled(open_navigation_palette: bool, ctx: &mut AppContext) {
-    autoupdate::cancel_relaunch(ctx);
-
     send_telemetry_from_app_ctx!(
         TelemetryEvent::QuitModalCancel {
             nav_palette: open_navigation_palette,

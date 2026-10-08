@@ -11,7 +11,7 @@ use warpui::ui_components::button::ButtonVariant;
 use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::windowing::{StateEvent, WindowManager};
 use warpui::{
-    AppContext, Entity, FocusContext, ModelHandle, SingletonEntity, TypedActionView, View,
+    AppContext, Entity, FocusContext, SingletonEntity, TypedActionView, View,
     ViewContext, ViewHandle, WindowId,
 };
 
@@ -22,7 +22,6 @@ use super::section_views::{
 };
 use super::{KeybindingsView, ResourceCenterMainView};
 use crate::appearance::Appearance;
-use crate::changelog_model::ChangelogModel;
 use crate::ui_components::buttons::icon_button;
 use crate::ui_components::icons;
 use crate::ui_components::window_focus_dimming::WindowFocusDimming;
@@ -109,14 +108,11 @@ pub enum ResourceCenterAction {
 }
 
 impl ResourceCenterView {
-    pub fn new(
-        ctx: &mut ViewContext<Self>,
-        changelog_model_handle: ModelHandle<ChangelogModel>,
-    ) -> Self {
+    pub fn new(ctx: &mut ViewContext<Self>) -> Self {
         let main_view = ResourceCenterPageView {
             page: ResourceCenterPage::Main,
             page_view_handle: ResourceCenterViewHandle::Main(
-                ctx.add_view(|ctx| ResourceCenterMainView::new(ctx, changelog_model_handle)),
+                ctx.add_view(|_| ResourceCenterMainView::new()),
             ),
         };
         let keybindings_view = ResourceCenterPageView {

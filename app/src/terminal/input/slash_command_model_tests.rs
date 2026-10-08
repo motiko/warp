@@ -40,7 +40,6 @@ fn test_parse_input_requires_slash_at_start() {
 
 #[test]
 fn test_parse_slash_command_handles_argument_rules() {
-    let _changelog_flag = crate::features::FeatureFlag::Changelog.override_enabled(true);
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 

@@ -14,7 +14,6 @@ fn commands_have_typed_identities() {
             &commands::OPEN_SETTINGS_FILE,
             SlashCommandKind::OpenSettingsFile,
         ),
-        (&commands::CHANGELOG, SlashCommandKind::Changelog),
         (&*commands::FEEDBACK, SlashCommandKind::Feedback),
     ] {
         assert_eq!(

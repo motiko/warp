@@ -14,7 +14,6 @@ pub mod completions;
 pub mod local_control;
 
 pub const SERVER_ROOT_URL_OVERRIDE_ENV: &str = "WARP_SERVER_ROOT_URL";
-pub const WS_SERVER_URL_OVERRIDE_ENV: &str = "WARP_WS_SERVER_URL";
 
 /// Options related to the parent process that spawned this Warp instance.
 #[derive(Debug, Default, Clone, clap::Args)]
@@ -76,15 +75,6 @@ pub struct Args {
     )]
     server_root_url: Option<String>,
 
-    /// Override the websocket server URL.
-    #[arg(
-        long = "ws-server-url",
-        global = true,
-        hide = true,
-        env = "WARP_WS_SERVER_URL"
-    )]
-    ws_server_url: Option<String>,
-
     #[command(subcommand)]
     command: Option<Command>,
 
@@ -96,10 +86,6 @@ pub struct Args {
 /// along with their own flags, or convert their flags into an `AppArgs` value.
 #[derive(Debug, Default, clap::Args, Clone)]
 pub struct AppArgs {
-    /// True if this instance of Warp was launched at the end of the auto-update process.
-    #[arg(long = "finish-update", hide = true)]
-    pub finish_update: bool,
-
     /// Crash recovery mechanism to use if we detect the parent process terminated.
     #[cfg(enable_crash_recovery)]
     #[arg(long = "crash-recovery-mechanism", value_enum, requires = "ParentOpts")]
@@ -172,9 +158,6 @@ impl Args {
         self.server_root_url.as_deref()
     }
 
-    pub fn ws_server_url(&self) -> Option<&str> {
-        self.ws_server_url.as_deref()
-    }
 }
 
 /// Warp may spawn several worker processes - mostly servers that support the main application.
@@ -330,18 +313,6 @@ pub fn ripgrep_search_subcommand() -> String {
         .expect("ripgrep-search subcommand not found")
         .get_name()
         .to_string()
-}
-
-/// Returns the flag to use when finishing the auto-update process.
-pub fn finish_update_flag() -> String {
-    let command = <Args as CommandFactory>::command();
-    let flag = command
-        .get_arguments()
-        .find(|arg| arg.get_long() == Some("finish-update"))
-        .expect("finish-update flag not found")
-        .get_long()
-        .unwrap();
-    format!("--{flag}")
 }
 
 /// Returns the flag to use for the dump-debug-info subcommand.

@@ -49,10 +49,6 @@ pub enum GraphQLError {
     /// This build has no server configured, so the request was never sent.
     #[error("offline build: no server configured")]
     Offline,
-    /// The request was blocked by GCP Identity-Aware Proxy, indicating that
-    /// the IAP bearer token is stale or missing.
-    #[error("blocked by IAP challenge")]
-    IapChallengeBlocked,
     #[error("received non-OK response code {status}")]
     HttpError { status: StatusCode, body: String },
     #[error("Failed to deserialize GraphQL response: {0:?}")]
@@ -63,9 +59,7 @@ impl ErrorExt for GraphQLError {
     fn is_actionable(&self) -> bool {
         match self {
             GraphQLError::RequestError(e) | GraphQLError::ResponseError(e) => e.is_actionable(),
-            GraphQLError::StagingAccessBlocked
-            | GraphQLError::IapChallengeBlocked
-            | GraphQLError::Offline => false,
+            GraphQLError::StagingAccessBlocked | GraphQLError::Offline => false,
             GraphQLError::HttpError { status, .. } => {
                 !matches!(status.as_u16(), 408 | 429 | 500..=599)
             }
@@ -159,11 +153,6 @@ where
             log::debug!("{operation_name} request to /graphql/v2 succeeded.");
         }
         status_code => {
-            // Check for IAP challenge first — IAP rejects with 302/401/403 and its own
-            // `x-goog-iap-generated-response` header.
-            if http_client::iap::is_iap_challenge(status_code, response.headers()) {
-                return Err(GraphQLError::IapChallengeBlocked);
-            }
             if status_code == StatusCode::FORBIDDEN && ChannelState::uses_staging_server() {
                 // Both our server and Cloud Armor can send back HTTP 403 errors.
                 // Since Cloud Armor sends back an HTML error page, check for that to determine

@@ -3,17 +3,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 
-use anyhow::Result;
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use pathfinder_geometry::rect::RectF;
 use pathfinder_geometry::vector::{Vector2F, vec2f};
 use serde::{Deserialize, Serialize};
 use settings::Setting as _;
-use url::Url;
 use warp_core::context_flag::ContextFlag;
-use warp_core::safe_error;
-use warp_errors::report_error;
 use warpui::keymap::{EditableBinding, FixedBinding};
 use warpui::platform::{WindowBounds, WindowStyle};
 use warpui::presenter::ChildView;
@@ -27,18 +23,11 @@ use warpui::{
 
 use crate::app_state::{AppState, PaneUuid, WindowSnapshot};
 use crate::appearance::Appearance;
-use crate::auth::auth_manager::{AuthManager, AuthManagerEvent};
-use crate::auth::auth_redirect::AuthRedirectPayload;
-use crate::autoupdate::{AutoupdateState, AutoupdateStateEvent, RequestType, UpdateReady};
-use crate::changelog_model::ChangelogRequestType;
-use crate::features::FeatureFlag;
 use crate::interval_timer::IntervalTimer;
 use crate::launch_configs::launch_config;
 use crate::pane_group::{NewTerminalOptions, PanesLayout};
 use crate::persistence::ModelEvent;
 use crate::server::ids::ServerId;
-use crate::server::server_api::auth::UserAuthenticationError;
-use crate::server::server_api::{ServerApi, ServerApiProvider, ServerTime};
 use crate::server::telemetry::{LaunchConfigUiLocation, TelemetryEvent};
 use crate::settings::QuakeModeSettings;
 use crate::settings_view::{SettingsSection, flags};
@@ -187,11 +176,6 @@ pub fn init(app: &mut AppContext) {
     app.add_global_action(
         "root_view:move_quake_mode_window_from_screen_change",
         move_quake_mode_window_from_screen_change,
-    );
-    app.add_action("root_view:log_out", RootView::log_out);
-    app.add_action(
-        "root_view:handle_incoming_auth_url",
-        RootView::handle_incoming_auth_url,
     );
     app.add_action(
         "root_view:add_session_at_path",
@@ -1175,14 +1159,11 @@ impl NewWorkspaceSource {
 #[derive(Clone)]
 struct WorkspaceArgs {
     global_resource_handles: GlobalResourceHandles,
-    server_time: Option<Arc<ServerTime>>,
     workspace_setting: NewWorkspaceSource,
 }
 
 pub struct RootView {
     workspace: ViewHandle<Workspace>,
-    server_time: Option<Arc<ServerTime>>,
-    pub server_api: Arc<ServerApi>,
     pub model_event_sender: Option<SyncSender<ModelEvent>>,
 }
 
@@ -1197,44 +1178,16 @@ impl RootView {
         UserWorkspaces::handle(ctx).update(ctx, |user_workspaces, ctx| {
             user_workspaces.register_window(window_id, team_uid, ctx);
         });
-        let server_api = ServerApiProvider::as_ref(ctx).get();
-
-        ctx.subscribe_to_model(&AuthManager::handle(ctx), |me, _, event, ctx| {
-            me.handle_auth_manager_event(event, ctx);
-        });
 
         let model_event_sender = global_resource_handles.model_event_sender.clone();
         let workspace = WorkspaceArgs {
             global_resource_handles,
-            server_time: None,
             workspace_setting,
         }
         .create_workspace(ctx);
 
-        if FeatureFlag::Changelog.is_enabled() {
-            workspace.update(ctx, |workspace, ctx| {
-                workspace.check_for_changelog(ChangelogRequestType::WindowLaunch, ctx);
-            });
-        }
-
-        ctx.subscribe_to_model(
-            &AutoupdateState::handle(ctx),
-            |root_view, _handle, evt, ctx| {
-                if let AutoupdateStateEvent::CheckComplete {
-                    result,
-                    request_type: RequestType::Poll,
-                } = evt
-                {
-                    root_view.polling_update_check_complete(result, ctx)
-                }
-            },
-        );
-        AutoupdateState::handle(ctx).update(ctx, |state, ctx| state.start_polling(ctx));
-
         Self {
             workspace,
-            server_time: None,
-            server_api,
             model_event_sender,
         }
     }
@@ -1242,65 +1195,6 @@ impl RootView {
     /// Used for integration tests.
     pub fn workspace_view(&self) -> Option<&ViewHandle<Workspace>> {
         Some(&self.workspace)
-    }
-
-    fn polling_update_check_complete(
-        &mut self,
-        result: &Result<UpdateReady>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if let Ok(UpdateReady::Yes { new_version, .. }) = result {
-            log::info!("Update ready for channel version {new_version:?}");
-            if new_version.update_by.is_some() {
-                log::info!("Update ready, there is an update-by time, checking for server time.");
-                let server_api = self.server_api.clone();
-                let _ = ctx.spawn(
-                    async move { server_api.server_time().await },
-                    Self::server_time_updated,
-                );
-            }
-        }
-    }
-
-    fn server_time_updated(
-        &mut self,
-        server_time: Result<ServerTime>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if let Ok(server_time) = server_time {
-            let server_time = Arc::new(server_time);
-            self.server_time = Some(server_time.clone());
-
-            let workspace = &self.workspace;
-            workspace.update(ctx, |workspace, ctx| {
-                workspace.set_server_time(server_time);
-                ctx.notify();
-            })
-        } else {
-            report_error!(anyhow::anyhow!(
-                "Error fetching server time {:?}",
-                server_time.err()
-            ));
-        }
-    }
-
-    /// Replaces the workspace with a fresh, empty one after the local account state is cleared.
-    fn log_out(&mut self, _: &(), ctx: &mut ViewContext<Self>) -> bool {
-        self.workspace.update(ctx, |workspace, ctx| {
-            workspace.on_log_out(ctx);
-        });
-        self.workspace = WorkspaceArgs {
-            global_resource_handles: GlobalResourceHandlesProvider::as_ref(ctx).get().clone(),
-            server_time: None,
-            workspace_setting: NewWorkspaceSource::Empty {
-                previous_active_window: None,
-                shell: None,
-            },
-        }
-        .create_workspace(ctx);
-        ctx.focus_self();
-        ctx.notify();
-        true
     }
 
     fn close_window(&mut self, _: &(), ctx: &mut ViewContext<Self>) -> bool {
@@ -1377,24 +1271,6 @@ impl RootView {
         // Focus the pane that the notification originated from.
         self.focus_pane(pane_view_locator, ctx);
         send_telemetry_from_ctx!(TelemetryEvent::NotificationClicked, ctx);
-        true
-    }
-
-    #[allow(clippy::ptr_arg)]
-    fn handle_incoming_auth_url(&mut self, url: &Url, ctx: &mut ViewContext<Self>) -> bool {
-        match AuthRedirectPayload::from_url(url.clone()) {
-            Ok(redirect_payload) => {
-                AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                    auth_manager.initialize_user_from_auth_payload(redirect_payload, true, ctx);
-                });
-            }
-            Err(error) => {
-                safe_error!(
-                    safe: ("Unable to parse AuthResult from url"),
-                    full: ("Unable to parse AuthResult from url: {error}")
-                );
-            }
-        }
         true
     }
 
@@ -1482,20 +1358,6 @@ impl RootView {
         true
     }
 
-    fn handle_auth_manager_event(&mut self, event: &AuthManagerEvent, ctx: &mut ViewContext<Self>) {
-        match event {
-            AuthManagerEvent::AuthFailed(UserAuthenticationError::UserAccountDisabled(_)) => {
-                crate::auth::log_out(ctx);
-            }
-            AuthManagerEvent::AuthFailed(UserAuthenticationError::Unexpected(err)) => {
-                report_error!(err);
-            }
-            AuthManagerEvent::AuthComplete
-            | AuthManagerEvent::AuthFailed(_)
-            | AuthManagerEvent::NeedsReauth => {}
-        }
-    }
-
     pub fn focus(&mut self, ctx: &mut ViewContext<Self>) -> bool {
         ctx.focus(&self.workspace);
         ctx.notify();
@@ -1571,7 +1433,6 @@ impl WorkspaceArgs {
         ctx.add_typed_action_view(|ctx| {
             Workspace::new(
                 self.global_resource_handles,
-                self.server_time,
                 self.workspace_setting,
                 ctx,
             )

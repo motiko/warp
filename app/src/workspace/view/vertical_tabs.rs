@@ -4014,7 +4014,7 @@ impl PaneGroup {
             ),
             IPaneType::File => TypedPane::File,
             IPaneType::Settings => TypedPane::Settings,
-            IPaneType::GetStarted | IPaneType::NetworkLog | IPaneType::DeferredPlaceholder => {
+            IPaneType::GetStarted | IPaneType::DeferredPlaceholder => {
                 TypedPane::Other
             }
             #[cfg(test)]

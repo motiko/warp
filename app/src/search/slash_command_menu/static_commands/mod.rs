@@ -28,7 +28,6 @@ pub enum SlashCommandKind {
     SetTabColor,
     OpenCodeReview,
     OpenSettingsFile,
-    Changelog,
     Feedback,
 }
 

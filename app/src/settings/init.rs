@@ -14,7 +14,7 @@ use super::initializer::SettingsInitializer;
 use super::native_preference::NativePreferenceSettings;
 use super::{
     AISettings, AccessibilitySettings, AliasExpansionSettings, AppEditorSettings,
-    BlockVisibilitySettings, ChangelogSettings, CodeSettings, DebugSettings,
+    BlockVisibilitySettings, CodeSettings, DebugSettings,
     DefaultSessionSettings, EmacsBindingsSettings, FontSettings, FontSettingsChangedEvent,
     GPUSettings, InputBoxType, InputModeSettings, InputSettings, LocalControlSettings,
     PaneSettings, SameLinePromptBlockSettings, ScrollSettings, SelectionSettings, SshSettings,
@@ -64,7 +64,6 @@ pub fn register_all_settings(ctx: &mut AppContext) {
     CodeSettings::register(ctx);
     LigatureSettings::register(ctx);
     GPUSettings::register(ctx);
-    ChangelogSettings::register(ctx);
     GeneralSettings::register(ctx);
     AISettings::register(ctx);
     DefaultSessionSettings::register(ctx);

@@ -67,15 +67,6 @@ pub const OPEN_SETTINGS_FILE: StaticCommand = StaticCommand {
     argument: None,
 };
 
-pub const CHANGELOG: StaticCommand = StaticCommand {
-    name: "/changelog",
-    description: "Open the latest changelog",
-    kind: SlashCommandKind::Changelog,
-    icon_path: "bundled/svg/book-open.svg",
-    availability: Availability::ALWAYS,
-    argument: None,
-};
-
 // Accepts an optional argument so that buffers like `/feedback some text` still parse to
 // this command (the trailing text is ignored on execution). Without this, typing any
 // argument after `/feedback` would fall through and be treated as plain input.
@@ -157,10 +148,6 @@ fn all_commands() -> Vec<StaticCommand> {
         SET_TAB_COLOR.clone(),
         OPEN_CODE_REVIEW,
     ];
-
-    if FeatureFlag::Changelog.is_enabled() {
-        commands.push(CHANGELOG);
-    }
 
     if !cfg!(target_family = "wasm") {
         commands.push(EDIT.clone());

@@ -416,12 +416,6 @@ impl Input {
                     return true;
                 }
             }
-            SlashCommandKind::Changelog => {
-                if !FeatureFlag::Changelog.is_enabled() {
-                    return false;
-                }
-                ctx.dispatch_typed_action(&WorkspaceAction::ViewLatestChangelog);
-            }
             SlashCommandKind::Feedback => {
                 ctx.dispatch_typed_action(&WorkspaceAction::SendFeedback);
             }

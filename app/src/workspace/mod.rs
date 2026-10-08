@@ -873,28 +873,6 @@ pub fn init(app: &mut AppContext) {
         .with_enabled(|| ContextFlag::LaunchConfigurations.is_enabled()),
     ]);
 
-    if FeatureFlag::Autoupdate.is_enabled() {
-        app.register_editable_bindings([
-            EditableBinding::new(
-                "workspace:update_and_relaunch",
-                "Install update and relaunch",
-                // TODO(vorporeal): I wonder if we should change wording here?
-                WorkspaceAction::ApplyUpdate,
-            )
-            .with_group(bindings::BindingGroup::AutoUpdate.as_str())
-            .with_context_predicate(id!("Workspace") & id!("AutoupdateState_UpdateReady"))
-            .with_enabled(|| ContextFlag::PromptForVersionUpdates.is_enabled()),
-            EditableBinding::new(
-                "workspace:check_for_updates",
-                "Check for updates",
-                WorkspaceAction::CheckForUpdate,
-            )
-            .with_group(bindings::BindingGroup::AutoUpdate.as_str())
-            .with_context_predicate(id!("Workspace") & !id!("AutoupdateState_UpdateReady"))
-            .with_enabled(|| ContextFlag::PromptForVersionUpdates.is_enabled()),
-        ]);
-    }
-
     app.register_editable_bindings([EditableBinding::new(
         "workspace:toggle_resource_center",
         "Toggle resource center",
@@ -927,20 +905,6 @@ pub fn init(app: &mut AppContext) {
         }
     }
 
-    if FeatureFlag::Changelog.is_enabled() {
-        app.register_editable_bindings([EditableBinding::new(
-            "workspace:view_changelog",
-            "View latest changelog",
-            WorkspaceAction::ViewLatestChangelog,
-        )
-        .with_context_predicate(id!("Workspace"))
-        .with_group(bindings::BindingGroup::Settings.as_str())
-        .with_custom_action(CustomAction::ViewChangelog)
-        // Note that while the changelog resides in WarpEssentials, we should gate access to
-        // the changelog based on whether WarpEssentials is an available view.
-        .with_enabled(|| ContextFlag::WarpEssentials.is_enabled())]);
-    }
-
     app.register_editable_bindings([
         EditableBinding::new(
             "workspace:shift_focus_left",
@@ -957,18 +921,6 @@ pub fn init(app: &mut AppContext) {
         .with_context_predicate(id!("Workspace"))
         .with_key_binding("cmdorctrl-shift-)"),
     ]);
-
-    // Register a debug-only action for writing the user's access token to the system clipboard
-    // to aid debugging and development.
-    #[cfg(not(feature = "skip_login"))]
-    if ChannelState::enable_debug_features() {
-        app.register_editable_bindings([EditableBinding::new(
-            "workspace:copy_access_token_to_clipboard",
-            "Copy access token to clipboard",
-            WorkspaceAction::CopyAccessTokenToClipboard,
-        )
-        .with_context_predicate(id!("Workspace"))]);
-    }
 
     app.register_editable_bindings([
         EditableBinding::new(
