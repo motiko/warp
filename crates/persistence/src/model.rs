@@ -3,7 +3,11 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
-use super::schema::{app, blocks, code_pane_tabs, code_panes, code_review_panes, commands, ignored_suggestions, notebook_panes, pane_branches, pane_leaves, pane_nodes, panels, projects, settings_panes, tab_groups, tabs, terminal_panes, windows, workspace_language_server, workspace_metadata};
+use super::schema::{
+    app, blocks, code_pane_tabs, code_panes, code_review_panes, commands, ignored_suggestions,
+    notebook_panes, pane_branches, pane_leaves, pane_nodes, panels, projects, settings_panes,
+    tab_groups, tabs, terminal_panes, windows, workspace_language_server, workspace_metadata,
+};
 #[derive(Insertable)]
 #[diesel(table_name = app)]
 pub struct NewApp {

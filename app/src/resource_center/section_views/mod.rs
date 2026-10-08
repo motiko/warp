@@ -1,6 +1,5 @@
 use warpui::elements::ScrollbarWidth;
 
-
 pub const HEADER_FONT_SIZE: f32 = 16.;
 pub const SECTION_HEADER_FONT_SIZE: f32 = 16.;
 pub const DESCRIPTION_FONT_SIZE: f32 = 14.;

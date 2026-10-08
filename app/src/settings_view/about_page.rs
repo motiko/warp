@@ -102,28 +102,28 @@ impl SettingsWidget for AboutPageWidget {
 
         Align::new(
             Flex::column()
-            .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_child(
-                ConstrainedBox::new(
-                    Image::new(
-                        AssetSource::Bundled { path: image_path },
-                        CacheOption::BySize,
+                .with_cross_axis_alignment(CrossAxisAlignment::Center)
+                .with_child(
+                    ConstrainedBox::new(
+                        Image::new(
+                            AssetSource::Bundled { path: image_path },
+                            CacheOption::BySize,
+                        )
+                        .finish(),
                     )
+                    .with_max_height(100.)
+                    .with_max_width(350.)
                     .finish(),
                 )
-                .with_max_height(100.)
-                .with_max_width(350.)
+                .with_child(version_row.finish())
+                .with_child(
+                    ui_builder
+                        .span("Copyright 2026 Warp")
+                        .build()
+                        .with_margin_top(16.)
+                        .finish(),
+                )
                 .finish(),
-            )
-            .with_child(version_row.finish())
-            .with_child(
-                ui_builder
-                    .span("Copyright 2026 Warp")
-                    .build()
-                    .with_margin_top(16.)
-                    .finish(),
-            )
-            .finish(),
         )
         .finish()
     }

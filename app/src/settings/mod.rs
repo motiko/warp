@@ -478,7 +478,6 @@ pub enum EnforceMinimumContrast {
 }
 
 impl Settings {
-
     pub fn theme_for_theme_kind(theme_kind: &ThemeKind, ctx: &mut AppContext) -> WarpTheme {
         match theme_kind {
             ThemeKind::InMemory(in_memory_theme) => in_memory_theme.theme(),

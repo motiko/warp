@@ -28,7 +28,6 @@ fn initialize_editor(app: &mut App) -> (WindowId, ViewHandle<CodeEditorView>) {
     app.add_singleton_model(|_| ActiveSession::default());
     app.add_singleton_model(NotebookKeybindings::new);
 
-
     let (window, editor_view) = app.add_window(WindowStyle::NotStealFocus, |ctx| {
         CodeEditorView::new(
             None,

@@ -55,7 +55,6 @@ fn initialize_code_editor_app(app: &mut App) {
     app.add_singleton_model(|_| ActiveSession::default());
     app.add_singleton_model(NotebookKeybindings::new);
 
-
     // Enable vim mode in editor settings
     app.update_model(
         &AppEditorSettings::handle(app),

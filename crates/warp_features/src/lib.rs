@@ -165,8 +165,6 @@ pub enum FeatureFlag {
     /// Enables using `esc` to clear autosuggestions.
     ClearAutosuggestionOnEscape,
 
-
-
     /// Enables Kitty image rendering
     KittyImages,
 
@@ -533,7 +531,6 @@ pub enum FeatureFlag {
     /// Enables conversation artifacts.
     ConversationArtifacts,
 
-
     /// Enables loading and returning bundled skills in the SkillManager.
     BundledSkills,
 
@@ -593,7 +590,6 @@ pub enum FeatureFlag {
     /// Enables attaching code review comments, diff hunk, and attach as context
     /// from code review + code editor for House Of Agents work
     HoaCodeReview,
-
 
     /// Enables tab configs — user-definable TOML templates for launching custom tab layouts.
     TabConfigs,

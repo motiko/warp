@@ -13,8 +13,9 @@ use warp_core::ui::theme::color::internal_colors;
 use warp_errors::{report_error, report_if_error};
 use warpui::r#async::{SpawnedFutureHandle, Timer};
 use warpui::elements::{
-    Align, ChildView, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
-    Empty, Expanded, Flex, MainAxisAlignment, MainAxisSize, MouseStateHandle, ParentElement, Radius, Rect, Shrinkable, Text,
+    Align, ChildView, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment, Empty, Expanded,
+    Flex, MainAxisAlignment, MainAxisSize, MouseStateHandle, ParentElement, Radius, Rect,
+    Shrinkable, Text,
 };
 use warpui::fonts::Weight;
 use warpui::keymap::ContextPredicate;
@@ -1019,9 +1020,7 @@ struct AppAnalyticsWidget {
     docs_link_mouse_state: MouseStateHandle,
 }
 
-impl AppAnalyticsWidget {
-
-}
+impl AppAnalyticsWidget {}
 
 impl SettingsWidget for AppAnalyticsWidget {
     type View = PrivacyPageView;
@@ -1070,10 +1069,7 @@ impl SettingsWidget for AppAnalyticsWidget {
 
         let mut column = Flex::column();
         column.add_child(super::settings_page::build_toggle_element(
-            label,
-            switch,
-            appearance,
-            None,
+            label, switch, appearance, None,
         ));
         column.add_child(
             ui_builder

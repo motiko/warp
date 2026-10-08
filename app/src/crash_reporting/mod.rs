@@ -24,8 +24,8 @@ use warpui::windowing::state::ApplicationStage;
 use warpui::windowing::{self, StateEvent, WindowManager};
 use warpui::{AppContext, SingletonEntity};
 
-use crate::antivirus::{AntivirusInfo, AntivirusInfoEvent};
 use crate::anonymous_id::get_or_create_anonymous_id;
+use crate::antivirus::{AntivirusInfo, AntivirusInfoEvent};
 use crate::channel::ChannelState;
 use crate::features::FeatureFlag;
 use crate::settings::{PrivacySettings, PrivacySettingsChangedEvent};

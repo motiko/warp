@@ -1,6 +1,6 @@
 use warpui::elements::{
-    Align, Container, Element, Empty, Flex,
-    MainAxisSize, MouseStateHandle, ParentElement, Shrinkable,
+    Align, Container, Element, Empty, Flex, MainAxisSize, MouseStateHandle, ParentElement,
+    Shrinkable,
 };
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::{AppContext, Entity, SingletonEntity, View};
@@ -10,17 +10,12 @@ use crate::appearance::Appearance;
 use crate::channel::ChannelState;
 use crate::workspace::WorkspaceAction;
 
+#[derive(Default)]
 pub struct ResourceCenterMainView {
     copy_version_mouse_state: MouseStateHandle,
 }
 
 impl ResourceCenterMainView {
-    pub fn new() -> Self {
-        Self {
-            copy_version_mouse_state: Default::default(),
-        }
-    }
-
     fn render_current_version(&self, appearance: &Appearance) -> Box<dyn Element> {
         // Use a dummy string for git release tag which is not available on local env
         let version = ChannelState::app_version().unwrap_or("v0.local.testing.string_00");

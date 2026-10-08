@@ -1,4 +1,3 @@
-
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
@@ -21,7 +20,6 @@ use warp_core::channel::{Channel, ChannelState};
 use warp_core::execution_mode;
 use warp_core::operating_system_info::OperatingSystemInfo;
 use warp_errors::report_error;
-
 
 pub mod headers {
     /// Custom Warp header indicating the version of the Warp app.

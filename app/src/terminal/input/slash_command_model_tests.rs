@@ -40,6 +40,7 @@ fn test_parse_input_requires_slash_at_start() {
 
 #[test]
 fn test_parse_slash_command_handles_argument_rules() {
+    let _settings_file_flag = crate::features::FeatureFlag::SettingsFile.override_enabled(true);
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 

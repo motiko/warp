@@ -1112,7 +1112,6 @@ impl NewWorkspaceSource {
             _ => false,
         }
     }
-
 }
 
 /// Args needed to construct a `Workspace`.
@@ -1385,11 +1384,7 @@ impl TypedActionView for RootView {
 impl WorkspaceArgs {
     fn create_workspace(self, ctx: &mut ViewContext<RootView>) -> ViewHandle<Workspace> {
         ctx.add_typed_action_view(|ctx| {
-            Workspace::new(
-                self.global_resource_handles,
-                self.workspace_setting,
-                ctx,
-            )
+            Workspace::new(self.global_resource_handles, self.workspace_setting, ctx)
         })
     }
 }

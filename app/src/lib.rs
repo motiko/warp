@@ -2,11 +2,11 @@
 
 mod ai;
 mod alloc;
+mod anonymous_id;
 mod antivirus;
 #[cfg(target_os = "macos")]
 mod app_menus;
 mod app_services;
-mod anonymous_id;
 mod app_state;
 mod banner;
 mod chip_configurator;

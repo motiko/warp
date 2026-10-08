@@ -13,11 +13,11 @@ use super::app_installation_detection::UserAppInstallDetectionSettings;
 use super::native_preference::NativePreferenceSettings;
 use super::{
     AISettings, AccessibilitySettings, AliasExpansionSettings, AppEditorSettings,
-    BlockVisibilitySettings, CodeSettings, DebugSettings,
-    DefaultSessionSettings, EmacsBindingsSettings, FontSettings, FontSettingsChangedEvent,
-    GPUSettings, InputBoxType, InputModeSettings, InputSettings, LocalControlSettings,
-    PaneSettings, SameLinePromptBlockSettings, ScrollSettings, SelectionSettings, SshSettings,
-    ThemeSettings, VimBannerSettings, WarpDrivePrivacySettings,
+    BlockVisibilitySettings, CodeSettings, DebugSettings, DefaultSessionSettings,
+    EmacsBindingsSettings, FontSettings, FontSettingsChangedEvent, GPUSettings, InputBoxType,
+    InputModeSettings, InputSettings, LocalControlSettings, PaneSettings,
+    SameLinePromptBlockSettings, ScrollSettings, SelectionSettings, SshSettings, ThemeSettings,
+    VimBannerSettings, WarpDrivePrivacySettings,
 };
 use crate::appearance;
 use crate::banner::BannerState;
@@ -105,7 +105,6 @@ pub fn init(
     startup_toml_parse_error: Option<user_preferences::Error>,
     ctx: &mut AppContext,
 ) -> UserDefaultsOnStartup {
-
     register_all_settings(ctx);
 
     // One-time migration: copy public settings from the platform-native store

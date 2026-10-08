@@ -29,10 +29,9 @@ use warpui::windowing::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH};
 
 use super::block_list::{delete_blocks, save_block};
 use super::model::{
-    self, AI_DOCUMENT_PANE_KIND, AI_FACT_PANE_KIND, CODE_PANE_KIND,
-    ENV_VAR_COLLECTION_PANE_KIND, EXECUTION_PROFILE_EDITOR_PANE_KIND, MCP_SERVER_PANE_KIND,
-    NOTEBOOK_PANE_KIND, NewApp, NewCommand, NewTab, NewTabGroup,
-    NewWindow, NewWorkspaceMetadata, Project, SETTINGS_PANE_KIND,
+    self, AI_DOCUMENT_PANE_KIND, AI_FACT_PANE_KIND, CODE_PANE_KIND, ENV_VAR_COLLECTION_PANE_KIND,
+    EXECUTION_PROFILE_EDITOR_PANE_KIND, MCP_SERVER_PANE_KIND, NOTEBOOK_PANE_KIND, NewApp,
+    NewCommand, NewTab, NewTabGroup, NewWindow, NewWorkspaceMetadata, Project, SETTINGS_PANE_KIND,
     TERMINAL_PANE_KIND, Tab, TabGroup, WORKFLOW_PANE_KIND, Window,
     WorkspaceMetadata as WorkspaceMetadataModel,
 };

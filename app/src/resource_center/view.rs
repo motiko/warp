@@ -11,8 +11,8 @@ use warpui::ui_components::button::ButtonVariant;
 use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::windowing::{StateEvent, WindowManager};
 use warpui::{
-    AppContext, Entity, FocusContext, SingletonEntity, TypedActionView, View,
-    ViewContext, ViewHandle, WindowId,
+    AppContext, Entity, FocusContext, SingletonEntity, TypedActionView, View, ViewContext,
+    ViewHandle, WindowId,
 };
 
 use super::keybindings_page::KeybindingsEvent;
@@ -112,7 +112,7 @@ impl ResourceCenterView {
         let main_view = ResourceCenterPageView {
             page: ResourceCenterPage::Main,
             page_view_handle: ResourceCenterViewHandle::Main(
-                ctx.add_view(|_| ResourceCenterMainView::new()),
+                ctx.add_view(|_| ResourceCenterMainView::default()),
             ),
         };
         let keybindings_view = ResourceCenterPageView {

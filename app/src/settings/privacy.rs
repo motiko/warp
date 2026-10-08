@@ -8,7 +8,6 @@ use warp_errors::report_error;
 pub use warp_terminal::model::secrets::RegexDisplayInfo;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
-
 pub const TELEMETRY_ENABLED_DEFAULTS_KEY: &str = "TelemetryEnabled";
 pub const CRASH_REPORTING_ENABLED_DEFAULTS_KEY: &str = "CrashReportingEnabled";
 pub const CLOUD_CONVERSATION_STORAGE_ENABLED_DEFAULTS_KEY: &str = "CloudConversationStorageEnabled";
@@ -417,7 +416,6 @@ impl PrivacySettings {
             }
         }
     }
-
 }
 
 /// Events emitted when PrivacySettings is updated.

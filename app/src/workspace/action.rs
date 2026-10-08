@@ -713,8 +713,7 @@ impl WorkspaceAction {
             | TabConfigSidecarMakeDefault { .. }
             | TabConfigSidecarEditConfig { .. }
             | TabConfigSidecarRemoveConfig { .. }
-            | OpenSettingsFile
-            => false,
+            | OpenSettingsFile => false,
             #[cfg(not(target_family = "wasm"))]
             ViewLogs => false,
             #[cfg(target_os = "macos")]

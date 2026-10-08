@@ -658,7 +658,6 @@ pub struct PaneGroup {
     /// Mapping from pane IDs to their contents.
     pane_contents: HashMap<PaneId, Box<dyn AnyPaneContent>>,
 
-
     dragged_border: Option<DraggedBorder>,
     user_default_shell_changed_banner: ViewHandle<Banner<PaneGroupAction>>,
 
@@ -1696,12 +1695,8 @@ impl PaneGroup {
 
         let mut pane_history = Vec::new();
 
-        let (pane_data, initial_focus) = initial_layout_callback(
-            &mut pane_contents,
-            &mut pane_history,
-            view_bounds,
-            ctx,
-        );
+        let (pane_data, initial_focus) =
+            initial_layout_callback(&mut pane_contents, &mut pane_history, view_bounds, ctx);
 
         let focused_pane = initial_focus
             .focused_pane

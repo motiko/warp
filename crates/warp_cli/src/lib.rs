@@ -157,7 +157,6 @@ impl Args {
     pub fn server_root_url(&self) -> Option<&str> {
         self.server_root_url.as_deref()
     }
-
 }
 
 /// Warp may spawn several worker processes - mostly servers that support the main application.
