@@ -107,8 +107,8 @@ use self::vertical_tabs::{
 };
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 use super::action::{
-    InitContent, NewSessionMenuAnchor, TabContextMenuAnchor,
-    VerticalTabsPaneContextMenuTarget, WorkspaceAction,
+    InitContent, NewSessionMenuAnchor, TabContextMenuAnchor, VerticalTabsPaneContextMenuTarget,
+    WorkspaceAction,
 };
 pub(crate) use super::close_session_confirmation_dialog::OpenDialogSource;
 use super::close_session_confirmation_dialog::{
@@ -125,8 +125,6 @@ use super::util::{
     WorkspaceState,
 };
 use super::{ActiveSession, TabBarDropTargetData, TabBarLocation, WorkspaceRegistry, util};
-use crate::search::command_search::natural_language::NaturalLanguageCommandContext;
-use crate::terminal::model::block::SerializedBlock;
 use crate::app_state::{
     LeafContents, LeafSnapshot, LeftPanelDisplayedTab, LeftPanelSnapshot, NotebookPaneSnapshot,
     PaneNodeSnapshot, PaneUuid, RightPanelSnapshot, SettingsPaneSnapshot, TabGroupSnapshot,
@@ -144,9 +142,7 @@ use crate::changelog_model::{ChangelogModel, ChangelogRequestType, Event as Chan
 use crate::channel::ChannelState;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::toast_message::CloudObjectToastMessage;
-use crate::cloud_object::{
-    CloudObject, GenericStringObjectFormat, JsonObjectType, ObjectType,
-};
+use crate::cloud_object::{CloudObject, GenericStringObjectFormat, JsonObjectType, ObjectType};
 use crate::code::buffer_location::LocalOrRemotePath;
 use crate::code::editor::{add_color, remove_color};
 #[cfg(feature = "local_fs")]
@@ -186,8 +182,8 @@ use crate::palette::PaletteMode;
 use crate::pane_group::FilePane;
 use crate::pane_group::pane::ActionOrigin;
 use crate::pane_group::{
-    self, AnyPaneContent, CodePane, CodeReviewPanelArg, Direction as PaneGroupDirection,
-    Direction, NetworkLogPane, NewTerminalOptions, PaneGroup, PaneId, PanesLayout, TabBarHoverIndex,
+    self, AnyPaneContent, CodePane, CodeReviewPanelArg, Direction as PaneGroupDirection, Direction,
+    NetworkLogPane, NewTerminalOptions, PaneGroup, PaneId, PanesLayout, TabBarHoverIndex,
     TerminalPaneId,
 };
 use crate::persistence::ModelEvent;
@@ -204,6 +200,7 @@ use crate::root_view::{NewWorkspaceSource, OpenLaunchConfigArg, quake_mode_windo
 use crate::search::command_palette::view::{
     Event as CommandPaletteEvent, NavigationMode, View as CommandPalette,
 };
+use crate::search::command_search::natural_language::NaturalLanguageCommandContext;
 use crate::search::command_search::searcher::{
     AcceptedHistoryItem, AcceptedWorkflow, CommandSearchItemAction,
 };
@@ -218,8 +215,7 @@ use crate::server::network_log_pane_manager::NetworkLogPaneManager;
 use crate::server::server_api::{ServerApi, ServerApiProvider, ServerTime};
 use crate::server::telemetry::{
     AddTabWithShellSource, CloseTarget, EnvVarTelemetryMetadata, FileTreeSource,
-    LaunchConfigUiLocation, NotificationsTurnedOnSource, PaletteSource,
-    TabRenameEvent,
+    LaunchConfigUiLocation, NotificationsTurnedOnSource, PaletteSource, TabRenameEvent,
 };
 use crate::session_management::{SessionNavigationData, SessionSource, TabNavigationData};
 use crate::settings::cloud_preferences::CloudPreferencesSettings;
@@ -227,10 +223,9 @@ use crate::settings::{
     AISettings, AISettingsChangedEvent, AccessibilitySettings, AliasExpansionSettings,
     AppEditorSettings, BlockVisibilitySettings, ChangelogSettings, CodeSettings,
     CodeSettingsChangedEvent, CtrlTabBehavior, CursorBlink, DebugSettings, DefaultSessionMode,
-    DefaultSessionSettings,
-    FontSettings, GPUSettings, InputSettings, MonospaceFontSize, PaneSettings, PrivacySettings,
-    SelectionSettings, Settings, SshSettings, ThemeSettings, active_theme_kind,
-    respect_system_theme,
+    DefaultSessionSettings, FontSettings, GPUSettings, InputSettings, MonospaceFontSize,
+    PaneSettings, PrivacySettings, SelectionSettings, Settings, SshSettings, ThemeSettings,
+    active_theme_kind, respect_system_theme,
 };
 use crate::settings_view::keybindings::{KeybindingChangedEvent, KeybindingChangedNotifier};
 use crate::settings_view::pane_manager::SettingsPaneManager;
@@ -249,9 +244,7 @@ use crate::tab_configs::remove_confirmation_dialog::{
     RemoveTabConfigConfirmationDialog, RemoveTabConfigConfirmationEvent,
 };
 use crate::tab_configs::session_config_modal::{SessionConfigModal, SessionConfigModalEvent};
-use crate::tab_configs::telemetry::{
-    ExistingTabConfigOpenMode, TabConfigsTelemetryEvent,
-};
+use crate::tab_configs::telemetry::{ExistingTabConfigOpenMode, TabConfigsTelemetryEvent};
 #[cfg(feature = "local_fs")]
 use crate::tab_configs::telemetry::{NewWorktreeConfigOpenSource, WorktreeBranchNamingMode};
 use crate::tab_configs::{
@@ -267,6 +260,7 @@ use crate::terminal::keys_settings::KeysSettings;
 use crate::terminal::ligature_settings::should_use_ligature_rendering;
 #[cfg(feature = "local_tty")]
 use crate::terminal::local_tty::docker_sandbox::resolve_sbx_path_from_user_shell;
+use crate::terminal::model::block::SerializedBlock;
 use crate::terminal::model::blockgrid::BlockGrid;
 use crate::terminal::model::escape_sequences::C0;
 #[cfg(feature = "local_fs")]
@@ -285,8 +279,7 @@ use crate::terminal::shared_session::SharedSessionActionSource;
 use crate::terminal::shell::ShellType;
 use crate::terminal::view::ssh_file_upload::FileUploadId;
 use crate::terminal::view::{
-    LeftPanelTargetView, NOTIFICATIONS_TROUBLESHOOT_URL,
-    SyncEvent, SyncInputType,
+    LeftPanelTargetView, NOTIFICATIONS_TROUBLESHOOT_URL, SyncEvent, SyncInputType,
 };
 use crate::terminal::warpify::settings::WarpifySettings;
 use crate::terminal::{self, BlockListSettings, SizeInfo, TerminalModel, TerminalView};
@@ -326,8 +319,7 @@ use crate::window_settings::{WindowSettings, WindowSettingsChangedEvent, ZoomLev
 use crate::workflows::manager::{WorkflowManager, WorkflowOpenSource};
 use crate::workflows::workflow::Workflow;
 use crate::workflows::{
-    CloudWorkflow, WorkflowSelectionSource, WorkflowSource, WorkflowType,
-    WorkflowViewMode,
+    CloudWorkflow, WorkflowSelectionSource, WorkflowSource, WorkflowType, WorkflowViewMode,
 };
 use crate::workspace::action::CommandSearchOptions;
 #[cfg(target_os = "macos")]
@@ -1333,11 +1325,8 @@ impl Workspace {
         (settings_pane, theme_chooser_view)
     }
 
-    fn build_workflow_modal(
-        ctx: &mut ViewContext<Self>,
-    ) -> ViewHandle<WorkflowModal> {
-        let workflow_modal =
-            ctx.add_typed_action_view(WorkflowModal::new);
+    fn build_workflow_modal(ctx: &mut ViewContext<Self>) -> ViewHandle<WorkflowModal> {
+        let workflow_modal = ctx.add_typed_action_view(WorkflowModal::new);
 
         ctx.subscribe_to_view(&workflow_modal, |me, _, event, ctx| {
             me.handle_workflow_modal_event(event, ctx);
@@ -2043,8 +2032,7 @@ impl Workspace {
         let session_config_modal = Self::build_session_config_modal(ctx);
 
         let close_session_confirmation_dialog = Self::build_close_session_confirmation_dialog(ctx);
-        let command_search_view =
-            ctx.add_typed_action_view(CommandSearchView::new);
+        let command_search_view = ctx.add_typed_action_view(CommandSearchView::new);
         ctx.subscribe_to_view(&command_search_view, |me, _, event, ctx| {
             me.handle_command_search_event(event, ctx);
         });
@@ -2781,11 +2769,9 @@ impl Workspace {
             | NewWorkspaceSource::TeamSwitched { .. }
             | NewWorkspaceSource::NotebookFromFilePath { .. } => should_default_open,
             #[cfg(not(target_family = "wasm"))]
-            NewWorkspaceSource::SharedSessionAsViewer { .. }
-            => should_default_open,
+            NewWorkspaceSource::SharedSessionAsViewer { .. } => should_default_open,
             #[cfg(target_family = "wasm")]
-            NewWorkspaceSource::SharedSessionAsViewer { .. }
-            => {
+            NewWorkspaceSource::SharedSessionAsViewer { .. } => {
                 // Web opens these as single-purpose views without exposed multi-tab UI, so keep
                 // the tabs panel closed even though native windows still expose workspace chrome.
                 false
@@ -8061,19 +8047,16 @@ impl Workspace {
             "Materializing default worktree config: repo_path={repo_path:?}, branch_name={branch_name:?}"
         );
 
-        let (toml_content, tab_config) = match materialize_default_worktree_config(
-            &template_toml,
-            &config_name,
-            &repo_path,
-        ) {
-            Ok(materialized) => materialized,
-            Err(e) => {
-                log::warn!(
-                    "Failed to materialize default worktree config from {config_path:?}: {e}"
-                );
-                return;
-            }
-        };
+        let (toml_content, tab_config) =
+            match materialize_default_worktree_config(&template_toml, &config_name, &repo_path) {
+                Ok(materialized) => materialized,
+                Err(e) => {
+                    log::warn!(
+                        "Failed to materialize default worktree config from {config_path:?}: {e}"
+                    );
+                    return;
+                }
+            };
 
         let dir = tab_configs_dir();
         if let Err(e) = std::fs::create_dir_all(&dir) {
@@ -8537,7 +8520,6 @@ impl Workspace {
                 .expect("should be able to lock universal search resizable state handle")
                 .size()
         });
-
 
         let voltron_width = modal_sizes.map(|ms| {
             ms.voltron_width
@@ -10529,10 +10511,8 @@ impl Workspace {
             .file_notebook_paths(ctx)
             .filter_map(|(id, path)| path.map(|p| (id, p)))
             .collect();
-        let local_paths: Vec<(EntityId, LocalOrRemotePath)> = code_paths
-            .into_iter()
-            .chain(notebook_paths)
-            .collect();
+        let local_paths: Vec<(EntityId, LocalOrRemotePath)> =
+            code_paths.into_iter().chain(notebook_paths).collect();
 
         // Get the focused terminal ID to prioritize it in the repo_to_terminal map
         let focused_terminal_id = pane_group
@@ -13479,9 +13459,7 @@ impl Workspace {
         pane_group
             .pane_ids()
             .filter(|id| !pane_group.is_pane_hidden_for_close(*id))
-            .any(|id| {
-                id.is_terminal_pane() || id.is_file_pane() || id.is_code_pane()
-            })
+            .any(|id| id.is_terminal_pane() || id.is_file_pane() || id.is_code_pane())
     }
 
     fn render_right_panel_button(
@@ -15015,10 +14993,7 @@ impl Workspace {
         appearance: &Appearance,
     ) -> Box<dyn Element> {
         let WorkspaceBannerButtonDetails {
-            text,
-            action,
-            icon,
-            ..
+            text, action, icon, ..
         } = details;
         let ui_font_family = appearance.ui_font_family();
         Hoverable::new(mouse_state, move |state| {
@@ -18025,7 +18000,6 @@ impl View for Workspace {
                 ),
             );
         }
-
 
         if self.current_workspace_state.is_native_quit_modal_open {
             stack.add_positioned_overlay_child(

@@ -2,12 +2,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use warpui::elements::{
-    ChildView, Clipped, Container, CrossAxisAlignment, Element, MainAxisAlignment,
-    MainAxisSize, ParentElement, Wrap,
+    ChildView, Clipped, Container, CrossAxisAlignment, Element, MainAxisAlignment, MainAxisSize,
+    ParentElement, Wrap,
 };
 use warpui::{
-    AppContext, Entity, EntityId, FocusContext, ModelHandle, TypedActionView,
-    View, ViewContext, ViewHandle,
+    AppContext, Entity, EntityId, FocusContext, ModelHandle, TypedActionView, View, ViewContext,
+    ViewHandle,
 };
 
 use super::display_chip::{DisplayChip, DisplayChipConfig, PromptDisplayChipEvent};
@@ -45,9 +45,7 @@ pub enum PromptDisplayAction {
 pub enum PromptDisplayEvent {
     OpenFile(String),
     OpenTextFileInCodeEditor(String),
-    ToggleMenu {
-        open: bool,
-    },
+    ToggleMenu { open: bool },
     OpenCodeReview,
     OpenCommandPaletteFiles,
     TryExecuteCommand(PromptChipShellCommand),
@@ -236,7 +234,9 @@ impl PromptDisplay {
             prompt
                 .chips(ctx)
                 .iter()
-                .find(|chip_result| matches!(chip_result.kind, super::ContextChipKind::ShellGitBranch))
+                .find(|chip_result| {
+                    matches!(chip_result.kind, super::ContextChipKind::ShellGitBranch)
+                })
                 .and_then(|chip_result| chip_result.value.as_ref().map(|v| v.to_string()))
         })
     }

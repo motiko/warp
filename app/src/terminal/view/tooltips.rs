@@ -101,49 +101,49 @@ impl TerminalView {
         let mut links = vec![];
 
         if let Some(SecretTooltip { tooltip }) = &self.open_secret_tool_tip {
-                    let handle = *tooltip;
+            let handle = *tooltip;
 
-                    // Position the tooltip above the first cell in the secret.
-                    element_id = format!(
-                        "terminal_view:first_cell_in_secret_{}",
-                        handle.get_inner().id()
-                    );
+            // Position the tooltip above the first cell in the secret.
+            element_id = format!(
+                "terminal_view:first_cell_in_secret_{}",
+                handle.get_inner().id()
+            );
 
-                    if matches!(get_secret_obfuscation_mode(app), ObfuscateSecrets::Yes) {
-                        let is_redacted = model
-                            .secret_from_handle(tooltip)
-                            .is_some_and(Secret::is_obfuscated);
+            if matches!(get_secret_obfuscation_mode(app), ObfuscateSecrets::Yes) {
+                let is_redacted = model
+                    .secret_from_handle(tooltip)
+                    .is_some_and(Secret::is_obfuscated);
 
-                        if is_redacted {
-                            links.push(GridTooltipLink {
-                                text: "Reveal secret".to_string(),
-                                action: TerminalAction::ToggleGridSecret {
-                                    handle,
-                                    show_secret: true,
-                                },
-                                mouse_state: self.mouse_states.toggle_secrets_tooltip.clone(),
-                                detail: None,
-                            });
-                        } else {
-                            links.push(GridTooltipLink {
-                                text: "Hide secret".to_string(),
-                                action: TerminalAction::ToggleGridSecret {
-                                    handle,
-                                    show_secret: false,
-                                },
-                                mouse_state: self.mouse_states.toggle_secrets_tooltip.clone(),
-                                detail: None,
-                            })
-                        }
-                    }
-
+                if is_redacted {
                     links.push(GridTooltipLink {
-                        text: "Copy secret".to_string(),
-                        action: TerminalAction::CopyGridSecret(handle),
-                        mouse_state: self.mouse_states.copy_secrets_tooltip.clone(),
+                        text: "Reveal secret".to_string(),
+                        action: TerminalAction::ToggleGridSecret {
+                            handle,
+                            show_secret: true,
+                        },
+                        mouse_state: self.mouse_states.toggle_secrets_tooltip.clone(),
                         detail: None,
                     });
+                } else {
+                    links.push(GridTooltipLink {
+                        text: "Hide secret".to_string(),
+                        action: TerminalAction::ToggleGridSecret {
+                            handle,
+                            show_secret: false,
+                        },
+                        mouse_state: self.mouse_states.toggle_secrets_tooltip.clone(),
+                        detail: None,
+                    })
                 }
+            }
+
+            links.push(GridTooltipLink {
+                text: "Copy secret".to_string(),
+                action: TerminalAction::CopyGridSecret(handle),
+                mouse_state: self.mouse_states.copy_secrets_tooltip.clone(),
+                detail: None,
+            });
+        }
 
         #[cfg_attr(not(feature = "local_fs"), allow(unused_mut))]
         if let Some(link) = &self.open_grid_link_tool_tip {

@@ -26,7 +26,6 @@ use warpui::{
     ViewContext, ViewHandle, WindowId, id,
 };
 
-use crate::terminal::model::block::SerializedBlock;
 use crate::app_state::{AppState, PaneUuid, WindowSnapshot};
 use crate::appearance::Appearance;
 use crate::auth::auth_manager::{AuthManager, AuthManagerEvent};
@@ -47,6 +46,7 @@ use crate::settings_view::{SettingsSection, flags};
 use crate::terminal::available_shells::AvailableShell;
 use crate::terminal::general_settings::GeneralSettings;
 use crate::terminal::keys_settings::KeysSettings;
+use crate::terminal::model::block::SerializedBlock;
 use crate::terminal::shell::ShellType;
 use crate::terminal::view::cell_size_and_padding;
 use crate::themes::theme::AnsiColorIdentifier;
@@ -246,7 +246,6 @@ pub fn init(app: &mut AppContext) {
         "root_view:open_settings_in_existing_window",
         RootView::open_settings_in_existing_window,
     );
-
 
     app.add_action("root_view:add_file_pane", RootView::add_file_pane);
     app.add_global_action(
@@ -1182,8 +1181,7 @@ impl NewWorkspaceSource {
             Self::FromTemplate { .. }
             | Self::Session { .. }
             | Self::SharedSessionAsViewer { .. }
-            | Self::NotebookFromFilePath { .. }
-            => None,
+            | Self::NotebookFromFilePath { .. } => None,
             Self::TeamSwitched { team_uid } => return Some(*team_uid),
             Self::Restored {
                 window_snapshot, ..
@@ -1202,10 +1200,7 @@ impl NewWorkspaceSource {
     /// should reach directly, rather than being deferred
     /// behind product onboarding.
     pub(crate) fn is_content_deep_link(&self) -> bool {
-        matches!(
-            self,
-            NewWorkspaceSource::SharedSessionAsViewer { .. }
-        )
+        matches!(self, NewWorkspaceSource::SharedSessionAsViewer { .. })
     }
 }
 

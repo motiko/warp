@@ -275,12 +275,12 @@ impl crate::search::mixer::SyncDataSource for DataSource {
         if query.filters.contains(&QueryFilter::Workflows) || should_include_all_drive_objects {
             filtered_cloud_objects.extend(
                 self.search_workflows(query, app)
-                .map_err(|err| {
-                    Box::new(DataSourceSearchError::new(err.to_string()))
-                        as DataSourceRunErrorWrapper
-                })?
-                .into_iter()
-                .map(QueryResult::from),
+                    .map_err(|err| {
+                        Box::new(DataSourceSearchError::new(err.to_string()))
+                            as DataSourceRunErrorWrapper
+                    })?
+                    .into_iter()
+                    .map(QueryResult::from),
             );
         }
 
@@ -381,8 +381,11 @@ trait WarpDriveSearcher {
     ) -> anyhow::Result<Vec<NotebookSearchItem>>;
 
     /// Searches command workflows; agent-mode prompts synced from the server are never returned.
-    fn search_workflow(&self, query: &str, app: &AppContext)
-    -> anyhow::Result<Vec<WorkflowSearchItem>>;
+    fn search_workflow(
+        &self,
+        query: &str,
+        app: &AppContext,
+    ) -> anyhow::Result<Vec<WorkflowSearchItem>>;
 
     fn search_env_var(
         &self,

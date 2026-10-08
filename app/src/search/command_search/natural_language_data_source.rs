@@ -152,9 +152,9 @@ impl AsyncDataSource for NaturalLanguageDataSource {
                     .into_iter()
                     .map(|command| {
                         WorkflowSearchItem {
-                            identity: WorkflowIdentity::Local(Box::new(
-                                WorkflowType::AIGenerated(command.into()),
-                            )),
+                            identity: WorkflowIdentity::Local(Box::new(WorkflowType::AIGenerated(
+                                command.into(),
+                            ))),
                             source: WorkflowSource::WarpAI,
                             fuzzy_matched_workflow: FuzzyMatchWorkflowResult::no_match(),
                         }

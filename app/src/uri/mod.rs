@@ -745,10 +745,7 @@ impl Action {
     fn window_behavior_hint(&self) -> WindowBehaviorHint {
         use WindowBehaviorHint as W;
         match self {
-            Self::Docker
-            | Self::OpenFileEditor { .. }
-            | Self::OpenRepo
-            => W::default(),
+            Self::Docker | Self::OpenFileEditor { .. } | Self::OpenRepo => W::default(),
             Self::NewTab => W::ShowPrimaryWindow(WindowActivationFallbackBehavior::Notify {
                 title: "New tab created".to_owned(),
                 description: "Go to Warp to see your new tab.".to_owned(),
@@ -1109,8 +1106,7 @@ fn validate_custom_uri(url: &Url) -> Result<UriHost> {
         | UriHost::SharedSession
         | UriHost::Settings
         | UriHost::TabConfig
-        | UriHost::Session
-        => true,
+        | UriHost::Session => true,
         // Auth and Home only allow the desktop redirect path
         UriHost::Auth | UriHost::Home => false,
     };

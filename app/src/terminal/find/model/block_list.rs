@@ -8,9 +8,7 @@ use warpui::units::Lines;
 use super::FindOptions;
 use crate::terminal::GridType;
 use crate::terminal::model::block::Block;
-use crate::terminal::model::blocks::{
-    BlockHeight, BlockHeightItem, BlockHeightSummary, BlockList,
-};
+use crate::terminal::model::blocks::{BlockHeight, BlockHeightItem, BlockHeightSummary, BlockList};
 use crate::terminal::model::find::{FindConfig, RegexDFAs};
 use crate::terminal::model::index::Point;
 use crate::terminal::model::terminal_model::{BlockIndex, BlockSortDirection};
@@ -516,8 +514,7 @@ impl BlockListFindRun {
     ) {
         update_matches_for_filtered_block(
             self.matches.iter_mut().filter(|find_match| {
-                find_match.matches_block(block_index)
-                    && find_match.grid_type() == GridType::Output
+                find_match.matches_block(block_index) && find_match.grid_type() == GridType::Output
             }),
             block,
             block_sort_direction,

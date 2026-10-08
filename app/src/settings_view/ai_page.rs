@@ -27,6 +27,7 @@ use super::settings_page::{
     SettingsWidget, TOGGLE_BUTTON_RIGHT_PADDING,
 };
 use super::{SettingsAction, SettingsSection, ToggleSettingActionPair, flags};
+use crate::ToastStack;
 use crate::appearance::Appearance;
 use crate::modal::{Modal, ModalEvent, ModalViewState};
 use crate::settings::{AISettings, AISettingsChangedEvent};
@@ -34,7 +35,6 @@ use crate::ui_components::icons::Icon;
 use crate::util::bindings;
 use crate::view_components::DismissibleToast;
 use crate::view_components::action_button::{ActionButton, ButtonSize, SecondaryTheme};
-use crate::ToastStack;
 
 const PAGE_TITLE: &str = "AI (optional)";
 const AI_DESCRIPTION: &str = "AI features stay off unless you turn them on. Add your own model \

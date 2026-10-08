@@ -72,7 +72,7 @@ impl CustomEndpointSchema {
             "Anthropic Messages" => Some(Self::AnthropicMessages),
             _ => None,
         }
-}
+    }
 }
 
 /// Stable file-safe identity for a custom endpoint definition.

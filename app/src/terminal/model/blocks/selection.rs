@@ -983,7 +983,6 @@ impl BlockList {
                             }
                         }
                         BlockHeightItem::RichContent(RichContentItem { view_id, .. }) => {
-
                             if let Some(active_window_id) = app.windows().active_window()
                                 && let Some(ssh_block) = app
                                     .view_with_id::<WarpifySuccessBlock>(active_window_id, *view_id)
@@ -1035,7 +1034,6 @@ impl BlockList {
 
                 let mut selected_texts = vec![];
                 for view_id in ids {
-
                     if let Some(active_window_id) = app.windows().active_window() {
                         if let Some(env_var_block) =
                             app.view_with_id::<EnvVarCollectionBlock>(active_window_id, view_id)
@@ -1055,7 +1053,6 @@ impl BlockList {
                             }
                         }
                     }
-
                 }
 
                 // TODO: If `selected_texts` is empty, should we return `None` instead of `Some("")`?

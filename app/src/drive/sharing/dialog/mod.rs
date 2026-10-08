@@ -871,8 +871,7 @@ impl SharingDialog {
                             SharingAccessLevel::Edit,
                         ))
                         .with_disabled(
-                            inherited_access
-                                && current_access_level >= SharingAccessLevel::Edit,
+                            inherited_access && current_access_level >= SharingAccessLevel::Edit,
                         )
                         .into_item(),
                 );
@@ -893,10 +892,7 @@ impl SharingDialog {
                 menu.set_selected_by_index(
                     match current_access_level {
                         SharingAccessLevel::View => 0,
-                        SharingAccessLevel::Edit => {
-                            1
-
-                        }
+                        SharingAccessLevel::Edit => 1,
                         // Not yet supported, so default to view.
                         SharingAccessLevel::Full => 0,
                     },
@@ -1098,7 +1094,6 @@ impl SharingDialog {
 
     /// Reset the invite access level menu based on the current target.
     fn reset_invite_access_level_menu(&mut self, ctx: &mut ViewContext<Self>) {
-
         self.invite_form.access_level_menu.update(ctx, |menu, ctx| {
             let mut items = vec![
                 MenuItemFields::new(SharingAccessLevel::View.label())
@@ -1789,10 +1784,7 @@ impl SharingDialog {
                 match current_access_level {
                     None => 0,
                     Some(SharingAccessLevel::View) => 3,
-                    Some(SharingAccessLevel::Edit) => {
-                        4
-
-                    }
+                    Some(SharingAccessLevel::Edit) => 4,
                     Some(SharingAccessLevel::Full) => 3,
                 },
                 ctx,
@@ -2645,12 +2637,13 @@ impl TypedActionView for SharingDialog {
                         update_manager.set_object_link_permissions(*id, *access_level, ctx);
                     });
                 } else if let Some(ShareableObject::Session { handle, .. }) = self.target.as_ref()
-                    && let Some(view) = handle.upgrade(ctx) {
-                        let role = access_level.map(|access_level| access_level.into());
-                        view.update(ctx, |view, ctx| {
-                            view.update_session_link_permissions(role, ctx)
-                        });
-                    }
+                    && let Some(view) = handle.upgrade(ctx)
+                {
+                    let role = access_level.map(|access_level| access_level.into());
+                    view.update(ctx, |view, ctx| {
+                        view.update_session_link_permissions(role, ctx)
+                    });
+                }
                 ctx.notify();
             }
             SharingDialogAction::SetTeamPermissions(access_level) => {

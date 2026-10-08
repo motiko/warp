@@ -17,8 +17,8 @@ use warpui::keymap::Keystroke;
 use warpui::platform::Cursor;
 use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::{
-    AppContext, Element, Entity, EntityId, ModelHandle, SingletonEntity, TypedActionView,
-    View, ViewContext, ViewHandle,
+    AppContext, Element, Entity, EntityId, ModelHandle, SingletonEntity, TypedActionView, View,
+    ViewContext, ViewHandle,
 };
 
 use super::directory_fetcher::{
@@ -28,8 +28,7 @@ use super::display_menu::{
     ChipMenuType, DisplayChipMenu, FixedFooter, GenericMenuItem, PromptDisplayMenuEvent,
 };
 use super::{
-    ChipResult, ChipValue, ContextChipKind, github_pr_display_text_from_url,
-    render_text_from_kind,
+    ChipResult, ChipValue, ContextChipKind, github_pr_display_text_from_url, render_text_from_kind,
 };
 use crate::appearance::Appearance;
 use crate::code::editor::{add_color, remove_color};
@@ -236,7 +235,8 @@ const CHIP_INNER_CORNER_RADIUS: f32 = CHIP_CORNER_RADIUS - CHIP_BORDER_WIDTH;
 const NVM_INSTALL_URL: &str = "https://github.com/nvm-sh/nvm#installing-and-updating";
 /// nvm-windows must be installed without a pre-existing Node.js installation, which its README
 /// covers.
-const NVM_WINDOWS_INSTALL_URL: &str = "https://github.com/coreybutler/nvm-windows#installation--upgrades";
+const NVM_WINDOWS_INSTALL_URL: &str =
+    "https://github.com/coreybutler/nvm-windows#installation--upgrades";
 
 /// Standard positioning for tooltip overlays on UDI chips
 fn udi_tooltip_positioning() -> OffsetPositioning {
@@ -318,7 +318,6 @@ impl UdiChipConfig {
         self.hovered = hovered;
         self
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -640,8 +639,7 @@ impl DisplayChipKind {
             | DisplayChipKind::Ssh
             | DisplayChipKind::Subshell
             | DisplayChipKind::VirtualEnvironment
-            | DisplayChipKind::CondaEnvironment
-            => false,
+            | DisplayChipKind::CondaEnvironment => false,
         }
     }
 }
@@ -1322,9 +1320,8 @@ impl DisplayChip {
         let url = self.text.clone();
 
         let hover = Hoverable::new(self.mouse_state.clone(), move |state| {
-            let config =
-                UdiChipConfig::new_with_icon(Icon::Github, font_color, chip_text.clone())
-                    .with_hovered(state.is_hovered());
+            let config = UdiChipConfig::new_with_icon(Icon::Github, font_color, chip_text.clone())
+                .with_hovered(state.is_hovered());
             let chip_element = render_udi_chip(config, appearance);
 
             let mut stack = Stack::new().with_child(chip_element);
@@ -1836,12 +1833,9 @@ impl View for DisplayChip {
 
     fn render(&self, app: &AppContext) -> Box<dyn Element> {
         match self.render_chip(app) {
-            Some(chip) => {
-                Container::new(chip)
-                    .with_margin_right(CHIP_MARGIN_RIGHT)
-                    .finish()
-            
-            }
+            Some(chip) => Container::new(chip)
+                .with_margin_right(CHIP_MARGIN_RIGHT)
+                .finish(),
             _ => Empty::new().finish(),
         }
     }
@@ -1874,9 +1868,7 @@ pub enum PromptChipShellCommand {
 pub enum PromptDisplayChipEvent {
     OpenFile(String),
     OpenTextFileInCodeEditor(String),
-    ToggleMenu {
-        open: bool,
-    },
+    ToggleMenu { open: bool },
     OpenCodeReview,
     OpenCommandPaletteFiles,
     TryExecuteCommand(PromptChipShellCommand),

@@ -1,6 +1,4 @@
-use warp_graphql::billing::{
-    OveragesPricing, PlanPricing, PricingInfo, StripeSubscriptionPlan,
-};
+use warp_graphql::billing::{OveragesPricing, PlanPricing, PricingInfo, StripeSubscriptionPlan};
 use warpui::{Entity, ModelContext, SingletonEntity};
 
 /// A global model for maintaining pricing information from the server.
@@ -68,4 +66,3 @@ impl Entity for PricingInfoModel {
 }
 
 impl SingletonEntity for PricingInfoModel {}
-

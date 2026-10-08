@@ -105,7 +105,6 @@ pub struct DiffStatus {
 }
 
 impl DiffStatus {
-
     /// Retrieve the hunk to render for a given line number.
     pub fn diff_hunk(
         &self,

@@ -19,6 +19,8 @@ use futures_util::stream::AbortHandle;
 use futures_util::{SinkExt, StreamExt};
 use instant::Instant;
 use parking_lot::FairMutex;
+#[cfg(not(any(test, feature = "integration_tests")))]
+use session_sharing_protocol::common::TelemetryContext;
 use session_sharing_protocol::common::{
     ActivePrompt, ActivePromptUpdate, AgentPromptFailureReason, AgentPromptRequestId,
     CommandExecutionFailureReason, CommandExecutionRequestId, ControlActionFailureReason,
@@ -28,14 +30,12 @@ use session_sharing_protocol::common::{
     SelectionUpdate, SessionId, UserID, WindowSize, WriteToPtyFailureReason, WriteToPtyRequestId,
 };
 #[cfg(not(any(test, feature = "integration_tests")))]
-use session_sharing_protocol::common::TelemetryContext;
-#[cfg(not(any(test, feature = "integration_tests")))]
 use session_sharing_protocol::sharer::InitPayload;
 use session_sharing_protocol::sharer::{
     AddGuestsResponse, DownstreamMessage, FailedToAddGuestsReason, FailedToInitializeSessionReason,
     Lifetime, LinkAccessLevelUpdateResponse, ReconnectPayload, ReconnectToken, RemoveGuestResponse,
-    RoleUpdateReason, SessionEndedReason, SessionRetentionReason, SessionTerminatedReason, TeamAccessLevelUpdateResponse, UpdatePendingUserRoleResponse,
-    UpstreamMessage,
+    RoleUpdateReason, SessionEndedReason, SessionRetentionReason, SessionTerminatedReason,
+    TeamAccessLevelUpdateResponse, UpdatePendingUserRoleResponse, UpstreamMessage,
 };
 use warp_errors::report_error;
 use warp_server_client::iap::IapManager;

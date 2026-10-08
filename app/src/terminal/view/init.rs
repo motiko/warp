@@ -1,8 +1,6 @@
 use warp_core::context_flag::ContextFlag;
 use warpui::AppContext;
-use warpui::keymap::{
-    EditableBinding, FixedBinding, PerPlatformKeystroke,
-};
+use warpui::keymap::{EditableBinding, FixedBinding, PerPlatformKeystroke};
 use warpui::platform::OperatingSystem;
 use warpui::units::IntoLines;
 
@@ -654,4 +652,3 @@ pub fn init(app: &mut AppContext) {
     .with_enabled(|| cfg!(feature = "local_fs") && ChannelState::enable_debug_features())
     .with_context_predicate(id!("Terminal"))]);
 }
-

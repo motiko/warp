@@ -2,10 +2,10 @@ use std::result::Result as StdResult;
 use std::sync::Arc;
 
 use settings::Setting as _;
-#[cfg(test)]
-use uuid::Uuid;
 #[cfg(target_family = "wasm")]
 use url::Url;
+#[cfg(test)]
+use uuid::Uuid;
 use warp_core::features::FeatureFlag;
 use warp_errors::{report_error, report_if_error};
 use warp_server_auth::user::persistence::PersistedUser;
@@ -276,8 +276,7 @@ impl AuthManager {
 
                 // Fetch the user's privacy settings from the server if any or update the server settings.
                 let privacy_settings_handle = PrivacySettings::handle(ctx);
-                let privacy_settings_snapshot =
-                    privacy_settings_handle.as_ref(ctx).get_snapshot();
+                let privacy_settings_snapshot = privacy_settings_handle.as_ref(ctx).get_snapshot();
                 ctx.update_model(&privacy_settings_handle, |privacy_settings, ctx| {
                     privacy_settings.fetch_or_update_settings(ctx);
                 });

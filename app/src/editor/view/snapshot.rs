@@ -25,9 +25,9 @@ use warpui::{AppContext, EntityId, ModelHandle};
 
 use super::model::EditorModel;
 use super::{
-    AutosuggestionLocation, AutosuggestionState,
-    BaselinePositionComputationMethod, Bias, DisplayPoint, DrawableSelection, ScrollState,
-    ToBufferOffset, ToCharOffset, ToDisplayPoint, ToPoint,
+    AutosuggestionLocation, AutosuggestionState, BaselinePositionComputationMethod, Bias,
+    DisplayPoint, DrawableSelection, ScrollState, ToBufferOffset, ToCharOffset, ToDisplayPoint,
+    ToPoint,
 };
 use crate::editor::soft_wrap::FrameLayouts;
 use crate::terminal::grid_size_util::grid_compute_baseline_position_fn;

@@ -59,8 +59,9 @@ use warpui::r#async::SpawnedFutureHandle;
 use warpui::clipboard::ClipboardContent;
 use warpui::color::ColorU;
 use warpui::elements::{
-    AnchorPair, ChildAnchor, Clipped, ConstrainedBox, Container, DispatchEventResult, DropTargetData, Element, EventHandler, MouseStateHandle, OffsetType, ParentAnchor, ResizableStateHandle,
-    SavePosition, SelectionHandle, YAxisAnchor, resizable_state_handle,
+    AnchorPair, ChildAnchor, Clipped, ConstrainedBox, Container, DispatchEventResult,
+    DropTargetData, Element, EventHandler, MouseStateHandle, OffsetType, ParentAnchor,
+    ResizableStateHandle, SavePosition, SelectionHandle, YAxisAnchor, resizable_state_handle,
 };
 pub use warpui::elements::{ParentElement as _, Stack};
 pub use warpui::geometry::vector::{Vector2F, vec2f};
@@ -71,8 +72,7 @@ use warpui::text_layout::TextStyle;
 use warpui::units::IntoPixels;
 use warpui::{
     AppContext, Entity, EntityId, FocusContext, ModelAsRef, ModelHandle, SingletonEntity,
-    TypedActionView, View, ViewContext, ViewHandle, WeakViewHandle, end_trace,
-    start_trace,
+    TypedActionView, View, ViewContext, ViewHandle, WeakViewHandle, end_trace, start_trace,
 };
 
 use self::decorations::InputBackgroundJobOptions;
@@ -116,10 +116,11 @@ use crate::context_chips::prompt_type::PromptType;
 use crate::editor::{
     AutosuggestionLocation, BaselinePositionComputationMethod, CommandXRayAnchor, CrdtOperation,
     DisplayPoint, EditOrigin, EditorAction, EditorDecoratorElements, EditorOptions, EditorSnapshot,
-    EditorView, Event as EditorEvent, InteractionState, PathTransformerFn, PlainTextEditorViewAction,
-    Point as BufferPoint, PropagateAndNoOpEscapeKey, PropagateAndNoOpNavigationKeys,
-    PropagateHorizontalNavigationKeys, ReplicaId, TextColors, TextRun, default_cursor_colors,
-    position_id_for_cached_point, position_id_for_cursor, position_id_for_first_cursor,
+    EditorView, Event as EditorEvent, InteractionState, PathTransformerFn,
+    PlainTextEditorViewAction, Point as BufferPoint, PropagateAndNoOpEscapeKey,
+    PropagateAndNoOpNavigationKeys, PropagateHorizontalNavigationKeys, ReplicaId, TextColors,
+    TextRun, default_cursor_colors, position_id_for_cached_point, position_id_for_cursor,
+    position_id_for_first_cursor,
 };
 use crate::env_vars::EnvVarCollectionExt;
 use crate::features::FeatureFlag;
@@ -137,12 +138,13 @@ use crate::search::QueryFilter;
 use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGISTRY;
 use crate::server::ids::SyncId;
 use crate::server::telemetry::{
-    CommandXRayTrigger, EnvVarTelemetryMetadata, PaletteSource, TelemetryEvent, WorkflowTelemetryMetadata,
+    CommandXRayTrigger, EnvVarTelemetryMetadata, PaletteSource, TelemetryEvent,
+    WorkflowTelemetryMetadata,
 };
 use crate::session_management::SessionNavigationPromptElements;
 use crate::settings::{
-    AISettings, AliasExpansionSettings, AppEditorSettings,
-    AppEditorSettingsChangedEvent, InputModeSettings, InputSettings, InputSettingsChangedEvent,
+    AISettings, AliasExpansionSettings, AppEditorSettings, AppEditorSettingsChangedEvent,
+    InputModeSettings, InputSettings, InputSettingsChangedEvent,
     MAX_TIMES_TO_SHOW_AUTOSUGGESTION_HINT,
 };
 use crate::settings_view::{SettingsSection, flags};
@@ -655,31 +657,17 @@ pub enum InputAction {
 
     ToggleClassicCompletionsMode,
 
-
-
-
-
-
-
-
-
     /// Persist the completions menu width when the user resizes it.
     UpdateCompletionsMenuWidth(f32),
 
     /// Persist the completions menu height when the user resizes it.
     UpdateCompletionsMenuHeight(f32),
 
-
-
     /// Opens the inline history menu for cycling through past commands and conversations.
     OpenInlineHistoryMenu,
 
-
     /// Triggers a slash command from a custom keybinding. The string is the command name.
     TriggerSlashCommandFromKeybinding(&'static str),
-
-
-
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
@@ -1420,20 +1408,18 @@ pub fn init(app: &mut AppContext) {
         ]);
     }
 
-    app.register_editable_bindings([
-        EditableBinding::new(
-            "input:toggle_natural_language_command_search",
-            "Open AI Command Suggestions",
-            InputAction::ShowAiCommandSearch,
-        )
-        .with_context_predicate(
-            id!("Input")
-                & !id!(SharedSessionStatus::reader().as_keymap_context())
-                & id!(flags::IS_ANY_AI_ENABLED),
-        )
-        .with_group(bindings::BindingGroup::WarpAi.as_str())
-        .with_custom_action(CustomAction::AISearch),
-    ]);
+    app.register_editable_bindings([EditableBinding::new(
+        "input:toggle_natural_language_command_search",
+        "Open AI Command Suggestions",
+        InputAction::ShowAiCommandSearch,
+    )
+    .with_context_predicate(
+        id!("Input")
+            & !id!(SharedSessionStatus::reader().as_keymap_context())
+            & id!(flags::IS_ANY_AI_ENABLED),
+    )
+    .with_group(bindings::BindingGroup::WarpAi.as_str())
+    .with_custom_action(CustomAction::AISearch)]);
 
     let slash_command_bindings = COMMAND_REGISTRY
         .all_commands()
@@ -1467,7 +1453,6 @@ pub fn init(app: &mut AppContext) {
         .collect::<Vec<_>>();
 
     app.register_editable_bindings(slash_command_bindings);
-
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -1978,7 +1963,6 @@ impl Input {
                         editor.set_buffer_text_ignoring_undo(command, ctx);
                     });
                 }
-
             }
             inline_history::InlineHistoryMenuEvent::Close => {
                 if self
@@ -2022,10 +2006,7 @@ impl Input {
         }
 
         self.suggestions_mode_model.update(ctx, |m, ctx| {
-            m.set_mode(
-                InputSuggestionsMode::InlineHistoryMenu,
-                ctx,
-            );
+            m.set_mode(InputSuggestionsMode::InlineHistoryMenu, ctx);
         });
 
         ctx.notify();
@@ -2090,10 +2071,10 @@ impl Input {
                     CommandExecutionSource::User,
                     true,
                     ctx,
-                )
-                    && !current_input.is_empty() {
-                        self.input_contents_before_prompt_chip_command = Some(current_input);
-                    }
+                ) && !current_input.is_empty()
+                {
+                    self.input_contents_before_prompt_chip_command = Some(current_input);
+                }
             }
         }
     }
@@ -3598,7 +3579,6 @@ impl Input {
                                 editor.set_buffer_text_ignoring_undo(selected_item.text(), ctx);
                             });
                         }
-
                     }
                     InputSuggestionsMode::CompletionSuggestions {
                         replacement_start, ..
@@ -4907,21 +4887,19 @@ impl Input {
             EditorEvent::HideXRay => {
                 self.hide_x_ray(ctx);
             }
-            EditorEvent::TryToShowXRay(token_at) => {
-                match token_at {
-                    CommandXRayAnchor::Cursor => {
-                        let pos = self.start_byte_index_of_first_selection(ctx);
-                        self.start_xray_at_offset(pos, CommandXRayTrigger::Keystroke, ctx);
-                    }
-                    CommandXRayAnchor::Hover(mouse_position) => {
-                        if let Some(offset) = self.start_byte_index_at_point(mouse_position, ctx)
-                            && !self.suggestions_mode_model.as_ref(ctx).is_visible()
-                        {
-                            self.start_xray_at_offset(offset, CommandXRayTrigger::Hover, ctx);
-                        }
+            EditorEvent::TryToShowXRay(token_at) => match token_at {
+                CommandXRayAnchor::Cursor => {
+                    let pos = self.start_byte_index_of_first_selection(ctx);
+                    self.start_xray_at_offset(pos, CommandXRayTrigger::Keystroke, ctx);
+                }
+                CommandXRayAnchor::Hover(mouse_position) => {
+                    if let Some(offset) = self.start_byte_index_at_point(mouse_position, ctx)
+                        && !self.suggestions_mode_model.as_ref(ctx).is_visible()
+                    {
+                        self.start_xray_at_offset(offset, CommandXRayTrigger::Hover, ctx);
                     }
                 }
-            }
+            },
             EditorEvent::InsertLastWordPrevCommand => self.insert_last_word_previous_command(ctx),
             // For this particular view, the terminal Input, we ignore search direction because in
             // this context, search means search through History which isn't actually sensitive to
@@ -5163,7 +5141,10 @@ impl Input {
 
     /// Returns a collection of history entries that are shell commands from
     /// the shared session (run on the sharer's machine).
-    fn command_history<'a>(&'a self, ctx: &'a ViewContext<Self>) -> Vec<HistoryInputSuggestion<'a>> {
+    fn command_history<'a>(
+        &'a self,
+        ctx: &'a ViewContext<Self>,
+    ) -> Vec<HistoryInputSuggestion<'a>> {
         History::as_ref(ctx).up_arrow_suggestions(self.active_block_session_id(), ctx)
     }
 
@@ -7263,7 +7244,6 @@ impl Input {
     pub(crate) fn is_voltron_open(&self) -> bool {
         self.is_voltron_open
     }
-
 }
 
 impl Entity for Input {
@@ -7467,10 +7447,7 @@ impl Autosuggester for Input {
             .and_then(|result| result.strip_prefix(buffer_text.as_str()));
 
         if let Some(autosuggestion) = autosuggestion_result_substring {
-            self.set_autosuggestion(
-                autosuggestion,
-                ctx,
-            );
+            self.set_autosuggestion(autosuggestion, ctx);
         }
     }
 

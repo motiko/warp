@@ -73,8 +73,7 @@ use repo_metadata::repositories::RepoDetectionSource;
 use serde::Serialize;
 use serde_json::json;
 use session_sharing_protocol::common::{
-    ParticipantId, Role, RoleRequestId, RoleRequestResponse,
-    WindowSize as SessionSharingWindowSize,
+    ParticipantId, Role, RoleRequestId, RoleRequestResponse, WindowSize as SessionSharingWindowSize,
 };
 use session_sharing_protocol::sharer::{
     RoleUpdateReason, SessionEndedReason, SessionRetentionReason,
@@ -128,19 +127,17 @@ use warpui::windowing::WindowManager;
 use warpui::{
     AccessibilityData, AppContext, BlurContext, CursorInfo, Element, Entity, EntityId,
     EventContext, FocusContext, ModelAsRef, ModelHandle, SingletonEntity, Tracked, TypedActionView,
-    View, ViewContext, ViewHandle, WeakModelHandle, WeakViewHandle, WindowId,
-    end_trace_after_next, record_trace_event, windowing,
+    View, ViewContext, ViewHandle, WeakModelHandle, WeakViewHandle, WindowId, end_trace_after_next,
+    record_trace_event, windowing,
 };
 
-use self::link_detection::HighlightedLinkOption;
 pub use self::link_detection::GridHighlightedLink;
+use self::link_detection::HighlightedLinkOption;
 use super::available_shells::AvailableShell;
 use super::block_list_viewport::FindMatchScrollLocation;
 use super::event::SshLoginStatus;
 use super::find::FindOptions;
-use super::model::block::{
-    BlockSection, BlocklistEnvVarMetadata,
-};
+use super::model::block::{BlockSection, BlocklistEnvVarMetadata};
 use super::model::completions::ShellCompletion;
 use super::model::rich_content::RichContentType;
 use super::model::selection::ExpandedSelectionRange;
@@ -182,8 +179,8 @@ use crate::features::FeatureFlag;
 use crate::menu::{Event as MenuEvent, Menu, MenuItem, MenuItemFields};
 use crate::pane_group::focus_state::PaneFocusHandle;
 use crate::pane_group::{
-    CodeReviewPanelArg, PaneConfiguration, PaneEvent, PaneGroupAction,
-    SplitPaneState, TerminalViewResources,
+    CodeReviewPanelArg, PaneConfiguration, PaneEvent, PaneGroupAction, SplitPaneState,
+    TerminalViewResources,
 };
 use crate::persistence::{self, FinishedCommandMetadata};
 #[cfg(feature = "local_fs")]
@@ -195,8 +192,8 @@ use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ObjectUid, SyncId};
 use crate::server::server_api::ServerApi;
 use crate::server::telemetry::{
-    BootstrappingInfo, NotificationsTurnedOnSource, PaletteSource, SaveAsWorkflowModalSource, SecretInteraction,
-    SlowBootstrapInfo, TelemetryEvent, ToggleBlockFilterSource,
+    BootstrappingInfo, NotificationsTurnedOnSource, PaletteSource, SaveAsWorkflowModalSource,
+    SecretInteraction, SlowBootstrapInfo, TelemetryEvent, ToggleBlockFilterSource,
 };
 use crate::session_management::{CommandContext, SessionNavigationPromptElements};
 #[cfg(feature = "local_fs")]
@@ -227,8 +224,7 @@ use crate::terminal::block_list_element::{
     render_hoverable_block_button,
 };
 use crate::terminal::block_list_viewport::{
-    InputMode, OverhangingBlock, ScrollPosition, ScrollPositionUpdate,
-    ScrollState, ViewportState,
+    InputMode, OverhangingBlock, ScrollPosition, ScrollPositionUpdate, ScrollState, ViewportState,
 };
 use crate::terminal::bootstrap::init_subshell_command;
 use crate::terminal::color::List;
@@ -241,8 +237,8 @@ use crate::terminal::grid_size_util::grid_cell_dimensions;
 use crate::terminal::input::decorations::InputBackgroundJobOptions;
 use crate::terminal::input::inline_menu::InlineMenuPositioner;
 use crate::terminal::input::{
-    CommandExecutionSource, InputAction, InputState, MenuPositioning,
-    MenuPositioningProvider, ShellWidgetApplyMode,
+    CommandExecutionSource, InputAction, InputState, MenuPositioning, MenuPositioningProvider,
+    ShellWidgetApplyMode,
 };
 use crate::terminal::ligature_settings::{LigatureSettings, should_use_ligature_rendering};
 use crate::terminal::links::should_directly_open_link;
@@ -257,10 +253,7 @@ use crate::terminal::model::ansi::{ClearMode, Handler};
 use crate::terminal::model::block::{
     Block, BlockId, BlockMetadata, LONG_RUNNING_BOTTOM_PADDING_LINES,
 };
-use crate::terminal::model::blocks::{
-    BlockList,
-    BlockListPoint, Gap,
-};
+use crate::terminal::model::blocks::{BlockList, BlockListPoint, Gap};
 use crate::terminal::model::escape_sequences::{
     self, C1, EscCodes, ToEscapeSequence, alt_screen_scroll_to_pty_bytes,
 };
@@ -353,8 +346,8 @@ use crate::workflows::workflow::Workflow;
 use crate::workspace::sync_inputs::SyncedInputState;
 use crate::workspace::{CommandSearchOptions, ToastStack, WorkspaceAction, WorkspaceRegistry};
 use crate::{
-    ActiveSession as WindowActiveSession, safe_warn,
-    send_telemetry_from_ctx, send_telemetry_sync_from_ctx,
+    ActiveSession as WindowActiveSession, safe_warn, send_telemetry_from_ctx,
+    send_telemetry_sync_from_ctx,
 };
 
 lazy_static! {
@@ -1757,7 +1750,6 @@ pub struct TerminalView {
     highlighted_link: HighlightedLinkOption,
     open_grid_link_tool_tip: Option<GridHighlightedLink>,
 
-
     last_hover_fragment_boundary: Option<WithinModel<FragmentBoundary>>,
 
     bootstrap_start: Option<Instant>,
@@ -1987,7 +1979,6 @@ pub struct TerminalView {
 
     /// Path to the current repository, or None if not currently in a repo.
     current_repo_path: Option<LocalOrRemotePath>,
-
 
     /// The title the shell set for this terminal.
     terminal_title: String,
@@ -2262,7 +2253,6 @@ impl TerminalView {
                 }
             },
         );
-
 
         let (resize_tx, resize_rx) = async_channel::unbounded();
         let (find_link_tx, find_link_rx) = async_channel::unbounded();
@@ -3741,7 +3731,10 @@ impl TerminalView {
             let has_alt_screen_selection = model.alt_screen().selection().is_some();
             let has_block_list_selection = model.block_list().selection().is_some();
             let active_block_state = CtrlCActiveBlockState {
-                is_long_running: model.block_list().active_block().is_active_and_long_running(),
+                is_long_running: model
+                    .block_list()
+                    .active_block()
+                    .is_active_and_long_running(),
             };
             (
                 has_block_list_selection,
@@ -3994,7 +3987,11 @@ impl TerminalView {
     /// Like `is_long_running`, but returns `false` for read-only (shared) sessions.
     pub fn is_long_running_and_user_controlled(&self) -> bool {
         let model = self.model.lock();
-        model.block_list().active_block().is_active_and_long_running() && !model.is_read_only()
+        model
+            .block_list()
+            .active_block()
+            .is_active_and_long_running()
+            && !model.is_read_only()
     }
 
     pub fn was_ever_visible(&self) -> bool {
@@ -4373,8 +4370,7 @@ impl TerminalView {
     }
 
     fn is_any_tooltip_open(&self) -> bool {
-        self.open_grid_link_tool_tip.is_some()
-            || self.open_secret_tool_tip.is_some()
+        self.open_grid_link_tool_tip.is_some() || self.open_secret_tool_tip.is_some()
     }
 
     #[cfg(feature = "integration_tests")]
@@ -5198,7 +5194,6 @@ impl TerminalView {
         }
     }
 
-
     /// Returns true if the block belongs to a warpified remote session.
     ///
     /// Only warpified remote blocks can be detected.
@@ -5360,12 +5355,9 @@ impl TerminalView {
                             match &repo_path_opt {
                                 Some(LocalOrRemotePath::Remote(remote_path)) => {
                                     #[cfg(not(target_family = "wasm"))]
-                                    DetectedRepositories::handle(ctx).update(
-                                        ctx,
-                                        |repos, _| {
-                                            repos.register_remote_repo_root(remote_path.clone());
-                                        },
-                                    );
+                                    DetectedRepositories::handle(ctx).update(ctx, |repos, _| {
+                                        repos.register_remote_repo_root(remote_path.clone());
+                                    });
 
                                     // Remote sessions can only materialize their working
                                     // directory after repo detection has resolved the host.
@@ -5399,9 +5391,7 @@ impl TerminalView {
                                         };
 
                                         let Ok(active_directory) =
-                                            CanonicalizedPath::try_from(
-                                                active_directory,
-                                            )
+                                            CanonicalizedPath::try_from(active_directory)
                                         else {
                                             return;
                                         };
@@ -5423,25 +5413,18 @@ impl TerminalView {
                                             },
                                         );
 
-                                        if old_repo_path
-                                            .as_ref()
-                                            .and_then(|p| p.to_local_path())
+                                        if old_repo_path.as_ref().and_then(|p| p.to_local_path())
                                             != Some(repo_path.as_path())
                                         {
-                                                me.clear_git_repo_status_subscription(ctx);
+                                            me.clear_git_repo_status_subscription(ctx);
                                             me.update_git_status_subscription(ctx);
                                         }
 
                                         me.input.update(ctx, |input, ctx| {
-                                            input.update_repo_path(
-                                                Some(repo_path.clone()),
-                                                ctx,
-                                            );
+                                            input.update_repo_path(Some(repo_path.clone()), ctx);
                                         });
 
-
                                         me.start_lsp_server_in_active_pwd(ctx);
-
                                     }
                                     #[cfg(not(feature = "local_fs"))]
                                     let _ = repo_path;
@@ -6039,7 +6022,6 @@ impl TerminalView {
                     self.did_notify_long_running = false;
                     self.set_current_state(terminal_view_state, ctx);
 
-
                     let exit_code_data =
                         &json!({"exit_code": serialized_block.exit_code}).to_string();
 
@@ -6130,21 +6112,24 @@ impl TerminalView {
                     // session restoration is enabled.
                     ctx.emit(Event::BlockCompleted {
                         block: serialized_block.clone(),
-                        is_local: !self.is_block_considered_remote(serialized_block.session_id, ctx),
+                        is_local: !self
+                            .is_block_considered_remote(serialized_block.session_id, ctx),
                     });
                 } else if let BlockType::Background(serialized_block) = block_type {
                     // Because background output blocks are before the active block, they need to be saved
                     // via a BlockCompleted event but don't affect focus or input.
                     ctx.emit(Event::BlockCompleted {
                         block: serialized_block.clone(),
-                        is_local: !self.is_block_considered_remote(serialized_block.session_id, ctx),
+                        is_local: !self
+                            .is_block_considered_remote(serialized_block.session_id, ctx),
                     });
                 } else if let BlockType::BootstrapVisible(serialized_block) = block_type {
                     // Re-compute the focus after the visible bootstrap block has completed.
                     self.redetermine_terminal_focus(ctx);
                     ctx.emit(Event::BlockCompleted {
                         block: serialized_block.clone(),
-                        is_local: !self.is_block_considered_remote(serialized_block.session_id, ctx),
+                        is_local: !self
+                            .is_block_considered_remote(serialized_block.session_id, ctx),
                     });
                 }
 
@@ -6294,7 +6279,6 @@ impl TerminalView {
                     self.close_find_bar(ctx);
                     self.redetermine_global_focus(ctx);
                 }
-
             }
             ModelEvent::DetectedEndOfSshLogin(check_type) => {
                 self.handle_detected_end_of_ssh_login(check_type, ctx);
@@ -6815,12 +6799,7 @@ impl TerminalView {
         };
         if let Some(source) = pending_share {
             log::info!("Terminal bootstrapped with pending shared session; attempting to share");
-            self.attempt_to_share_session(
-                SharedSessionScrollbackType::All,
-                None,
-                source,
-                ctx,
-            );
+            self.attempt_to_share_session(SharedSessionScrollbackType::All, None, source, ctx);
         }
 
         if let Some(env_var_collection) = self.pending_env_var_collection.take() {
@@ -7151,7 +7130,6 @@ impl TerminalView {
         ctx: &mut ViewContext<TerminalView>,
     ) {
         if let Some(correction) = corrections.into_iter().next() {
-
             // Set the autosuggestion only if the input is still empty
             self.input.update(ctx, |input, ctx| {
                 if input.buffer_text(ctx).is_empty() {
@@ -7874,7 +7852,6 @@ impl TerminalView {
     }
 
     fn copy(&mut self, ctx: &mut ViewContext<Self>) {
-
         let semantic_selection = SemanticSelection::as_ref(ctx);
         if let Some(selected) = self.model.lock().selection_to_string(
             semantic_selection,
@@ -10127,7 +10104,6 @@ impl TerminalView {
             self.close_context_menu(ctx, true);
         }
 
-
         if let Some(selected_block_index) = self.selected_blocks.tail() {
             let new_block_index = self
                 .model
@@ -10173,7 +10149,6 @@ impl TerminalView {
         if self.is_context_menu_open() {
             self.close_context_menu(ctx, true);
         }
-
 
         let input_mode = *InputModeSettings::as_ref(ctx).input_mode.value();
         let is_inverted_blocklist = input_mode.is_inverted_blocklist();
@@ -10383,10 +10358,7 @@ impl TerminalView {
         ctx.notify();
     }
 
-    fn clear_selections_without_focusing_input(
-        &mut self,
-        ctx: &mut ViewContext<Self>,
-    ) {
+    fn clear_selections_without_focusing_input(&mut self, ctx: &mut ViewContext<Self>) {
         self.clear_selected_blocks(ctx);
         self.clear_selected_text(ctx);
         ctx.notify();
@@ -10852,9 +10824,7 @@ impl TerminalView {
             InputEvent::UnhandledModifierKeyOnEditor(_) => {}
             InputEvent::ClearSelectionsWhenShellMode => self.clear_selections_when_shell_mode(ctx),
             InputEvent::AutosuggestionAccepted => ctx.notify(),
-            InputEvent::Escape => {
-                ctx.emit(Event::Escape)
-            }
+            InputEvent::Escape => ctx.emit(Event::Escape),
             InputEvent::InputStateChanged(_) => {}
             InputEvent::SyncInput(input) => {
                 if !SyncedInputState::as_ref(ctx).is_syncing_any_inputs(ctx.window_id()) {
@@ -11710,8 +11680,6 @@ impl TerminalView {
             None => return String::new(),
             Some(block) => block,
         };
-
-        
 
         if block.honor_ps1() {
             block.prompt_contents_to_string(false)
@@ -13855,7 +13823,8 @@ impl TerminalView {
         }
         drop(model);
 
-        self.warpify_footer.update(ctx, |footer, ctx| footer.show(ctx));
+        self.warpify_footer
+            .update(ctx, |footer, ctx| footer.show(ctx));
         self.maybe_show_warpify_footer_in_blocklist(ctx);
 
         send_telemetry_from_ctx!(TelemetryEvent::WarpifyFooterShown { is_ssh: false }, ctx);
@@ -13886,7 +13855,6 @@ impl TerminalView {
             );
         });
     }
-
 }
 
 impl Entity for TerminalView {
@@ -14522,7 +14490,9 @@ impl TypedActionView for TerminalView {
             }
             OpenWorkflowModal => self.open_workflow_modal(ctx),
             OpenWorkflowModalForGeneratedWorkflow(workflow) => {
-                ctx.emit(Event::OpenWorkflowModalWithTemporary(Box::new(workflow.clone())));
+                ctx.emit(Event::OpenWorkflowModalWithTemporary(Box::new(
+                    workflow.clone(),
+                )));
             }
             OpenWorkflowModalForBlock(block_index) => {
                 self.open_workflow_modal_from_block(*block_index, ctx)
@@ -15152,10 +15122,9 @@ impl View for TerminalView {
         }
 
         let active_block = model_lock.block_list().active_block();
-        if active_block.is_active_and_long_running()
-            && !model_lock.is_alt_screen_active() {
-                context.set.insert("LongRunningCommand");
-            }
+        if active_block.is_active_and_long_running() && !model_lock.is_alt_screen_active() {
+            context.set.insert("LongRunningCommand");
+        }
 
         // Add keyboard protocol context if enabled.
         if model_lock.is_term_mode_set(TermMode::KEYBOARD_PROTOCOL) {

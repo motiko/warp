@@ -655,34 +655,29 @@ pub fn render_text_from_kind(
         ContextChipKind::ShellGitBranch | ContextChipKind::GitBranchStatus => {
             text.add_text_with_highlights(
                 "git:(",
-                prompt_colors.input_prompt_git
-            ,
+                prompt_colors.input_prompt_git,
                 styles.font_properties,
             );
         }
         ContextChipKind::SvnBranch => {
             text.add_text_with_highlights(
                 "svn:(",
-                prompt_colors.input_prompt_svn
-            ,
+                prompt_colors.input_prompt_svn,
                 styles.font_properties,
             );
         }
         ContextChipKind::SvnDirtyItems => {
             text.add_text_with_highlights(
                 "±",
-                prompt_colors.input_prompt_svn
-            ,
+                prompt_colors.input_prompt_svn,
                 styles.font_properties,
             );
         }
         ContextChipKind::KubernetesContext => {
             text.add_text_with_highlights(
                 "⎈ ",
-                prompt_colors.input_prompt_kubernetes
-            ,
-                Properties::default().weight(Weight::Thin)
-            ,
+                prompt_colors.input_prompt_kubernetes,
+                Properties::default().weight(Weight::Thin),
             );
         }
         _ => (),
@@ -694,16 +689,14 @@ pub fn render_text_from_kind(
         ContextChipKind::ShellGitBranch | ContextChipKind::GitBranchStatus => {
             text.add_text_with_highlights(
                 ")",
-                prompt_colors.input_prompt_git
-            ,
+                prompt_colors.input_prompt_git,
                 styles.font_properties,
             );
         }
         ContextChipKind::SvnBranch => {
             text.add_text_with_highlights(
                 ")",
-                prompt_colors.input_prompt_svn
-            ,
+                prompt_colors.input_prompt_svn,
                 styles.font_properties,
             );
         }

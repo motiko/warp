@@ -28,8 +28,7 @@ use warp_graphql::workspace::{
     ComputerUseAutonomyValue as GqlComputerUseAutonomyValue,
     ComputerUseSettingInfo as GqlComputerUseSettingInfo,
     FeatureModelChoice as GqlFeatureModelChoice, LinkSharingSettings as GqlLinkSharingSettings,
-    LinkSharingSettingsInfo as GqlLinkSharingSettingsInfo,
-    LlmSettings as GqlLlmSettings,
+    LinkSharingSettingsInfo as GqlLinkSharingSettingsInfo, LlmSettings as GqlLlmSettings,
     MembershipRole as GqlMembershipRole,
     SandboxedAgentSettingsInfo as GqlSandboxedAgentSettingsInfo,
     SecretRedactionRegexListInfo as GqlSecretRedactionRegexListInfo,
@@ -290,7 +289,6 @@ fn team_for_test() -> Team {
         visibility: TeamVisibility::Open,
     }
 }
-
 
 fn workspace_for_test(team: &Team) -> Workspace {
     Workspace {
@@ -2434,4 +2432,3 @@ fn test_workspace_policy_wins_over_user_level_policy() {
         });
     })
 }
-

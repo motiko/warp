@@ -6,6 +6,7 @@ use async_channel::Sender;
 use futures_util::stream::AbortHandle;
 use lazy_static::lazy_static;
 use regex::Regex;
+use secret_redaction::find_secrets_in_text;
 use settings::Setting as _;
 use url::Url;
 use warp_core::context_flag::ContextFlag;
@@ -35,7 +36,6 @@ use super::active_notebook_data::{
 };
 use super::manager::NotebookManager;
 use super::{CloudNotebookModel, NotebookId, NotebookLocation};
-use secret_redaction::find_secrets_in_text;
 use crate::appearance::Appearance;
 use crate::cloud_object::grab_edit_access_modal::{GrabEditAccessModal, GrabEditAccessModalEvent};
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent, UpdateSource};

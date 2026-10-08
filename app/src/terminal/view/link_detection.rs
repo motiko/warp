@@ -490,7 +490,6 @@ impl super::TerminalView {
             }
         };
     }
-
 }
 
 // A collection of link detection functions that are only valid on platforms

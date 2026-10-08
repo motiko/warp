@@ -3,9 +3,9 @@ use std::sync::Arc;
 use warp_completer::completer::Description;
 use warpui::elements::{
     AnchorPair, Border, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
-    DispatchEventResult, Element, EventHandler, Flex, OffsetPositioning, OffsetType,
-    ParentElement, ParentOffsetBounds, PositionedElementOffsetBounds, PositioningAxis, Radius,
-    Shrinkable, Stack, XAxisAnchor,
+    DispatchEventResult, Element, EventHandler, Flex, OffsetPositioning, OffsetType, ParentElement,
+    ParentOffsetBounds, PositionedElementOffsetBounds, PositioningAxis, Radius, Shrinkable, Stack,
+    XAxisAnchor,
 };
 use warpui::fonts::Weight;
 use warpui::presenter::ChildView;

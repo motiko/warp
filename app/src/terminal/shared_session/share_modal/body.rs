@@ -256,8 +256,8 @@ impl View for Body {
             .filter(|i| i.is_disabled)
             .count();
 
-        let explanation_message = (disabled_count > 0)
-            .then_some("Some options are disabled due to sharing size limits");
+        let explanation_message =
+            (disabled_count > 0).then_some("Some options are disabled due to sharing size limits");
 
         if let Some(message) = explanation_message {
             column.add_child(

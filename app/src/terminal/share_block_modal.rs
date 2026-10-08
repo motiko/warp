@@ -34,9 +34,7 @@ use warpui::{
 use super::grid_renderer::CellGlyphCache;
 use super::model::grid::RespectDisplayedOutput;
 use crate::appearance::Appearance;
-use crate::editor::{
-    EditorView, SingleLineEditorOptions, TextOptions,
-};
+use crate::editor::{EditorView, SingleLineEditorOptions, TextOptions};
 use crate::send_telemetry_from_ctx;
 use crate::server::block::{Block as ServerBlock, DisplaySetting};
 use crate::server::server_api::block::BlockClient;
@@ -411,7 +409,6 @@ impl ShareBlockModal {
         if self.obfuscate_secrets.is_visually_obfuscated() {
             self.scan_selected_block_for_secrets(ctx);
         }
-
     }
 
     fn link(&self) -> Option<String> {

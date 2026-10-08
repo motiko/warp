@@ -10,9 +10,9 @@ use super::{
     FindTaskMessage, is_query_refinement,
 };
 use crate::terminal::block_list_element::GridType;
+use crate::terminal::find::BlockListMatch;
 use crate::terminal::find::model::block_list::run_find_on_block_list;
 use crate::terminal::find::model::{FindOptions, TerminalFindModel};
-use crate::terminal::find::BlockListMatch;
 use crate::terminal::model::TerminalModel;
 use crate::terminal::model::grid::grid_handler::AbsolutePoint;
 use crate::terminal::model::index::Point;

@@ -50,8 +50,7 @@ use warpui::actions::StandardAction;
 use warpui::r#async::Timer;
 use warpui::clipboard::ClipboardContent;
 use warpui::elements::{
-    CornerRadius, DEFAULT_UI_LINE_HEIGHT_RATIO,
-    Hoverable, MouseStateHandle, Radius,
+    CornerRadius, DEFAULT_UI_LINE_HEIGHT_RATIO, Hoverable, MouseStateHandle, Radius,
 };
 use warpui::fonts::{Cache as FontCache, FamilyId, Properties, Weight};
 use warpui::keymap::{EditableBinding, FixedBinding, Keystroke, PerPlatformKeystroke};
@@ -88,7 +87,8 @@ use crate::editor::accept_autosuggestion_keybinding_view::AcceptAutosuggestionKe
 use crate::editor::autosuggestion_ignore_view::{AutosuggestionIgnore, AutosuggestionIgnoreEvent};
 use crate::features::FeatureFlag;
 use crate::settings::{
-    AppEditorSettings, AppEditorSettingsChangedEvent, CursorBlink, CursorDisplayType, SelectionSettings,
+    AppEditorSettings, AppEditorSettingsChangedEvent, CursorBlink, CursorDisplayType,
+    SelectionSettings,
 };
 use crate::settings_view::flags;
 use crate::terminal::grid_size_util::grid_cell_dimensions;
@@ -106,7 +106,6 @@ const DEFAULT_TAB_SIZE: usize = 4;
 pub const ACCEPT_AUTOSUGGESTION_KEYBINDING_NAME: &str = "editor_view:insert_autosuggestion";
 
 pub const MAX_IMAGES_PER_CONVERSATION: usize = 200;
-
 
 #[derive(Clone, Copy)]
 pub enum AutosuggestionLocation {
@@ -865,15 +864,13 @@ pub fn init(ctx: &mut AppContext) {
         ),
     ]);
 
-    ctx.register_editable_bindings([
-        EditableBinding::new(
-            "editor_view:inspect_command",
-            "Inspect Command",
-            EditorAction::InspectCommand,
-        )
-        .with_context_predicate(id!("EditorView") & !id!("IMEOpen"))
-        .with_key_binding("cmdorctrl-i"),
-    ]);
+    ctx.register_editable_bindings([EditableBinding::new(
+        "editor_view:inspect_command",
+        "Inspect Command",
+        EditorAction::InspectCommand,
+    )
+    .with_context_predicate(id!("EditorView") & !id!("IMEOpen"))
+    .with_key_binding("cmdorctrl-i")]);
 
     ctx.register_editable_bindings([EditableBinding::new(
         "editor_view:clear_buffer",
@@ -3873,7 +3870,7 @@ impl EditorView {
         if !self.vim_mode_enabled(ctx)
             || self
                 .vim_mode(ctx)
-                .is_some_and(|vim_mode| matches![vim_mode, VimMode::Normal | VimMode::Insert]) 
+                .is_some_and(|vim_mode| matches![vim_mode, VimMode::Normal | VimMode::Insert])
         {
             cleared_buffer_len = self.buffer_size(ctx).as_usize();
             self.clear_buffer(ctx);

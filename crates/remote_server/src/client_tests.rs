@@ -9,9 +9,9 @@ use warpui_core::r#async::executor;
 use super::*;
 use crate::proto::{
     ClientMessage, ErrorCode, GetDiffStateResponse, InitializeResponse, OpenBufferResponse,
-    RunCommandResponse,
-    RunCommandSuccess, ServerMessage, WriteFile, client_message, host_scoped_request, notification,
-    run_command_response, server_message, session_scoped_request,
+    RunCommandResponse, RunCommandSuccess, ServerMessage, WriteFile, client_message,
+    host_scoped_request, notification, run_command_response, server_message,
+    session_scoped_request,
 };
 use crate::protocol;
 

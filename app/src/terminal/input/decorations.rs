@@ -60,7 +60,6 @@ fn valid_command_for_error_underline(command: &str) -> bool {
 }
 
 impl Input {
-
     /// Whether or not any decorations should be computed and applied to the
     /// input text.
     pub fn should_apply_decorations(&self, ctx: &ViewContext<Self>) -> bool {
@@ -149,18 +148,19 @@ impl Input {
 
             let completion_session = completion_context.session.clone();
 
-            self.decorations_future_handle = Some(ctx.spawn_abortable(
-                async move {
-                    parse_current_commands_and_tokens(buffer_text, &completion_context).await
-                },
-                move |input, parsed_tokens, ctx| {
-                    input.last_parsed_tokens = Some(parsed_tokens);
-                    input.apply_decorations(ctx);
-                },
-                move |_, _| {
-                    completion_session.cancel_active_commands();
-                },
-            ));
+            self.decorations_future_handle =
+                Some(ctx.spawn_abortable(
+                    async move {
+                        parse_current_commands_and_tokens(buffer_text, &completion_context).await
+                    },
+                    move |input, parsed_tokens, ctx| {
+                        input.last_parsed_tokens = Some(parsed_tokens);
+                        input.apply_decorations(ctx);
+                    },
+                    move |_, _| {
+                        completion_session.cancel_active_commands();
+                    },
+                ));
         }
     }
 

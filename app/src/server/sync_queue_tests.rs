@@ -26,10 +26,7 @@ use crate::server::cloud_objects::update_manager::InitiatedBy;
 use crate::server::ids::{ClientId, HashableId, ServerId, ServerIdAndType, SyncId};
 use crate::server::server_api::ServerApiProvider;
 use crate::server::server_api::auth::UserAuthenticationError;
-use crate::server::sync_queue::{
-    CreationFailureReason, QueueItemId,
-    SyncQueueEvent,
-};
+use crate::server::sync_queue::{CreationFailureReason, QueueItemId, SyncQueueEvent};
 use crate::system::SystemStats;
 use crate::test_util::assert_eventually;
 use crate::workflows::CloudWorkflowModel;

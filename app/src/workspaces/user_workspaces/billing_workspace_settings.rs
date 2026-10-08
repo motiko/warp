@@ -10,9 +10,7 @@ use super::UserWorkspaces;
 use crate::auth::AuthStateProvider;
 use crate::channel::ChannelState;
 use crate::workspaces::team::Team;
-use crate::workspaces::workspace::{
-    BillingMetadata, CustomerType, PurchaseAddOnCreditsPolicy,
-};
+use crate::workspaces::workspace::{BillingMetadata, CustomerType, PurchaseAddOnCreditsPolicy};
 
 impl UserWorkspaces {
     pub fn current_workspace_billing_metadata(&self) -> Option<&BillingMetadata> {
@@ -156,5 +154,4 @@ impl UserWorkspaces {
             .map(|workspace| workspace.billing_metadata.is_byo_endpoint_enabled())
             .unwrap_or(true)
     }
-
 }

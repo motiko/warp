@@ -555,10 +555,7 @@ impl FileNode {
                 .finish(),
             FileType::Notebook => Icon::Notebook
                 .to_warpui_icon(Fill::Solid(override_color.unwrap_or(
-                    warp_drive_icon_color(
-                        appearance,
-                        DriveObjectType::Notebook,
-                    ),
+                    warp_drive_icon_color(appearance, DriveObjectType::Notebook),
                 )))
                 .finish(),
         };

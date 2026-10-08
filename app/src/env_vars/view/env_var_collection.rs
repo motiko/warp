@@ -1,4 +1,5 @@
 use pathfinder_geometry::vector::{Vector2F, vec2f};
+use secret_redaction::find_secrets_in_text_with_levels;
 use warp_core::features::FeatureFlag;
 use warp_errors::report_error;
 use warpui::clipboard::ClipboardContent;
@@ -20,7 +21,6 @@ use warpui::{
 
 use super::command_dialog::EnvVarCommandDialog;
 use super::menus::Menus;
-use secret_redaction::find_secrets_in_text_with_levels;
 use crate::cloud_object::breadcrumbs::ContainingObject;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::{CloudObjectEventEntrypoint, Owner};

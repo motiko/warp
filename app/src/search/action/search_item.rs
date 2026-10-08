@@ -207,10 +207,7 @@ impl SearchItemIcon for BindingGroup {
             | Self::Notifications
             | Self::WarpAi => appearance.theme().foreground().into_solid(),
             Self::Workflow => warp_drive_icon_color(appearance, DriveObjectType::Workflow),
-            Self::Notebooks => warp_drive_icon_color(
-                appearance,
-                DriveObjectType::Notebook,
-            ),
+            Self::Notebooks => warp_drive_icon_color(appearance, DriveObjectType::Notebook),
             Self::EnvVarCollection => {
                 warp_drive_icon_color(appearance, DriveObjectType::EnvVarCollection)
             }

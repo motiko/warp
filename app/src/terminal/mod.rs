@@ -1,9 +1,9 @@
 pub use block_list_element::GridType;
+pub use history::{History, HistoryEntry, HistoryEvent, LinkedWorkflowData, ShellHost};
 use model::alt_screen::AltScreen;
 use model::blocks::BlockList;
 pub use model::terminal_model::TerminalModel;
 use ordered_float::Float;
-pub use history::{History, HistoryEntry, HistoryEvent, LinkedWorkflowData, ShellHost};
 pub use view::{Event, TerminalView};
 pub use warp_terminal::shell::{self, ShellLaunchData};
 pub use warp_terminal::{CellSizeAndWindowPadding, ClipboardType, SizeInfo};

@@ -417,7 +417,6 @@ impl LaunchMode {
             LaunchMode::RemoteServerProxy => "remote_server_proxy",
         }
     }
-
 }
 
 /// If the given event is a key down event containing alt modifiers, and those
@@ -1048,9 +1047,7 @@ pub(crate) fn initialize_app(
     // Only read the subsets of persisted data this launch mode actually
     // consumes; loading everything is expensive on large databases.
     let persisted_data_scope = match launch_mode {
-        LaunchMode::RemoteServerDaemon { .. } => {
-            persistence::PersistedDataScope::Daemon
-        }
+        LaunchMode::RemoteServerDaemon { .. } => persistence::PersistedDataScope::Daemon,
         LaunchMode::App { .. } | LaunchMode::RemoteServerProxy | LaunchMode::Test { .. } => {
             persistence::PersistedDataScope::Full
         }

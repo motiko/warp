@@ -43,9 +43,7 @@ use crate::drive::DriveObjectType;
 use crate::drive::cloud_object_styling::warp_drive_icon_color;
 use crate::editor::EditorView;
 use crate::pane_group::pane::IPaneType;
-use crate::pane_group::{
-    CodePane, PaneGroup, PaneId, TabBarHoverIndex, TerminalPane,
-};
+use crate::pane_group::{CodePane, PaneGroup, PaneId, TabBarHoverIndex, TerminalPane};
 use crate::safe_triangle::SafeTriangle;
 use crate::tab::{
     SelectedTabColor, TAB_INDICATOR_SYNCED_COLOR, TabData, reveals_tab_shortcut_hints,
@@ -237,9 +235,7 @@ fn pane_ids_for_detail_target(
             pane_group
                 .pane_by_id(pane_id)
                 .map(|_| {
-                    supports_vertical_tabs_detail_sidecar(
-                        &pane_group.resolve_pane_type(pane_id),
-                    )
+                    supports_vertical_tabs_detail_sidecar(&pane_group.resolve_pane_type(pane_id))
                 })
                 .unwrap_or(false)
         },
@@ -1341,7 +1337,10 @@ fn render_control_bar(
     .finish()
 }
 
-fn render_detail_kind_badge_icon(props: &PaneProps<'_>, appearance: &Appearance) -> Box<dyn Element> {
+fn render_detail_kind_badge_icon(
+    props: &PaneProps<'_>,
+    appearance: &Appearance,
+) -> Box<dyn Element> {
     let theme = appearance.theme();
     let sub_text = theme.sub_text_color(theme.background());
     let disabled_text = detail_sidecar_text_colors(theme).disabled;
@@ -4079,9 +4078,9 @@ impl PaneGroup {
             IPaneType::Workflow => TypedPane::Workflow,
             IPaneType::Settings => TypedPane::Settings,
             IPaneType::EnvVarCollection => TypedPane::EnvVarCollection,
-            IPaneType::GetStarted
-            | IPaneType::NetworkLog
-            | IPaneType::DeferredPlaceholder => TypedPane::Other,
+            IPaneType::GetStarted | IPaneType::NetworkLog | IPaneType::DeferredPlaceholder => {
+                TypedPane::Other
+            }
             #[cfg(test)]
             IPaneType::Dummy => TypedPane::Other,
         }
@@ -4745,10 +4744,7 @@ fn summary_pane_kind_icon(
         SummaryPaneKind::Terminal => (WarpIcon::Terminal, main_text),
         SummaryPaneKind::Code { .. } => (WarpIcon::Code2, sub_text),
         SummaryPaneKind::File => (WarpIcon::File, sub_text),
-        SummaryPaneKind::Notebook => (
-            WarpIcon::Notebook,
-            drive_color(DriveObjectType::Notebook),
-        ),
+        SummaryPaneKind::Notebook => (WarpIcon::Notebook, drive_color(DriveObjectType::Notebook)),
         SummaryPaneKind::Workflow => (WarpIcon::Workflow, drive_color(DriveObjectType::Workflow)),
         SummaryPaneKind::Settings => (WarpIcon::Gear, main_text),
         SummaryPaneKind::EnvVarCollection => (

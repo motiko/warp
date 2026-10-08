@@ -68,9 +68,11 @@ impl FindWorkQueue {
     /// [`collect_block_info`](super::collect_block_info)).
     pub fn enqueue_full_scan(&self, blocks: &[BlockInfo]) {
         let mut inner = self.inner.lock().unwrap();
-        inner.items.extend(blocks.iter().map(|block| FindWorkItem::FullBlock {
-            block_index: block.block_index,
-        }));
+        inner
+            .items
+            .extend(blocks.iter().map(|block| FindWorkItem::FullBlock {
+                block_index: block.block_index,
+            }));
         drop(inner);
         // Wake the background task if it is waiting.
         self.event.notify(1);

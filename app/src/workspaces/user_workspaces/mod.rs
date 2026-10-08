@@ -31,19 +31,19 @@ use crate::server::server_api::workspace::{PurchaseAddonCreditsOutcome, Workspac
 #[cfg(test)]
 use crate::server::server_api::{team::MockTeamClient, workspace::MockWorkspaceClient};
 use crate::settings::PrivacySettings;
-#[cfg(test)]
-use crate::workspaces::workspace::{BillingMetadata, WorkspaceMember, WorkspaceSettings};
 use crate::workspaces::workspace::{
     AiOverages, PurchaseAddOnCreditsPolicy, UsageBasedPricingSettings,
 };
+#[cfg(test)]
+use crate::workspaces::workspace::{BillingMetadata, WorkspaceMember, WorkspaceSettings};
 pub(crate) mod billing_workspace_settings;
 pub(crate) mod team_workspace_settings;
+#[cfg(any(test, not(feature = "integration_tests")))]
+pub use team_workspace_settings::ResolvedTeamScope;
 #[cfg(test)]
 pub(crate) use team_workspace_settings::TeamContextForOperation;
 #[cfg(test)]
 pub(crate) use team_workspace_settings::TeamlessScopeForTest;
-#[cfg(any(test, not(feature = "integration_tests")))]
-pub use team_workspace_settings::ResolvedTeamScope;
 pub use team_workspace_settings::{TeamContext, TeamContextResolver, TeamScope};
 
 const STRIPE_SUBSCRIPTION_INTERVAL_PAGE_PREFIX: &str = "/upgrade";
@@ -1654,7 +1654,6 @@ impl UserWorkspaces {
             panic!("No workspace found. Did you call setup_test_workspace()?");
         }
     }
-
 }
 
 impl Entity for UserWorkspaces {

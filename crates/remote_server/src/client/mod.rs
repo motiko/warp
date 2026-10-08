@@ -10,13 +10,12 @@ use futures::io::{AsyncRead, AsyncWrite};
 use warpui_core::r#async::{FutureExt as _, executor};
 
 use crate::proto::{
-    Abort, Authenticate, BufferEdit, ClientMessage, CloseBuffer, DiffMode,
-    DiffStateFileDelta, DiffStateMetadataUpdate, DiffStateSnapshot, ErrorCode, GitStatusMetadata,
-    Initialize, InitializeResponse, LoadRepoMetadataDirectoryResponse,
-    NavigatedToDirectoryResponse, PrInfo, RepositoryInfo,
-    RunCommandRequest, RunCommandResponse, ServerMessage, SessionBootstrapped, TextEdit,
-    UnsubscribeDiffState, UpdateGitHubPrInfo, UpdateGitHubRepoInfo, UpdateGitStatus, notification,
-    server_message, session_scoped_request,
+    Abort, Authenticate, BufferEdit, ClientMessage, CloseBuffer, DiffMode, DiffStateFileDelta,
+    DiffStateMetadataUpdate, DiffStateSnapshot, ErrorCode, GitStatusMetadata, Initialize,
+    InitializeResponse, LoadRepoMetadataDirectoryResponse, NavigatedToDirectoryResponse, PrInfo,
+    RepositoryInfo, RunCommandRequest, RunCommandResponse, ServerMessage, SessionBootstrapped,
+    TextEdit, UnsubscribeDiffState, UpdateGitHubPrInfo, UpdateGitHubRepoInfo, UpdateGitStatus,
+    notification, server_message, session_scoped_request,
 };
 use crate::repo_metadata_proto::{proto_snapshot_to_update, proto_to_repo_metadata_update};
 

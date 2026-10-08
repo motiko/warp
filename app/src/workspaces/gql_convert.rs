@@ -30,31 +30,28 @@ use warp_graphql::user::{
 };
 use warp_graphql::workspace::{
     AddonCreditsSettings as GqlAddonCreditsSettings,
-    AdminEnablementSetting as GqlAdminEnablementSetting, AiPermissionsSettings as GqlAiPermissionsSettings,
-    EmailInvite as GqlEmailInvite,
+    AdminEnablementSetting as GqlAdminEnablementSetting,
+    AiPermissionsSettings as GqlAiPermissionsSettings, EmailInvite as GqlEmailInvite,
     InviteLinkDomainRestriction as GqlInviteLinkDomainRestriction,
     MembershipRole as GqlMembershipRole, Team as GqlTeam, TeamMember as GqlTeamMember,
     TeamSettings as GqlTeamSettings, TeamVisibility as GqlTeamVisibility,
     UgcCollectionEnablementSetting as GqlUgcCollectionEnablementSetting, Workspace as GqlWorkspace,
     WorkspaceMember as GqlWorkspaceMember, WorkspaceMemberUsageInfo as GqlWorkspaceMemberUsageInfo,
     WorkspaceSettings as GqlWorkspaceSettings,
-    };
+};
 
 use super::team::{
     DiscoverableTeam, DiscoverableWorkspace, MembershipRole, Team, TeamMember, TeamVisibility,
 };
 use super::user_workspaces::WorkspacesMetadataResponse;
 use super::workspace::{
-    AIAutonomyPolicy, AddonCreditsSettings, AdminEnablementSetting,
-    AiPermissionsSettings, AmbientAgentsPolicy, BillingCycleUsageData, BillingCycleUsageEntry,
-    BillingCycleUsageSummary, BillingMetadata,
-    CloudConversationStorageSettings, CodebaseContextSettings, CustomerType,
-    DelinquencyStatus, EmailInvite, EnforceableSetting, EnterpriseSecretRegex,
-    InstanceShape, InviteLinkDomainRestriction, LinkSharingSettings,
-    MaxPriorCycles, SecretRedactionSettings,
+    AIAutonomyPolicy, AddonCreditsSettings, AdminEnablementSetting, AiPermissionsSettings,
+    AmbientAgentsPolicy, BillingCycleUsageData, BillingCycleUsageEntry, BillingCycleUsageSummary,
+    BillingMetadata, CloudConversationStorageSettings, CodebaseContextSettings, CustomerType,
+    DelinquencyStatus, EmailInvite, EnforceableSetting, EnterpriseSecretRegex, InstanceShape,
+    InviteLinkDomainRestriction, LinkSharingSettings, MaxPriorCycles, SecretRedactionSettings,
     SessionSharingPolicy, SharedNotebooksPolicy, SharedWorkflowsPolicy, SplitListSetting,
-    TeamAiPermissionsSettings, TeamLinkSharingSettings,
-    TeamSecretRedactionSettings, TeamSettings,
+    TeamAiPermissionsSettings, TeamLinkSharingSettings, TeamSecretRedactionSettings, TeamSettings,
     TelemetryDataCollectionPolicy, TelemetrySettings, Tier, UgcCollectionEnablementSetting,
     UgcCollectionSettings, UgcDataCollectionPolicy, UsageBasedPricingPolicy,
     UsageVisibilityGranularity, UsageVisibilityPolicy, WarpAiPolicy, Workspace, WorkspaceMember,

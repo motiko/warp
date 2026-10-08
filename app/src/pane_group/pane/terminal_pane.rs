@@ -203,7 +203,6 @@ impl PaneContent for TerminalPane {
                 }
             }
         });
-
     }
 
     fn detach(
@@ -680,4 +679,3 @@ fn handle_terminal_view_event(
         log::warn!("Session {terminal_pane_id:?} not found");
     }
 }
-

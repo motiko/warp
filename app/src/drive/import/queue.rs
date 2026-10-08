@@ -205,10 +205,7 @@ impl ImportQueue {
                             client_id,
                             dequeued_item.owner,
                             parent_id,
-                            CloudNotebookModel {
-                                title,
-                                data,
-                            },
+                            CloudNotebookModel { title, data },
                             CloudObjectEventEntrypoint::ImportModal,
                             false,
                             ctx,

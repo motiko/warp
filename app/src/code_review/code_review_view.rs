@@ -1642,12 +1642,7 @@ impl CodeReviewView {
 
         if let Some(comment) = &existing_comment {
             composer.update(ctx, |editor, ctx| {
-                editor.reopen_saved_comment(
-                    &comment.id,
-                    None,
-                    &comment.content,
-                    ctx,
-                );
+                editor.reopen_saved_comment(&comment.id, None, &comment.content, ctx);
             });
         }
 
@@ -1735,12 +1730,7 @@ impl CodeReviewView {
 
                 editor_state.editor().update(ctx, |local_editor, ctx| {
                     local_editor.editor().update(ctx, |editor, ctx| {
-                        editor.open_existing_comment(
-                            &comment.id,
-                            line,
-                            &comment.content,
-                            ctx,
-                        );
+                        editor.open_existing_comment(&comment.id, line, &comment.content, ctx);
                     });
                 });
 
@@ -3468,7 +3458,6 @@ impl CodeReviewView {
 
         ctx.notify();
     }
-
 
     fn render_placeholder_header(appearance: &Appearance) -> Box<dyn Element> {
         let theme = appearance.theme();
@@ -5314,7 +5303,6 @@ impl CodeReviewView {
         !self.get_unsaved_file_paths(ctx).is_empty()
     }
 
-
     fn get_current_head(&self, ctx: &ViewContext<Self>) -> Option<CurrentHead> {
         self.diff_state_model
             .as_ref(ctx)
@@ -5335,7 +5323,6 @@ impl CodeReviewView {
             DiffMode::OtherBranch(branch_name) => Ok(DiffBase::BranchName(branch_name)),
         }
     }
-
 
     fn save_files(&mut self, paths: &[String], ctx: &mut ViewContext<Self>) {
         for path in paths {

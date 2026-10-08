@@ -25,9 +25,9 @@ use crate::client::ClientEvent;
 use crate::client::InitializeParams;
 use crate::client::RemoteServerClient;
 use crate::proto::{
-    DiffMode, DiffState, DiffStateErrorValue, DiffStateFileDelta,
-    DiffStateMetadataUpdate, DiffStateSnapshot, FileStatusInfo, GetDiffStateResponse, GitOpDelta,
-    GitStatusMetadata, PrInfo, RepositoryInfo, TextEdit, diff_state, get_diff_state_response,
+    DiffMode, DiffState, DiffStateErrorValue, DiffStateFileDelta, DiffStateMetadataUpdate,
+    DiffStateSnapshot, FileStatusInfo, GetDiffStateResponse, GitOpDelta, GitStatusMetadata, PrInfo,
+    RepositoryInfo, TextEdit, diff_state, get_diff_state_response,
 };
 use crate::repo_metadata_proto::proto_load_repo_metadata_directory_response_to_update;
 #[cfg(not(target_family = "wasm"))]
@@ -2771,13 +2771,7 @@ impl RemoteServerManager {
                 // optional create-PR) host-local and returns the final delta
                 // plus any created PR (see `handle_git_commit_chain`).
                 let result = handle
-                    .git_commit_chain(
-                        &repo_path,
-                        mode,
-                        message,
-                        include_unstaged,
-                        branch,
-                    )
+                    .git_commit_chain(&repo_path, mode, message, include_unstaged, branch)
                     .await
                     .map(|(delta, pr_info)| CommitChainSuccess { delta, pr_info })
                     .map_err(|e| e.to_string());

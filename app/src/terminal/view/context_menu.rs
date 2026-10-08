@@ -1,6 +1,8 @@
 use warpui::UpdateView;
 
-use super::{CONTEXT_MENU_WIDTH, ContextMenuState, MenuItem, TerminalAction, TerminalView, ViewContext};
+use super::{
+    CONTEXT_MENU_WIDTH, ContextMenuState, MenuItem, TerminalAction, TerminalView, ViewContext,
+};
 
 impl TerminalView {
     pub(super) fn show_context_menu(

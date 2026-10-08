@@ -404,8 +404,7 @@ impl SyncQueue {
             | QueueItem::UpdateFolder { id, .. }
             | QueueItem::UpdateCloudPreferences { id, .. }
             | QueueItem::UpdateEnvVarCollection { id, .. }
-            | QueueItem::UpdateWorkflowEnum { id, .. }
-            => self.get_update_dependencies(id),
+            | QueueItem::UpdateWorkflowEnum { id, .. } => self.get_update_dependencies(id),
 
             // Update workflow requests should depend on existing requests to that object, as well as
             // any enums or env vars they reference.
@@ -617,8 +616,7 @@ impl SyncQueue {
                 | QueueItem::UpdateWorkflow { id, revision, .. }
                 | QueueItem::UpdateCloudPreferences { id, revision, .. }
                 | QueueItem::UpdateEnvVarCollection { id, revision, .. }
-                | QueueItem::UpdateWorkflowEnum { id, revision, .. }
-                => {
+                | QueueItem::UpdateWorkflowEnum { id, revision, .. } => {
                     Self::maybe_update_queue_item_with_new_revision(
                         &self.client_id_to_server,
                         id,

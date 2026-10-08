@@ -3192,7 +3192,10 @@ impl Element for BlockListElement {
 
                     let separator_text =
                         if let Some(ts) = (*model).block_list().restored_session_ts() {
-                            format!("Previous session from {}", ts.format("%a %b %-d at %-I:%M %p"))
+                            format!(
+                                "Previous session from {}",
+                                ts.format("%a %b %-d at %-I:%M %p")
+                            )
                         } else {
                             "Previous session".to_string()
                         };
@@ -3824,7 +3827,7 @@ impl Element for BlockListElement {
                     let block_menu_rect_origin = block_menu_items_start_origin - vec2f(4., 4.);
                     let block_menu_rect_size = vec2f(
                         94., // 3 icons of 26px width + 4px padding between icons x2 + 4px left padding + 4px right padding
-                        34.,  // 26px height icons + 4px top padding + 4px bottom padding
+                        34., // 26px height icons + 4px top padding + 4px bottom padding
                     );
 
                     // We add in increments of 30 as each icon is 26px wide + 4px gap between icons

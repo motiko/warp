@@ -6,8 +6,14 @@ fn commands_have_typed_identities() {
         (&*commands::EDIT, SlashCommandKind::Edit),
         (&*commands::RENAME_TAB, SlashCommandKind::RenameTab),
         (&*commands::SET_TAB_COLOR, SlashCommandKind::SetTabColor),
-        (&commands::OPEN_CODE_REVIEW, SlashCommandKind::OpenCodeReview),
-        (&commands::OPEN_SETTINGS_FILE, SlashCommandKind::OpenSettingsFile),
+        (
+            &commands::OPEN_CODE_REVIEW,
+            SlashCommandKind::OpenCodeReview,
+        ),
+        (
+            &commands::OPEN_SETTINGS_FILE,
+            SlashCommandKind::OpenSettingsFile,
+        ),
         (&commands::CHANGELOG, SlashCommandKind::Changelog),
         (&*commands::FEEDBACK, SlashCommandKind::Feedback),
     ] {

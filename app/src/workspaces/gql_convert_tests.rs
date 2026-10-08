@@ -387,7 +387,6 @@ mod team_settings_conversion {
             AdminEnablementSetting::Enable
         );
         assert_eq!(settings.default_host_slug.as_deref(), Some("my-host"));
-
     }
 
     #[test]

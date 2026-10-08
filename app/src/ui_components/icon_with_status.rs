@@ -30,7 +30,11 @@ pub(crate) fn render_icon_with_status(
         }
         IconWithStatusVariant::NeutralElement { icon_element } => icon_element,
     };
-    render_neutral_circle(icon_element, internal_colors::fg_overlay_2(theme), total_size)
+    render_neutral_circle(
+        icon_element,
+        internal_colors::fg_overlay_2(theme),
+        total_size,
+    )
 }
 
 /// Builds the neutral circle: a full-`total_size` container with the glyph at

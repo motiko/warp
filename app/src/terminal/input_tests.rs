@@ -2925,10 +2925,7 @@ fn test_tab_completion_hides_autosuggestion() {
         input.update(&mut app, |input, ctx| {
             input.clear_buffer_and_reset_undo_stack(ctx);
             input.user_insert("open-file ", ctx);
-            input.set_autosuggestion(
-                "sesame",
-                ctx,
-            )
+            input.set_autosuggestion("sesame", ctx)
         });
 
         input.update(&mut app, |input, ctx| {
@@ -2985,10 +2982,7 @@ fn test_completions_while_typing_doesnt_hide_autosuggestion() {
         input.update(&mut app, |input, ctx| {
             input.clear_buffer_and_reset_undo_stack(ctx);
             input.user_insert("open-file ", ctx);
-            input.set_autosuggestion(
-                "sesame",
-                ctx,
-            )
+            input.set_autosuggestion("sesame", ctx)
         });
 
         // Autosuggestion should be active.
@@ -6094,8 +6088,8 @@ mod completion_sources_resolution_tests {
     fn multiline_buffer_never_selects_native() {
         assert_eq!(
             resolve_completion_sources(
-                true,  // feature flag on
-                true,  // multi-line
+                true, // feature flag on
+                true, // multi-line
                 CompletionsTrigger::Keybinding,
                 true, // warp completions on
                 true, // native shell completions on

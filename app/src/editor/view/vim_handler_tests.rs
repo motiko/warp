@@ -4497,11 +4497,7 @@ fn test_vim_accept_full_autosuggestions_char() {
         let editor = add_editor_vim_normal_mode("echo ", &mut app);
 
         editor.update(&mut app, |view, ctx| {
-            view.set_autosuggestion(
-                "foo bar-baz",
-                AutosuggestionLocation::EndOfBuffer,
-                ctx,
-            );
+            view.set_autosuggestion("foo bar-baz", AutosuggestionLocation::EndOfBuffer, ctx);
             view.vim_user_insert("$", ctx);
         });
 
@@ -4535,11 +4531,7 @@ fn test_vim_accept_full_autosuggestions_line_end() {
         let editor = add_editor_vim_normal_mode("echo ", &mut app);
 
         editor.update(&mut app, |view, ctx| {
-            view.set_autosuggestion(
-                "foo bar-baz",
-                AutosuggestionLocation::EndOfBuffer,
-                ctx,
-            );
+            view.set_autosuggestion("foo bar-baz", AutosuggestionLocation::EndOfBuffer, ctx);
             view.vim_user_insert("$", ctx);
         });
 
@@ -4573,11 +4565,7 @@ fn test_vim_accept_partial_autosuggestions_word() {
         let editor = add_editor_vim_normal_mode("echo ", &mut app);
 
         editor.update(&mut app, |view, ctx| {
-            view.set_autosuggestion(
-                "foo bar-baz",
-                AutosuggestionLocation::EndOfBuffer,
-                ctx,
-            );
+            view.set_autosuggestion("foo bar-baz", AutosuggestionLocation::EndOfBuffer, ctx);
             view.vim_user_insert("e", ctx);
         });
 

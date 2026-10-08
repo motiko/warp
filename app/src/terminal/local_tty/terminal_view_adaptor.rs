@@ -411,10 +411,7 @@ impl TerminalManager<TerminalView> {
                     });
                 }
             }
-            NetworkEvent::FailedToCreateSharedSession {
-                reason,
-                cause,
-            } => {
+            NetworkEvent::FailedToCreateSharedSession { reason, cause } => {
                 log::warn!("Failed to create shared session: reason={reason:?}, cause={cause:?}");
 
                 model
@@ -502,8 +499,9 @@ impl TerminalManager<TerminalView> {
                 });
             }
             NetworkEvent::ParticipantListUpdated(participant_list) => {
-                let was_viewer_driven_sizing_eligible = terminal_view
-                    .update(ctx, |view, ctx| view.is_viewer_driven_sizing_eligible(true, ctx));
+                let was_viewer_driven_sizing_eligible = terminal_view.update(ctx, |view, ctx| {
+                    view.is_viewer_driven_sizing_eligible(true, ctx)
+                });
 
                 if let Some(presence_manager) =
                     terminal_view.as_ref(ctx).shared_session_presence_manager()
@@ -523,8 +521,12 @@ impl TerminalManager<TerminalView> {
                     // since it was a default. Prefer to keep the viewer-set size for transcript
                     // persistence.
                     if !is_ambient_agent {
-                        let sharer_uid =
-                            participant_list.sharer.info.profile_data.firebase_uid.as_str();
+                        let sharer_uid = participant_list
+                            .sharer
+                            .info
+                            .profile_data
+                            .firebase_uid
+                            .as_str();
                         let still_eligible =
                             PresenceManager::single_distinct_present_viewer_uid_from_viewers(
                                 participant_list.viewers.iter(),
@@ -806,14 +808,13 @@ impl TerminalManager<TerminalView> {
                     });
                 }
             }
-            NetworkEvent::ViewerTerminalSizeReported {
-                window_size,
-            } => {
+            NetworkEvent::ViewerTerminalSizeReported { window_size } => {
                 if !*SharedSessionSettings::as_ref(ctx).viewer_driven_sizing_enabled {
                     return;
                 }
-                let eligible = terminal_view
-                    .update(ctx, |view, ctx| view.is_viewer_driven_sizing_eligible(true, ctx));
+                let eligible = terminal_view.update(ctx, |view, ctx| {
+                    view.is_viewer_driven_sizing_eligible(true, ctx)
+                });
                 if eligible {
                     terminal_view.update(ctx, |view, ctx| {
                         view.resize_from_viewer_report(*window_size, ctx);

@@ -111,8 +111,8 @@ impl SearchItem for WorkflowSearchItem {
         Container::new(
             ConstrainedBox::new(
                 Icon::Workflow
-                .to_warpui_icon(highlight_state.icon_fill(appearance))
-                .finish(),
+                    .to_warpui_icon(highlight_state.icon_fill(appearance))
+                    .finish(),
             )
             .with_width(appearance.monospace_font_size())
             .with_height(appearance.monospace_font_size())

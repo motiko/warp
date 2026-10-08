@@ -14,10 +14,10 @@ use super::session_settings::SessionSettings;
 use super::settings::TerminalSettings;
 use super::view::{WARP_PROMPT_HEIGHT_LINES, create_size_info_for_blocklist};
 use super::{BlockPadding, ShellLaunchState, SizeInfo, TerminalModel, color};
-use crate::terminal::model::block::SerializedBlock;
 use crate::appearance::Appearance;
 use crate::pane_group::pane::DetachType;
 use crate::settings::{BlockVisibilitySettings, DebugSettings, InputModeSettings};
+use crate::terminal::model::block::SerializedBlock;
 
 pub trait TerminalManager: Any {
     /// Returns the backing terminal model.

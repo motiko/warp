@@ -583,7 +583,6 @@ impl TerminalView {
                 .update(ctx, |prompt_display, ctx| {
                     prompt_display.update_shared_session_viewer_status(true, ctx);
                 });
-
         });
 
         // If viewer joined as an executor, make sure the view state is updated.

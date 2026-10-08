@@ -33,7 +33,12 @@ fn render_button(
     let ui_builder = appearance.ui_builder().clone();
     Container::new(
         icon_button(appearance, icon, false, mouse_handle)
-            .with_tooltip(move || ui_builder.tool_tip(tooltip_text.to_owned()).build().finish())
+            .with_tooltip(move || {
+                ui_builder
+                    .tool_tip(tooltip_text.to_owned())
+                    .build()
+                    .finish()
+            })
             .build()
             .on_click(move |ctx, _, _| on_click(code.clone(), ctx))
             .finish(),

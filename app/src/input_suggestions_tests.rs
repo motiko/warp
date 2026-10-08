@@ -374,5 +374,4 @@ fn test_history_order() {
         no_session_cmd.history_order(Some(current_session_id), &live_sessions,),
         HistoryOrder::DifferentSession
     );
-
 }

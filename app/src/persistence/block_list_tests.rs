@@ -67,7 +67,12 @@ fn restore_skips_blocks_from_agent_conversations() {
     )
     .expect("block should save");
     let ai_metadata = r#"{"conversation_id":"c","has_agent_written_to_block":false}"#.to_owned();
-    insert_legacy_block(&mut conn, &completed_block("agent-ran", 3), Some(&ai_metadata), None);
+    insert_legacy_block(
+        &mut conn,
+        &completed_block("agent-ran", 3),
+        Some(&ai_metadata),
+        None,
+    );
     insert_legacy_block(
         &mut conn,
         &completed_block("in-agent-view", 2),

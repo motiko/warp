@@ -10,9 +10,9 @@ use super::model::session::Sessions;
 use super::model_events::ModelEventDispatcher;
 use super::terminal_manager::BlockSpacing;
 use super::{ShellLaunchState, TerminalManager, TerminalModel, TerminalView};
-use crate::terminal::model::block::SerializedBlock;
 use crate::context_chips::prompt_type::PromptType;
 use crate::pane_group::TerminalViewResources;
+use crate::terminal::model::block::SerializedBlock;
 
 pub struct MockTerminalManager {
     model: Arc<FairMutex<TerminalModel>>,

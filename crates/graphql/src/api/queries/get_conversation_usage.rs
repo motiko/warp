@@ -141,10 +141,6 @@ pub struct ContextWindowSegment {
     pub token_count: i32,
 }
 
-
-
-
-
 #[derive(cynic::QueryFragment, Debug, Clone)]
 pub struct ModelTokenUsage {
     pub model_id: String,
@@ -194,4 +190,3 @@ pub struct ToolUsageMetadata {
     pub read_shell_command_output_stats: ToolCallStats,
     pub use_computer_stats: ToolCallStats,
 }
-

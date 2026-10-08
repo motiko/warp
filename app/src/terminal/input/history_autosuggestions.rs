@@ -51,14 +51,16 @@ pub fn next_commands_after_similar_context(
 ) -> Vec<String> {
     // The number of commands from history affects how quickly we "learn" new patterns, the lower
     // the faster.
-    let Ok(same_commands_from_history) = crate::persistence::commands::get_same_commands_from_history(
-        conn,
-        command,
-        pwd,
-        exit_code,
-        shell_host,
-        MAX_NUM_SIMILAR_HISTORY_CONTEXT,
-    ) else {
+    let Ok(same_commands_from_history) =
+        crate::persistence::commands::get_same_commands_from_history(
+            conn,
+            command,
+            pwd,
+            exit_code,
+            shell_host,
+            MAX_NUM_SIMILAR_HISTORY_CONTEXT,
+        )
+    else {
         return vec![];
     };
     same_commands_from_history

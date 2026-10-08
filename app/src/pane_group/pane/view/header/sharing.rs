@@ -208,7 +208,7 @@ impl<P: BackingView> PaneHeader<P> {
         let theme = appearance.theme();
 
         let icon_color = icon_color_override
-                .unwrap_or_else(|| Fill::Solid(theme.main_text_color(theme.background()).into()));
+            .unwrap_or_else(|| Fill::Solid(theme.main_text_color(theme.background()).into()));
 
         let button_builder = icon_button_with_color(
             appearance,

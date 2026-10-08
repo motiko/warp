@@ -237,4 +237,3 @@ impl BackingView for GetStartedView {
         self.focus_handle = Some(focus_handle);
     }
 }
-

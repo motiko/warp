@@ -14,8 +14,7 @@ use warpui::units::Lines;
 use super::inline_banner::{OpenInWarpBannerAction, VimModeBannerAction};
 use super::{
     AliasExpansionBannerAction, ContextMenuAction, GridHighlightedLink, InputContextMenuAction,
-    NotificationsDiscoveryBannerAction, NotificationsErrorBannerAction,
-    TerminalEditor,
+    NotificationsDiscoveryBannerAction, NotificationsErrorBannerAction, TerminalEditor,
 };
 use crate::code_review::telemetry_event::CodeReviewPaneEntrypoint;
 use crate::server::ids::SyncId;

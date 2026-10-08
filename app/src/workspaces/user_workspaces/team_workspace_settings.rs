@@ -105,7 +105,6 @@ impl TeamScope for TeamlessScopeForTest {
 pub type TeamContextResolver = Rc<dyn for<'a> Fn(&'a AppContext) -> TeamContext<'a>>;
 
 impl UserWorkspaces {
-
     /// Captures the team selected in `ctx`'s window as an operation's
     /// [`TeamContextForOperation`]. Always succeeds -- a window with no team selected still yields
     /// a scope whose `team_uid()` is `None`.

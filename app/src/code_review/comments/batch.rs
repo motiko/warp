@@ -152,7 +152,6 @@ impl ReviewCommentBatch {
             should_reposition_comments: false,
         });
     }
-
 }
 
 #[cfg(test)]

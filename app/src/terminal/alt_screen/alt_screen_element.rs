@@ -16,9 +16,8 @@ use warpui::geometry::vector::Vector2F;
 use warpui::text::SelectionType;
 use warpui::units::{IntoLines, IntoPixels, Lines, Pixels};
 use warpui::{
-    AfterLayoutContext, AppContext, Element, EntityId, Event, EventContext,
-    LayoutContext, ModelHandle, PaintContext, SizeConstraint, end_trace, record_trace_event,
-    start_trace,
+    AfterLayoutContext, AppContext, Element, EntityId, Event, EventContext, LayoutContext,
+    ModelHandle, PaintContext, SizeConstraint, end_trace, record_trace_event, start_trace,
 };
 
 use super::should_intercept_mouse;
@@ -600,7 +599,6 @@ impl Element for AltScreenElement {
         // After resizing the window to be larger, the max_scroll_top could have decreased,
         // so we need to make sure scroll_top is in bounds.
         self.scroll_top = self.scroll_top.min(self.max_scroll_top.unwrap());
-
     }
 
     fn paint(&mut self, origin: Vector2F, ctx: &mut PaintContext, app: &AppContext) {

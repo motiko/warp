@@ -418,7 +418,7 @@ impl InputSuggestions {
                                 matches: Some(result.matched_indices),
                                 icon_type: None,
                                 match_type: MatchType::Fuzzy,
-                                                    is_history_item: false,
+                                is_history_item: false,
                             },
                         )
                     })
@@ -444,7 +444,7 @@ impl InputSuggestions {
                 matches: None,
                 icon_type: None,
                 match_type: MatchType::Other,
-                    is_history_item: false,
+                is_history_item: false,
             })
             .collect();
 
@@ -1130,9 +1130,7 @@ impl HistoryInputSuggestion<'_> {
 
     /// Which type of detail panel to show for this suggestion, if any.
     fn details(&self) -> Option<DetailContent> {
-        self.entry
-            .has_metadata()
-            .then(|| self.entry.clone().into())
+        self.entry.has_metadata().then(|| self.entry.clone().into())
     }
 
     pub fn cmp(

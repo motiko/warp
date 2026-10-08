@@ -700,7 +700,9 @@ impl Network {
             }
             DownstreamMessage::AgentPromptRequestInFlight(_)
             | DownstreamMessage::AgentPromptRequestFailed { .. } => {
-                log::debug!("Ignoring agent prompt response; this client never sends agent prompts");
+                log::debug!(
+                    "Ignoring agent prompt response; this client never sends agent prompts"
+                );
             }
             DownstreamMessage::WriteToPtyRequestFailed { reason } => {
                 ctx.emit(NetworkEvent::WriteToPtyRequestFailed { reason });

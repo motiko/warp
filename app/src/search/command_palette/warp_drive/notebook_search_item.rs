@@ -37,10 +37,7 @@ impl SearchItem for NotebookSearchItem {
         highlight_state: ItemHighlightState,
         appearance: &Appearance,
     ) -> Box<dyn Element> {
-        let color = warp_drive_icon_color(
-            appearance,
-            DriveObjectType::Notebook,
-        );
+        let color = warp_drive_icon_color(appearance, DriveObjectType::Notebook);
         render_search_item_icon(appearance, Icon::Notebook, color, highlight_state)
     }
 

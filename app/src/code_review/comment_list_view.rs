@@ -41,8 +41,8 @@ use crate::code::editor::view::{CodeEditorEvent, CodeEditorView};
 use crate::code_review::code_review_view::CodeReviewView;
 use crate::code_review::comment_rendering::CommentViewCard;
 use crate::code_review::comments::{
-    AttachedReviewComment, AttachedReviewCommentTarget, CommentId,
-    ReviewCommentBatch, ReviewCommentBatchEvent,
+    AttachedReviewComment, AttachedReviewCommentTarget, CommentId, ReviewCommentBatch,
+    ReviewCommentBatchEvent,
 };
 use crate::code_review::telemetry_event::CodeReviewTelemetryEvent;
 use crate::menu::{Event, Menu, MenuItem, MenuItemFields};
@@ -50,8 +50,7 @@ use crate::rich_text::editor::view::{EditorViewEvent, RichTextEditorView};
 use crate::send_telemetry_from_ctx;
 use crate::ui_components::icons::Icon;
 use crate::view_components::action_button::{
-    ActionButton, ActionButtonTheme, ButtonSize, NakedTheme,
-    SecondaryTheme,
+    ActionButton, ActionButtonTheme, ButtonSize, NakedTheme, SecondaryTheme,
 };
 
 /// Header text for the outdated section when there is exactly one outdated comment.
@@ -912,7 +911,6 @@ impl CommentListView {
             edit_item = edit_item.with_disabled(true).with_tooltip(tooltip_text);
         }
         items.push(edit_item.into_item());
-
 
         items.push(
             MenuItemFields::new("Remove")

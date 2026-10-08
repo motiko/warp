@@ -42,7 +42,9 @@ impl<OnClick> TooltipLink<OnClick> {
 /// Configuration for redaction messaging in tooltips
 pub enum TooltipRedaction {
     /// Reassures users that a redacted secret won't be included in shared blocks.
-    Secret { secret_level: Option<SecretLevel> },
+    Secret {
+        secret_level: Option<SecretLevel>,
+    },
     NoRedaction,
 }
 
@@ -169,10 +171,7 @@ where
         }
     }
 
-    let is_secret = matches!(
-        redaction,
-        TooltipRedaction::Secret { .. }
-    );
+    let is_secret = matches!(redaction, TooltipRedaction::Secret { .. });
 
     // If enterprise secret redaction is enabled, add additional messaging and padding to the tooltip.
     let is_enterprise_secret_redaction_enabled =

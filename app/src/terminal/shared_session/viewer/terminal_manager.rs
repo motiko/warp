@@ -17,8 +17,9 @@ use warpui::{
 };
 
 use super::network::{
-    Network, NetworkEvent, command_execution_failure_reason_string, control_action_failure_reason_string,
-    session_ended_reason_string, viewer_removed_reason_string, write_to_pty_failure_reason_string,
+    Network, NetworkEvent, command_execution_failure_reason_string,
+    control_action_failure_reason_string, session_ended_reason_string,
+    viewer_removed_reason_string, write_to_pty_failure_reason_string,
 };
 use crate::context_chips::prompt_snapshot::PromptSnapshot;
 use crate::context_chips::prompt_type::PromptType;

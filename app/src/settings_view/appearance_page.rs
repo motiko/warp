@@ -93,7 +93,8 @@ use crate::workspace::header_toolbar_editor::HeaderToolbarInlineEditor;
 use crate::workspace::tab_settings::{
     DirectoryTabColor, HideTitleBarSearchBarInVerticalTabs, PreserveActiveTabColor,
     ShowIndicatorsButton, ShowVerticalTabPanelInRestoredWindows, TabCloseButtonPosition,
-    TabSettings, TabSettingsChangedEvent, UseVerticalTabs, WorkspaceDecorationVisibility, canonical_directory_key,
+    TabSettings, TabSettingsChangedEvent, UseVerticalTabs, WorkspaceDecorationVisibility,
+    canonical_directory_key,
 };
 use crate::{send_telemetry_from_ctx, themes};
 

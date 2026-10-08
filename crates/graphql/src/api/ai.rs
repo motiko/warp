@@ -239,7 +239,6 @@ pub struct ConversationUsageMetadata {
     pub tool_usage_metadata: ToolUsageMetadata,
 }
 
-
 #[derive(cynic::Enum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContextWindowSegmentType {
     Unknown,
@@ -256,8 +255,6 @@ pub struct ContextWindowSegment {
     pub segment_type: ContextWindowSegmentType,
     pub token_count: i32,
 }
-
-
 
 #[cfg(test)]
 #[path = "ai_tests.rs"]

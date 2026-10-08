@@ -15,8 +15,8 @@ use warp_core::ui::appearance::DEFAULT_UI_FONT_SIZE;
 use warp_errors::report_error;
 use warp_util::user_input::UserInput;
 use warpui::elements::{
-    AfterLayoutContext, ChildView, CornerRadius,
-    DEFAULT_UI_LINE_HEIGHT_RATIO, Element, Event, EventContext, LayoutContext, PaintContext, Point, Radius, SizeConstraint,
+    AfterLayoutContext, ChildView, CornerRadius, DEFAULT_UI_LINE_HEIGHT_RATIO, Element, Event,
+    EventContext, LayoutContext, PaintContext, Point, Radius, SizeConstraint,
 };
 use warpui::event::{DispatchedEvent, ModifiersState};
 use warpui::keymap::Keystroke;

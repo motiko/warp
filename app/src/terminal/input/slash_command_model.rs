@@ -190,8 +190,8 @@ impl SlashCommandModel {
         self.lifecycle
             .input_changed(new.is_empty(), new.starts_with('/'));
         if !*InputSettings::as_ref(ctx)
-                .enable_slash_commands_in_terminal
-                .value()
+            .enable_slash_commands_in_terminal
+            .value()
             && !self.is_disabled()
         {
             self.disable_until_empty_buffer(new.is_empty(), ctx);

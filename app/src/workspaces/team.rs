@@ -196,5 +196,4 @@ impl Team {
         }
         None // No reason found, team can be deleted
     }
-
 }

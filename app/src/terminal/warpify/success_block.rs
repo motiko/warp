@@ -12,10 +12,10 @@ use warpui::elements::{
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::{AppContext, Element, Entity, SingletonEntity, TypedActionView, View, ViewContext};
 
+use super::code_snippet::{CodeSnippetButtonHandles, render_runnable_code_snippet};
 use super::render::{HORIZONTAL_TEXT_MARGIN, SSH_DOCS_URL, SUBSHELL_DOCS_URL};
 use super::settings::WarpifySettings;
 use super::{WarpificationSource, render, subshell_bootstrap_success_block_bytes};
-use super::code_snippet::{CodeSnippetButtonHandles, render_runnable_code_snippet};
 use crate::appearance::Appearance;
 use crate::terminal::model::terminal_model::SubshellInitializationInfo;
 use crate::terminal::shell::{Shell, ShellType};

@@ -38,9 +38,7 @@ use crate::projects::persisted_workspace::{
 };
 use crate::ui_components::blended_colors;
 #[cfg(feature = "local_fs")]
-use crate::view_components::action_button::{
-    ActionButton, ButtonSize, NakedTheme,
-};
+use crate::view_components::action_button::{ActionButton, ButtonSize, NakedTheme};
 
 const FOOTER_HEIGHT: f32 = 24.;
 /// Margin around the LSP icon container

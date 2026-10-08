@@ -20,7 +20,26 @@ use warpui::{Entity, ModelContext, ModelHandle, SingletonEntity};
 use super::diff_state_tracker::{
     DiffModelKey, DiffStateUpdate, RemoteDiffStateManager, SubscribeOutcome,
 };
-use super::proto::{Abort, Authenticate, BranchInfo, BufferEdit, BufferUpdatedPush, ClientMessage, CloseBuffer, DeleteFile, DeleteFileResponse, DeleteFileSuccess, DiscardFilesError, DiscardFilesResponse, DiscardFilesSuccess, ErrorCode, ErrorResponse, FailedFileRead, FileContextProto, FileOperationError, GetBranchesError, GetBranchesResponse, GetBranchesSuccess, GetDiffStateResponse, GitCommitChainRequest, GitCommitChainResponse, GitCommitChainSuccess, GitCreatePrRequest, GitCreatePrResponse, GitGetCommittedBranchFilesRequest, GitGetCommittedBranchFilesResponse, GitGetCommittedBranchFilesSuccess, GitHubPrInfoPush, GitHubRepositoryInfoPush, GitOpDelta, GitOpError, GitPushRequest, GitPushResponse, GitStatusPush, Initialize, InitializeResponse, NavigatedToDirectory, NavigatedToDirectoryResponse, OpenBuffer, OpenBufferResponse, ReadFileContextResponse, ResolveConflict, ResolveConflictResponse, ResolveConflictSuccess, RipgrepSearchRequest, RunCommandError, RunCommandErrorCode, RunCommandRequest, RunCommandResponse, RunCommandSuccess, SaveBuffer, SaveBufferResponse, SaveBufferSuccess, ServerMessage, SessionBootstrapped, TextEdit, UpdateGitHubPrInfo, UpdateGitHubRepoInfo, UpdateGitStatus, WriteFile, WriteFileResponse, WriteFileSuccess, client_message, delete_file_response, discard_files_response, get_diff_state_response, git_commit_chain_response, git_create_pr_response, git_get_committed_branch_files_response, git_push_response, host_scoped_request, notification, resolve_conflict_response, run_command_response, save_buffer_response, server_message, session_scoped_request, write_file_response,
+use super::proto::{
+    Abort, Authenticate, BranchInfo, BufferEdit, BufferUpdatedPush, ClientMessage, CloseBuffer,
+    DeleteFile, DeleteFileResponse, DeleteFileSuccess, DiscardFilesError, DiscardFilesResponse,
+    DiscardFilesSuccess, ErrorCode, ErrorResponse, FailedFileRead, FileContextProto,
+    FileOperationError, GetBranchesError, GetBranchesResponse, GetBranchesSuccess,
+    GetDiffStateResponse, GitCommitChainRequest, GitCommitChainResponse, GitCommitChainSuccess,
+    GitCreatePrRequest, GitCreatePrResponse, GitGetCommittedBranchFilesRequest,
+    GitGetCommittedBranchFilesResponse, GitGetCommittedBranchFilesSuccess, GitHubPrInfoPush,
+    GitHubRepositoryInfoPush, GitOpDelta, GitOpError, GitPushRequest, GitPushResponse,
+    GitStatusPush, Initialize, InitializeResponse, NavigatedToDirectory,
+    NavigatedToDirectoryResponse, OpenBuffer, OpenBufferResponse, ReadFileContextResponse,
+    ResolveConflict, ResolveConflictResponse, ResolveConflictSuccess, RipgrepSearchRequest,
+    RunCommandError, RunCommandErrorCode, RunCommandRequest, RunCommandResponse, RunCommandSuccess,
+    SaveBuffer, SaveBufferResponse, SaveBufferSuccess, ServerMessage, SessionBootstrapped,
+    TextEdit, UpdateGitHubPrInfo, UpdateGitHubRepoInfo, UpdateGitStatus, WriteFile,
+    WriteFileResponse, WriteFileSuccess, client_message, delete_file_response,
+    discard_files_response, get_diff_state_response, git_commit_chain_response,
+    git_create_pr_response, git_get_committed_branch_files_response, git_push_response,
+    host_scoped_request, notification, resolve_conflict_response, run_command_response,
+    save_buffer_response, server_message, session_scoped_request, write_file_response,
 };
 use super::server_buffer_tracker::{PendingBufferRequestKind, ServerBufferTracker};
 use super::{diff_state_proto, ripgrep_search};
@@ -2849,23 +2868,19 @@ async fn read_text_file_contexts(
             .await
             .ok()
             .and_then(|metadata| metadata.modified().ok());
-        let failure = match FileModel::read_text_file(
-            &path,
-            max_file_bytes,
-            &line_ranges,
-            last_modified,
-        )
-        .await
-        {
-            Ok(TextFileReadResult::Segments { segments, .. }) => {
-                response
-                    .file_contexts
-                    .extend(segments.into_iter().map(text_segment_to_proto));
-                continue;
-            }
-            Ok(TextFileReadResult::NotText) => "File is not a text file".to_owned(),
-            Err(error) => format!("{error:#}"),
-        };
+        let failure =
+            match FileModel::read_text_file(&path, max_file_bytes, &line_ranges, last_modified)
+                .await
+            {
+                Ok(TextFileReadResult::Segments { segments, .. }) => {
+                    response
+                        .file_contexts
+                        .extend(segments.into_iter().map(text_segment_to_proto));
+                    continue;
+                }
+                Ok(TextFileReadResult::NotText) => "File is not a text file".to_owned(),
+                Err(error) => format!("{error:#}"),
+            };
         response.failed_files.push(FailedFileRead {
             path: file.path,
             error: Some(FileOperationError { message: failure }),

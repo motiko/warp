@@ -7,6 +7,7 @@ use env_var_selector::{EnvVarSelector, EnvVarSelectorEvent};
 use itertools::Itertools;
 use pathfinder_color::ColorU;
 use pathfinder_geometry::vector::vec2f;
+use secret_redaction::find_secrets_in_text;
 use string_offset::CharOffset;
 use syntax_highlightable::SyntaxHighlightable;
 use url::Url;
@@ -36,7 +37,6 @@ use warpui::{
 use super::aliases::WorkflowAliases;
 use super::command_parser::WorkflowCommandDisplayData;
 use super::{CloudWorkflowModel, WorkflowSource, WorkflowType, WorkflowViewMode};
-use secret_redaction::find_secrets_in_text;
 use crate::appearance::Appearance;
 use crate::cloud_object::breadcrumbs::ContainingObject;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
@@ -154,7 +154,6 @@ const BUTTON_PADDING: f32 = 12.;
 const BUTTON_FONT_SIZE: f32 = 14.;
 const BUTTON_BORDER_RADIUS: f32 = 4.;
 const BUTTON_HEIGHT: f32 = 32.;
-
 
 const ALIAS_HELP_TEXT: &str = "Aliases allow you to create short strings to execute workflows. Each alias can have different argument values and environment variables, and aliases are personal to you.";
 
@@ -1893,7 +1892,7 @@ impl WorkflowView {
                     .to_warpui_icon(
                         warp_drive_icon_color(appearance, DriveObjectType::Workflow).into(),
                     )
-                .finish(),
+                    .finish(),
             )
             .with_width(WORKFLOW_ICON_DIMENSIONS)
             .with_height(WORKFLOW_ICON_DIMENSIONS)

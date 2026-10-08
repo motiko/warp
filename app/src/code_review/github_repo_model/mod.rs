@@ -119,5 +119,4 @@ impl GitHubRepoModel {
             Self::Remote(_) => unreachable!("remote test models are not used"),
         }
     }
-
 }

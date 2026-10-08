@@ -1158,14 +1158,14 @@ impl<V: EditorView> EditorWrapper<V> {
                     .revert_hunk_button
                     .as_ref()
                     .filter(|_| show_revert_diff_hunk)
-                {
-                    buttons.add_child(self.render_revert_button(
-                        revert_hunk_button,
-                        line_height,
-                        line.line_range(),
-                        appearance,
-                    ));
-                }
+            {
+                buttons.add_child(self.render_revert_button(
+                    revert_hunk_button,
+                    line_height,
+                    line.line_range(),
+                    appearance,
+                ));
+            }
 
             let offset = if self.expand_diff_indicator_width_on_hover {
                 vec2f(VERTICAL_DIFF_HUNK_INDICATOR_HOVERED_WIDTH, 0.)
