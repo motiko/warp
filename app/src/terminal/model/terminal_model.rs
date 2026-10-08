@@ -24,9 +24,7 @@ use warpui::image_cache::ImageType;
 
 use super::super::{AltScreen, BlockList};
 use super::ansi::{BootstrappedValue, FinishUpdateValue, InputBufferValue, Mode, PendingHook};
-use super::block::{
-    Block, BlockId, BlockMetadata, BlockSize, BlockState, SerializedBlock,
-};
+use super::block::{Block, BlockId, BlockMetadata, BlockSize, BlockState, SerializedBlock};
 use super::blockgrid::BlockGrid;
 use super::blocks::ActiveBlockCompletion;
 use super::grid::grid_handler::{
@@ -73,8 +71,7 @@ use crate::terminal::model::session::SessionInfo;
 use crate::terminal::shell::ShellType;
 use crate::terminal::ssh::util::{InteractiveSshCommand, SshLoginState};
 use crate::terminal::{
-    BlockPadding, ShellHost, ShellLaunchData, ShellLaunchState, SizeUpdate,
-    color, ssh,
+    BlockPadding, ShellHost, ShellLaunchData, ShellLaunchState, SizeUpdate, color, ssh,
 };
 
 /// Max size of the window title stack.
@@ -1293,9 +1290,7 @@ impl TerminalModel {
         let outcome = match transition.action {
             LifecycleAction::StartActiveBlock => {
                 match kind {
-                    CommandStartKind::UserOrQueued => {
-                        self.block_list.start_active_block()
-                    }
+                    CommandStartKind::UserOrQueued => self.block_list.start_active_block(),
                     CommandStartKind::InBand => {
                         self.block_list.start_active_block_for_in_band_command()
                     }

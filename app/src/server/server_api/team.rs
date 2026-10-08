@@ -4,7 +4,7 @@ use cynic::QueryBuilder;
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use warp_graphql::queries::get_workspaces_metadata_for_user::{
-    GetWorkspacesMetadataForUser, GetWorkspacesMetadataForUserVariables, PricingInfoResult,
+    GetWorkspacesMetadataForUser, GetWorkspacesMetadataForUserVariables,
 };
 
 use super::ServerApi;
@@ -39,16 +39,6 @@ impl TeamClient for ServerApi {
             }
         };
 
-        let pricing_info = match response.pricing_info {
-            PricingInfoResult::PricingInfoOutput(pricing_output) => {
-                Some(pricing_output.pricing_info)
-            }
-            PricingInfoResult::Unknown => None,
-        };
-
-        Ok(WorkspacesMetadataWithPricing {
-            metadata,
-            pricing_info,
-        })
+        Ok(WorkspacesMetadataWithPricing { metadata })
     }
 }

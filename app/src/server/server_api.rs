@@ -1,6 +1,5 @@
 pub mod auth;
 pub mod team;
-pub mod workspace;
 
 use std::ops::Deref;
 use std::path::Path;
@@ -29,7 +28,6 @@ use warp_server_client::iap::{IapManager, IapState};
 use warp_server_client::network_logging::NetworkLogModel;
 use warpui::r#async::BoxFuture;
 use warpui::{Entity, ModelContext, SingletonEntity};
-use workspace::WorkspaceClient;
 
 use super::experiments::{ServerExperiment, ServerExperiments};
 use crate::ChannelState;
@@ -480,10 +478,6 @@ impl ServerApiProvider {
 
     pub fn get_auth_client(&self) -> Arc<dyn AuthClient> {
         self.auth_client.clone()
-    }
-
-    pub fn get_workspace_client(&self) -> Arc<dyn WorkspaceClient> {
-        self.server_api.clone()
     }
 
     pub fn get_team_client(&self) -> Arc<dyn TeamClient> {

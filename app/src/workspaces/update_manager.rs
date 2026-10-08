@@ -113,11 +113,9 @@ impl TeamUpdateManager {
             Ok(WorkspacesMetadataWithPricing {
                 metadata: WorkspacesMetadataResponse {
                     workspaces: vec![],
-                    joinable_teams: vec![],
                     experiments: None,
                     user_purchase_policy: None,
                 },
-                pricing_info: None,
             })
         });
 
@@ -298,14 +296,12 @@ impl TeamUpdateManager {
         match result {
             Ok(user_workspaces_access) => {
                 let workspaces = user_workspaces_access.workspaces;
-                let joinable_teams = user_workspaces_access.joinable_teams;
                 let experiments = user_workspaces_access.experiments;
                 let user_purchase_policy = user_workspaces_access.user_purchase_policy;
 
                 UserWorkspaces::handle(ctx).update(ctx, |user_workspaces, ctx| {
                     user_workspaces.set_user_purchase_policy(user_purchase_policy);
                     user_workspaces.update_workspaces(workspaces.clone(), ctx);
-                    user_workspaces.update_joinable_teams(joinable_teams.clone(), ctx);
                 });
 
                 // Check if the current workspace is still in the list of workspaces.

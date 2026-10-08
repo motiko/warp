@@ -155,7 +155,6 @@ pub enum QueryFilter {
     /// Only include agent mode workflows (prompts) from WorkflowsDataSource.
     AgentModeWorkflows,
 
-
     /// Only include results from PlansDataSource.
     Plans,
 
@@ -176,8 +175,6 @@ pub enum QueryFilter {
 
     /// Filter results for launch configurations.
     LaunchConfigurations,
-
-
 
     /// Filter results for historical AI history.
     PromptHistory,

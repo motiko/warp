@@ -316,8 +316,7 @@ impl<'a> UnsavedStateSummary<'a> {
 
     pub fn should_display_warning(&self, ctx: &AppContext) -> bool {
         *GeneralSettings::as_ref(ctx).show_warning_before_quitting
-            && (self.total_long_running_commands > 0
-                || self.unsaved_code_changes)
+            && (self.total_long_running_commands > 0 || self.unsaved_code_changes)
     }
 
     /// Auto-save-aware variant of [`Self::should_display_warning`].
@@ -343,8 +342,7 @@ impl<'a> UnsavedStateSummary<'a> {
         }
 
         *GeneralSettings::as_ref(ctx).show_warning_before_quitting
-            && (self.total_long_running_commands > 0
-                || unsaveable_changes_remain)
+            && (self.total_long_running_commands > 0 || unsaveable_changes_remain)
     }
 
     pub fn running_sessions(&self) -> RunningSessionSummary<'_> {

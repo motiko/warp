@@ -5,9 +5,8 @@
 //! - CompletionSuggestions
 
 use warpui::elements::{
-    Border, ConstrainedBox, Container, CornerRadius, DragBarSide,
-    DropShadow, Element, Empty, Flex, ParentElement, Radius, Resizable, Shrinkable,
-    SizeConstraintCondition, SizeConstraintSwitch,
+    Border, ConstrainedBox, Container, CornerRadius, DragBarSide, DropShadow, Element, Empty, Flex,
+    ParentElement, Radius, Resizable, Shrinkable, SizeConstraintCondition, SizeConstraintSwitch,
 };
 use warpui::presenter::ChildView;
 

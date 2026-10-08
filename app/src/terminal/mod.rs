@@ -161,7 +161,6 @@ pub enum SizeUpdateReason {
     /// Updated after the temrinal has been laid out, so some of the element
     /// sizes that drive terminal size may have changed.
     AfterLayout,
-
 }
 
 /// Encapsulates info for updating the size of the terminal.
@@ -178,7 +177,6 @@ pub struct SizeUpdate {
 
     /// The new gap height, if there is one.
     new_gap_height: Option<Lines>,
-
 }
 
 impl SizeUpdate {
@@ -231,7 +229,6 @@ impl SizeUpdate {
     pub fn gap_height_changed(&self) -> bool {
         self.new_gap_height.is_some()
     }
-
 }
 
 /// The padding around each block, represented in fractional lines.

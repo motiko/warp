@@ -1204,9 +1204,7 @@ impl TelemetryEvent {
             TelemetryEvent::QuitModalShown {
                 running_processes,
                 modal_for,
-            } => Some(
-                json!({ "running_processes": running_processes, "modal_for": modal_for }),
-            ),
+            } => Some(json!({ "running_processes": running_processes, "modal_for": modal_for })),
             TelemetryEvent::QuitModalCancel {
                 nav_palette,
                 modal_for,

@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use std::ops::Range;
-use std::sync::Arc;
 
 use futures::prelude::*;
 use itertools::Itertools;
@@ -40,8 +39,6 @@ use crate::rich_text::editor::view::{RichTextEditorConfig, RichTextEditorView};
 use crate::rich_text::file::MarkdownDisplayMode;
 use crate::rich_text::link::{NotebookLinks, SessionSource};
 use crate::search::files::model::FileSearchModel;
-use crate::server::server_api::team::MockTeamClient;
-use crate::server::server_api::workspace::MockWorkspaceClient;
 use crate::settings::FontSettings;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::test_util::settings::initialize_settings_for_tests;
@@ -73,10 +70,7 @@ impl TypedActionView for TestView {
 
 /// Create a new RTE model with the given Markdown content. Also creates a [`RichTextEditorView`] (and adds relevant dependencies) since that
 /// window_id is needed for the model.
-fn model_from_markdown(
-    markdown: &str,
-    app: &mut App,
-) -> ModelHandle<NotebooksEditorModel> {
+fn model_from_markdown(markdown: &str, app: &mut App) -> ModelHandle<NotebooksEditorModel> {
     let window = setup_editor_window(app);
     app.add_model(|ctx| {
         let styles = rich_text_styles(Appearance::as_ref(ctx), FontSettings::as_ref(ctx));
@@ -123,16 +117,7 @@ fn setup_editor_window(app: &mut App) -> warpui::WindowId {
 
 fn initialize_deps(app: &mut App) {
     app.add_singleton_model(|_| Appearance::mock());
-    let team_client_mock = Arc::new(MockTeamClient::new());
-    let workspace_client_mock = Arc::new(MockWorkspaceClient::new());
-    app.add_singleton_model(|ctx| {
-        UserWorkspaces::mock(
-            team_client_mock.clone(),
-            workspace_client_mock.clone(),
-            vec![],
-            ctx,
-        )
-    });
+    app.add_singleton_model(|ctx| UserWorkspaces::mock(vec![], ctx));
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
     initialize_settings_for_tests(app);
 }
@@ -842,10 +827,8 @@ echo command
 fn test_markdown_block_conversion() {
     App::test((), |mut app| async move {
         initialize_deps(&mut app);
-        let editor = model_from_markdown(
-            "This is a list:\n1. First\n2. Second\n3. Third",
-            &mut app,
-        );
+        let editor =
+            model_from_markdown("This is a list:\n1. First\n2. Second\n3. Third", &mut app);
 
         editor.update(&mut app, |editor, ctx| {
             assert_eq!(
@@ -875,10 +858,8 @@ fn test_markdown_block_conversion() {
 fn test_conversion_preserves_indent_level() {
     App::test((), |mut app| async move {
         initialize_deps(&mut app);
-        let editor = model_from_markdown(
-            "1. Level 1\n    1. Level 2\n        1. Level 3",
-            &mut app,
-        );
+        let editor =
+            model_from_markdown("1. Level 1\n    1. Level 2\n        1. Level 3", &mut app);
         editor.update(&mut app, |editor, ctx| {
             assert_eq!(
                 editor.debug_buffer(ctx),
@@ -1087,10 +1068,7 @@ fn test_ordered_list_renumbering() {
 fn test_select_paragraph() {
     App::test((), |mut app| async move {
         initialize_deps(&mut app);
-        let editor = model_from_markdown(
-            "First line\nSecond line\n```\nCode block\n```",
-            &mut app,
-        );
+        let editor = model_from_markdown("First line\nSecond line\n```\nCode block\n```", &mut app);
 
         // Select the second line of text.
         editor.update(&mut app, |editor, ctx| {
@@ -1142,10 +1120,7 @@ fn test_select_paragraph() {
 fn test_select_line_out_of_bounds() {
     App::test((), |mut app| async move {
         initialize_deps(&mut app);
-        let editor = model_from_markdown(
-            "First line\nSecond line\n```\nCode block\n```",
-            &mut app,
-        );
+        let editor = model_from_markdown("First line\nSecond line\n```\nCode block\n```", &mut app);
 
         // Ensure there's an initial selection.
         editor.update(&mut app, |editor, ctx| editor.cursor_at(4.into(), ctx));
@@ -1179,10 +1154,7 @@ fn test_select_line_out_of_bounds() {
 fn test_select_line_in_block() {
     App::test((), |mut app| async move {
         initialize_deps(&mut app);
-        let editor = model_from_markdown(
-            "```\nFirst line\nSecond line\nThird line\n```",
-            &mut app,
-        );
+        let editor = model_from_markdown("```\nFirst line\nSecond line\nThird line\n```", &mut app);
 
         // Select one of the code block lines.
         editor.update(&mut app, |editor, ctx| {
@@ -2464,10 +2436,8 @@ fn test_cut_mermaid_code_block_uses_fenced_markdown_plain_text() {
         initialize_deps(&mut app);
         let _flag = FeatureFlag::MarkdownMermaid.override_enabled(true);
         let _editable_flag = FeatureFlag::EditableMarkdownMermaid.override_enabled(true);
-        let model_handle = model_from_markdown(
-            "Text\n```mermaid\ngraph TD\nA --> B\n```\n* List",
-            &mut app,
-        );
+        let model_handle =
+            model_from_markdown("Text\n```mermaid\ngraph TD\nA --> B\n```\n* List", &mut app);
         layout_model(&mut app, &model_handle).await;
 
         model_handle.update(&mut app, |model, ctx| {
@@ -2502,10 +2472,8 @@ fn test_copy_mermaid_code_block_adds_html_without_image_clipboard_data() {
         initialize_deps(&mut app);
         let _flag = FeatureFlag::MarkdownMermaid.override_enabled(true);
         let _editable_flag = FeatureFlag::EditableMarkdownMermaid.override_enabled(true);
-        let model_handle = model_from_markdown(
-            "Text\n```mermaid\ngraph TD\nA --> B\n```\n* List",
-            &mut app,
-        );
+        let model_handle =
+            model_from_markdown("Text\n```mermaid\ngraph TD\nA --> B\n```\n* List", &mut app);
         layout_model(&mut app, &model_handle).await;
 
         model_handle.update(&mut app, |model, ctx| {
@@ -2538,8 +2506,7 @@ fn test_copy_selection_with_markdown_image_omits_image_clipboard_data() {
     App::test((), |mut app| async move {
         initialize_deps(&mut app);
 
-        let model_handle =
-            model_from_markdown("Before\n![Alt text](diagram.png)\nAfter", &mut app);
+        let model_handle = model_from_markdown("Before\n![Alt text](diagram.png)\nAfter", &mut app);
         layout_model(&mut app, &model_handle).await;
 
         model_handle.update(&mut app, |model, ctx| {
@@ -2778,10 +2745,8 @@ fn test_insert_block_after_single_cursor() {
 fn test_multiselect_markdown_block_conversion() {
     App::test((), |mut app| async move {
         initialize_deps(&mut app);
-        let editor = model_from_markdown(
-            "This is a list:\n1. First\n2. Second\n3. Third",
-            &mut app,
-        );
+        let editor =
+            model_from_markdown("This is a list:\n1. First\n2. Second\n3. Third", &mut app);
 
         editor.update(&mut app, |editor, ctx| {
             assert_eq!(
@@ -2813,10 +2778,8 @@ fn test_multiselect_markdown_block_conversion() {
 fn test_multiselect_inline_markdown() {
     App::test((), |mut app| async move {
         initialize_deps(&mut app);
-        let editor = model_from_markdown(
-            "This is a list:\n1. First\n2. Second\n3. Third",
-            &mut app,
-        );
+        let editor =
+            model_from_markdown("This is a list:\n1. First\n2. Second\n3. Third", &mut app);
 
         editor.update(&mut app, |editor, ctx| {
             assert_eq!(

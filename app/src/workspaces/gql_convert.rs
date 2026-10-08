@@ -23,10 +23,7 @@ use warp_graphql::billing::{
     UsageVisibilityPolicy as GqlUsageVisibilityPolicy, WarpAiPolicy as GqlWarpAiPolicy,
 };
 use warp_graphql::queries::get_workspaces_metadata_for_user::User as GqlUser;
-use warp_graphql::user::{
-    DiscoverableTeamData as GqlDiscoverableTeamData,
-    DiscoverableWorkspaceData as GqlDiscoverableWorkspaceData,
-};
+use warp_graphql::user::DiscoverableTeamData as GqlDiscoverableTeamData;
 use warp_graphql::workspace::{
     AddonCreditsSettings as GqlAddonCreditsSettings,
     AdminEnablementSetting as GqlAdminEnablementSetting,
@@ -39,9 +36,7 @@ use warp_graphql::workspace::{
     WorkspaceSettings as GqlWorkspaceSettings,
 };
 
-use super::team::{
-    DiscoverableTeam, DiscoverableWorkspace, MembershipRole, Team, TeamMember, TeamVisibility,
-};
+use super::team::{DiscoverableTeam, MembershipRole, Team, TeamMember, TeamVisibility};
 use super::user_workspaces::WorkspacesMetadataResponse;
 use super::workspace::{
     AIAutonomyPolicy, AddonCreditsSettings, AdminEnablementSetting, AiPermissionsSettings,
@@ -76,21 +71,6 @@ impl From<GqlTeamMember> for TeamMember {
             email: gql_team_member.email,
             role: gql_team_member.role.into(),
             is_disabled: gql_team_member.is_disabled,
-        }
-    }
-}
-
-impl From<GqlDiscoverableWorkspaceData> for DiscoverableWorkspace {
-    fn from(gql_workspace: GqlDiscoverableWorkspaceData) -> Self {
-        Self {
-            workspace_uid: gql_workspace.workspace_uid.into_inner().into(),
-            name: gql_workspace.name,
-            open_teams: gql_workspace
-                .open_teams
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            member_count: i64::from(gql_workspace.member_count),
         }
     }
 }
@@ -1046,13 +1026,6 @@ pub fn workspaces_metadata_response_from_gql(
         })
         .collect();
 
-    let joinable_teams = gql_user
-        .discoverable_teams
-        .clone()
-        .into_iter()
-        .map(|gql_joinable_team| gql_joinable_team.into())
-        .collect();
-
     let experiments = gql_user
         .experiments
         .and_then(|experiments| convert_to_server_experiment!(experiments));
@@ -1070,7 +1043,6 @@ pub fn workspaces_metadata_response_from_gql(
     // TODO(skambashi) refactor to return back workspaces, and not teams
     WorkspacesMetadataResponse {
         workspaces,
-        joinable_teams,
         experiments,
         user_purchase_policy,
     }

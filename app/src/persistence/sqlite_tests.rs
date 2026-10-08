@@ -125,8 +125,8 @@ fn sqlite_read_restores_app_state_and_codebase_metadata() {
     let metadata = test_codebase_metadata("/tmp/remote-repo");
     save_codebase_index_metadata(&mut conn, metadata.clone())
         .expect("codebase index metadata should save");
-    let restored = read_sqlite_data(&mut conn, PersistedDataScope::Full)
-        .expect("persisted data should load");
+    let restored =
+        read_sqlite_data(&mut conn, PersistedDataScope::Full).expect("persisted data should load");
     let restored_app_state = restored
         .app_state
         .expect("app state should be present for the full scope");
@@ -918,8 +918,8 @@ fn team_member_is_disabled_round_trips_through_sqlite_cache() {
     writer.handle.join().expect("writer should terminate");
 
     let mut conn = setup_database(&database_path).expect("database should reopen");
-    let restored = read_sqlite_data(&mut conn, PersistedDataScope::Full)
-        .expect("persisted data should load");
+    let restored =
+        read_sqlite_data(&mut conn, PersistedDataScope::Full).expect("persisted data should load");
 
     let members = &restored.workspaces[0].teams[0].members;
     let active_member = members

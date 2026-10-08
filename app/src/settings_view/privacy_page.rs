@@ -32,9 +32,8 @@ use warpui::{
 
 use super::privacy::{AddRegexModal, AddRegexModalEvent};
 use super::settings_page::{
-    HEADER_PADDING, MatchData, PageTitle, PageType, SettingsPageMeta,
-    SettingsPageViewHandle, SettingsWidget, TOGGLE_BUTTON_RIGHT_PADDING, ToggleState,
-    render_body_item, render_sub_header,
+    HEADER_PADDING, MatchData, PageTitle, PageType, SettingsPageMeta, SettingsPageViewHandle,
+    SettingsWidget, TOGGLE_BUTTON_RIGHT_PADDING, ToggleState, render_body_item, render_sub_header,
 };
 use super::{SettingsAction, SettingsSection, ToggleSettingActionPair, flags};
 use crate::appearance::Appearance;
@@ -48,8 +47,7 @@ use crate::settings_view::privacy::AddRegexModalViewState;
 use crate::settings_view::render_body_item_label;
 use crate::settings_view::settings_page::CONTENT_FONT_SIZE;
 use crate::terminal::safe_mode_settings::{
-    SafeModeSettings, SecretDisplayMode,
-    get_effective_secret_display_mode,
+    SafeModeSettings, SecretDisplayMode, get_effective_secret_display_mode,
 };
 use crate::ui_components::buttons::icon_button;
 use crate::ui_components::icons::Icon;
@@ -1168,11 +1166,7 @@ impl SettingsWidget for SecretRedactionWidget {
         let secret_redaction_title_row = Container::new(
             Flex::row()
                 .with_child(
-                    Shrinkable::new(
-                        1.0,
-                        render_sub_header(appearance, SAFE_MODE_TITLE),
-                    )
-                    .finish(),
+                    Shrinkable::new(1.0, render_sub_header(appearance, SAFE_MODE_TITLE)).finish(),
                 )
                 .with_child(
                     Container::new({

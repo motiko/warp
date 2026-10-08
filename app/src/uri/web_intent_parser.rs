@@ -114,10 +114,7 @@ impl WebIntent {
     /// conversation viewer.
     #[cfg(any(target_family = "wasm", test))]
     pub fn is_conversation_view(url: &Url) -> bool {
-        matches!(
-            Self::try_from_url(url),
-            Ok(WebIntent::ConversationView(_))
-        )
+        matches!(Self::try_from_url(url), Ok(WebIntent::ConversationView(_)))
     }
 }
 

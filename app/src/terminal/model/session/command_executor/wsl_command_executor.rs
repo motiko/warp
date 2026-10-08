@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use command::r#async::Command;
 use itertools::Itertools as _;
 
-use super::{CommandExecutor, CommandOutput, ExecuteCommandOptions};
 use super::shared::serialize_variables_for_shell;
+use super::{CommandExecutor, CommandOutput, ExecuteCommandOptions};
 use crate::safe_warn;
 use crate::terminal::shell::{Shell, ShellType};
 

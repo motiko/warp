@@ -79,8 +79,8 @@ pub use features_page::FeaturesPageAction;
 pub use language_servers_page::language_servers_widget_id;
 pub use privacy_page::PrivacyPageAction;
 pub use settings_page::{
-    AdditionalInfo, InputListItem, ToggleState, render_body_item_label,
-    render_info_icon, render_input_list, render_separator,
+    AdditionalInfo, InputListItem, ToggleState, render_body_item_label, render_info_icon,
+    render_input_list, render_separator,
 };
 
 /// Original sidebar width used when the settings-file footer is not

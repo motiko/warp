@@ -1,7 +1,7 @@
 use async_channel::Sender;
 use itertools::Itertools;
-use warp_util::path::ShellFamily;
 pub use warp_terminal::shell::{shell_escape_single_quotes, shell_quote_arg};
+use warp_util::path::ShellFamily;
 
 use crate::terminal::model::session::command_executor::{
     InBandCommand, InBandCommandCancelledEvent,

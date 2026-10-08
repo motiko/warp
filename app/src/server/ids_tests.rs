@@ -22,9 +22,8 @@ pub fn test_server_sync_id_serialization() {
 
 #[test]
 pub fn test_server_sync_id_uid_serialization() {
-    let id = SyncId::ServerId(
-        ServerId::try_from("Ymgrzu0nh2HwDNeYEtXF1x").expect("valid server id"),
-    );
+    let id =
+        SyncId::ServerId(ServerId::try_from("Ymgrzu0nh2HwDNeYEtXF1x").expect("valid server id"));
     let serialized = serde_json::to_string(&id).expect("failed to serialize");
     assert_eq!(
         serialized,

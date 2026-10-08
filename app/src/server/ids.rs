@@ -1,6 +1,4 @@
-pub use warp_server_client::ids::{
-    ClientId, HashableId, ServerId, SyncId,
-};
+pub use warp_server_client::ids::{ClientId, HashableId, ServerId, SyncId};
 
 /// server_id_traits is a macro used for generating implementations for the type aliases on
 /// ServerId. It implements different To/From and Display, and HashableId traits.

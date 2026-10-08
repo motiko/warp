@@ -226,7 +226,6 @@ use crate::workflows::local_workflows::LocalWorkflows;
 use crate::workspace::{ActiveSession, PaneViewLocator, ToastStack, Workspace, WorkspaceAction};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
-use crate::workspaces::user_profiles::UserProfiles;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
 /// Our embedded application assets.
@@ -1046,7 +1045,6 @@ pub(crate) fn initialize_app(
         current_workspace_uid,
         app_state,
         command_history,
-        restored_user_profiles,
         experiments,
         persisted_workspaces,
         workspace_language_servers,
@@ -1059,7 +1057,6 @@ pub(crate) fn initialize_app(
                 sqlite_data.current_workspace_uid,
                 sqlite_data.app_state,
                 sqlite_data.command_history,
-                sqlite_data.user_profiles,
                 sqlite_data.experiments,
                 sqlite_data.codebase_indices,
                 sqlite_data.workspace_language_servers,
@@ -1078,7 +1075,6 @@ pub(crate) fn initialize_app(
                 Default::default(),
                 Default::default(),
                 Default::default(),
-                Default::default(),
             )
         });
 
@@ -1088,13 +1084,7 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(|ctx| ServerExperiments::new_from_cache(experiments, ctx));
 
     ctx.add_singleton_model(|ctx| {
-        UserWorkspaces::new(
-            server_api_provider.as_ref(ctx).get_team_client(),
-            server_api_provider.as_ref(ctx).get_workspace_client(),
-            cached_workspaces,
-            current_workspace_uid,
-            ctx,
-        )
+        UserWorkspaces::new(cached_workspaces, current_workspace_uid, ctx)
     });
 
     ctx.add_singleton_model(ai_config::api_keys::ApiKeyManager::new);
@@ -1371,8 +1361,6 @@ pub(crate) fn initialize_app(
     #[cfg(feature = "local_fs")]
     ctx.add_singleton_model(|_| LanguageServerShutdownManager::new());
 
-    ctx.add_singleton_model(|_| UserProfiles::new(restored_user_profiles));
-
     ctx.add_singleton_model(|_| AudibleBell::new());
 
     // This model has to be registered after the user workspaces model because it relies on it,
@@ -1455,7 +1443,6 @@ pub(crate) fn initialize_app(
     // Add a singleton model for resizable modals whose size should be persisted through restarts.
     ctx.add_singleton_model(|_| ResizableData::default());
 
-
     AutoupdateState::register(ctx, server_api.clone());
 
     ctx.add_singleton_model(LocalWorkflows::new);
@@ -1479,7 +1466,6 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(move |_| persistence_writer);
 
     ctx.add_singleton_model(move |_| IgnoredSuggestionsModel::new(persisted_ignored_suggestions));
-
 
     #[cfg(not(target_family = "wasm"))]
     if launch_mode.should_start_local_http_server() {

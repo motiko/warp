@@ -47,7 +47,6 @@ use crate::suggestions::ignored_suggestions_model::SuggestionType;
 use crate::terminal::history::PersistedCommand;
 use crate::terminal::model::block::SerializedBlock;
 use crate::terminal::model::session::SessionId;
-use crate::workspaces::user_profiles::UserProfileWithUID;
 use crate::workspaces::workspace::{Workspace as WorkspaceMetadata, WorkspaceUid};
 
 #[derive(Clone)]
@@ -102,12 +101,6 @@ impl PersistedDataScope {
     fn command_history(self) -> bool {
         matches!(self, PersistedDataScope::Full)
     }
-
-    /// User profiles used to identify cloud-object creators in both interactive frontends.
-    fn user_profiles(self) -> bool {
-        self != PersistedDataScope::Daemon
-    }
-
 }
 
 /// Initializes the persistence "subsystem".
@@ -240,7 +233,6 @@ pub struct PersistedData {
     pub workspaces: Vec<WorkspaceMetadata>,
     pub current_workspace_uid: Option<WorkspaceUid>,
     pub command_history: Vec<PersistedCommand>,
-    pub user_profiles: Vec<UserProfileWithUID>,
     pub experiments: Vec<ServerExperiment>,
     pub codebase_indices: Vec<CodeWorkspaceMetadata>,
     pub workspace_language_servers: HashMap<PathBuf, HashMap<LSPServerType, EnablementState>>,
@@ -297,10 +289,6 @@ pub enum ModelEvent {
     UpdateFinishedCommand {
         metadata: FinishedCommandMetadata,
     },
-    UpsertUserProfiles {
-        profiles: Vec<UserProfileWithUID>,
-    },
-    ClearUserProfiles,
     SaveExperiments {
         experiments: Vec<ServerExperiment>,
     },

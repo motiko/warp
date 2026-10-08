@@ -6,10 +6,10 @@ use warpui::elements::{
 use warpui::platform::Cursor;
 use warpui::{Element, EventContext};
 
-use crate::workflows::workflow_icon_color;
 use crate::appearance::Appearance;
 use crate::search::{FilterChipRenderer as CommonFilterChipRenderer, QueryFilter};
 use crate::util::color::{ContrastingColor, MinimumAllowedContrast};
+use crate::workflows::workflow_icon_color;
 
 /// Trait to render filter chips for the command palette.
 pub trait FilterChipRenderer: crate::search::FilterChipRenderer {

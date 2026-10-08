@@ -420,9 +420,7 @@ impl CommandSearchView {
             let was_immediately_executed = match &result_action {
                 ExecuteHistory(_) => true,
 
-                AcceptHistory(_)
-                | AcceptWorkflow(_)
-                | TranslateNaturalLanguage => false,
+                AcceptHistory(_) | AcceptWorkflow(_) | TranslateNaturalLanguage => false,
             };
 
             let (a11y_content, a11y_help_content) = if was_immediately_executed {

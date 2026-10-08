@@ -104,13 +104,12 @@ use crate::context_chips::display::{PromptDisplay, PromptDisplayEvent};
 use crate::context_chips::display_chip::PromptChipShellCommand;
 use crate::context_chips::prompt_type::PromptType;
 use crate::editor::{
-    AutosuggestionLocation, BaselinePositionComputationMethod, CommandXRayAnchor,
-    DisplayPoint, EditOrigin, EditorAction, EditorDecoratorElements, EditorOptions, EditorSnapshot,
-    EditorView, Event as EditorEvent, InteractionState, PathTransformerFn,
-    PlainTextEditorViewAction, Point as BufferPoint, PropagateAndNoOpEscapeKey,
-    PropagateAndNoOpNavigationKeys, PropagateHorizontalNavigationKeys, TextColors,
-    TextRun, default_cursor_colors, position_id_for_cached_point, position_id_for_cursor,
-    position_id_for_first_cursor,
+    AutosuggestionLocation, BaselinePositionComputationMethod, CommandXRayAnchor, DisplayPoint,
+    EditOrigin, EditorAction, EditorDecoratorElements, EditorOptions, EditorSnapshot, EditorView,
+    Event as EditorEvent, InteractionState, PathTransformerFn, PlainTextEditorViewAction,
+    Point as BufferPoint, PropagateAndNoOpEscapeKey, PropagateAndNoOpNavigationKeys,
+    PropagateHorizontalNavigationKeys, TextColors, TextRun, default_cursor_colors,
+    position_id_for_cached_point, position_id_for_cursor, position_id_for_first_cursor,
 };
 use crate::features::FeatureFlag;
 use crate::input_suggestions::{
@@ -126,8 +125,7 @@ use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::search::QueryFilter;
 use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGISTRY;
 use crate::server::telemetry::{
-    CommandXRayTrigger, PaletteSource, TelemetryEvent,
-    WorkflowTelemetryMetadata,
+    CommandXRayTrigger, PaletteSource, TelemetryEvent, WorkflowTelemetryMetadata,
 };
 use crate::session_management::SessionNavigationPromptElements;
 use crate::settings::{
@@ -168,9 +166,7 @@ use crate::workflows::command_parser::{
     compute_workflow_display_data_for_history_command,
     compute_workflow_display_data_with_overrides,
 };
-use crate::workflows::info_box::{
-    WORKFLOW_PARAMETER_HIGHLIGHT_COLOR, WorkflowsMoreInfoView,
-};
+use crate::workflows::info_box::{WORKFLOW_PARAMETER_HIGHLIGHT_COLOR, WorkflowsMoreInfoView};
 use crate::workflows::local_workflows::LocalWorkflows;
 use crate::workflows::{self, WorkflowSelectionSource, WorkflowSource, WorkflowType};
 use crate::workspace::sync_inputs::SyncedInputState;
@@ -1021,7 +1017,6 @@ impl PendingShellWidgetHandoff {
     }
 }
 
-
 pub fn init(app: &mut AppContext) {
     use warpui::keymap::macros::*;
 
@@ -1095,10 +1090,7 @@ pub fn init(app: &mut AppContext) {
         },
     )
     .with_group(bindings::BindingGroup::Settings.as_str())
-    .with_context_predicate(
-        id!("Input")
-            & !id!("LongRunningCommand"),
-    )]);
+    .with_context_predicate(id!("Input") & !id!("LongRunningCommand"))]);
 
     if FeatureFlag::ClassicCompletions.is_enabled()
         && !FeatureFlag::ForceClassicCompletions.is_enabled()
@@ -1191,10 +1183,7 @@ pub fn init(app: &mut AppContext) {
         "Open AI Command Suggestions",
         InputAction::ShowAiCommandSearch,
     )
-    .with_context_predicate(
-        id!("Input")
-            & id!(flags::IS_ANY_AI_ENABLED),
-    )
+    .with_context_predicate(id!("Input") & id!(flags::IS_ANY_AI_ENABLED))
     .with_group(bindings::BindingGroup::WarpAi.as_str())
     .with_custom_action(CustomAction::AISearch)]);
 
@@ -1459,7 +1448,6 @@ impl Input {
             prompt.update(ctx, |current_prompt, ctx| {
                 current_prompt.subscribe_to_input_editor(editor.clone(), ctx);
             });
-        
         });
 
         ctx.subscribe_to_view(&editor, move |me, _, event, ctx| {
@@ -2411,7 +2399,6 @@ impl Input {
 
     /// Closes the workflows panel.
     fn clear_selected_workflow(&mut self, ctx: &mut ViewContext<Self>) {
-
         // `take()` closes the Workflows panel because the panel is only
         // rendered if `selected_workflow_state` is Some(..).
         if let Some(state) = self.workflows_state.selected_workflow_state.take() {
@@ -4906,7 +4893,6 @@ impl Input {
             .abort_handle();
         self.completions_abort_handle = Some(abort_handle);
     }
-
 
     fn path_separators(&self, ctx: &AppContext) -> PathSeparators {
         self.active_session(ctx)

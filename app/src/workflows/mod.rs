@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use pathfinder_color::ColorU;
+use serde::{Deserialize, Serialize};
 use warp_core::ui::color::ContrastingColor;
 use warp_core::ui::color::contrast::MinimumAllowedContrast;
 use warp_core::ui::theme::Fill;

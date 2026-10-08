@@ -110,7 +110,6 @@ impl Default for SelectionBorderWidth {
     }
 }
 
-
 const SNACKBAR_HOVER_OPACITY: Opacity = 60;
 
 // If the header is more than SNACKBAR_HEADER_MAX_RATIO percent of the entire
@@ -131,7 +130,6 @@ const LINEAR_SCROLLING: ScrollingAcceleration = ScrollingAcceleration::Polynomia
 /// have a height that extends down to the bottom of the window when there's a horizontal scroll bar, which messes with the on-hover behavior.
 const BLOCK_HOVER_BUTTON_HEIGHT: f32 = 28.;
 
-
 enum ScrollingAcceleration {
     Polynomial(f32),
 }
@@ -150,7 +148,6 @@ const OVERFLOW_BUTTON_ICON_PATH: &str = "bundled/svg/overflow.svg";
 const SNACKBAR_TOGGLE_BUTTON_HOVER_LINES: f32 = 4.;
 const SNACKBAR_TOGGLE_BUTTON_WIDTH: f32 = 30.;
 const SNACKBAR_TOGGLE_BUTTON_HEIGHT: f32 = 16.;
-
 
 pub type LabelBuilderFn = dyn Fn(
     Vec<BlockIndex>,
@@ -675,7 +672,6 @@ pub struct BlockListElement {
     /// Child Elements to use for rich content inserted into the block list
     rich_content_elements: HashMap<EntityId, Box<dyn Element>>,
 
-
     horizontal_clipped_scroll_state: ClippedScrollStateHandle,
 
     /// The last laid out size of the input view.
@@ -961,10 +957,7 @@ impl BlockListElement {
     }
 
     /// Returns an updated version of the [`BlockListElement`] that renders the toolbelt on top of the hovered block.
-    pub fn with_hovered_index(
-        mut self,
-        block_index: BlockIndex,
-    ) -> Self {
+    pub fn with_hovered_index(mut self, block_index: BlockIndex) -> Self {
         self.hovered_block_index = Some(block_index);
         let icon_color = self
             .warp_theme
@@ -1036,7 +1029,6 @@ impl BlockListElement {
             })
             .finish(),
         );
-
 
         self
     }
@@ -3439,11 +3431,10 @@ impl Element for BlockListElement {
                         }
                     }
 
-                    if is_block_hovered {
-                        if let Some(overflow_icon) = self.overflow_menu_button.as_mut() {
-                            overflow_icon.paint(overflow_menu_button_origin, ctx, app);
-                        }
-
+                    if is_block_hovered
+                        && let Some(overflow_icon) = self.overflow_menu_button.as_mut()
+                    {
+                        overflow_icon.paint(overflow_menu_button_origin, ctx, app);
                     }
 
                     // When a block has an active filter on it, we want the filter icon to show even when the block is not hovered over.

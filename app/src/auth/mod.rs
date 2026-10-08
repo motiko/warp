@@ -13,8 +13,7 @@ use warpui::{AppContext, SingletonEntity};
 use crate::root_view::RootView;
 use crate::server::telemetry::TelemetryEvent;
 use crate::settings::{
-    CRASH_REPORTING_ENABLED_DEFAULTS_KEY, PrivacySettings,
-    TELEMETRY_ENABLED_DEFAULTS_KEY,
+    CRASH_REPORTING_ENABLED_DEFAULTS_KEY, PrivacySettings, TELEMETRY_ENABLED_DEFAULTS_KEY,
 };
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::{GlobalResourceHandlesProvider, persistence, send_telemetry_sync_from_app_ctx};

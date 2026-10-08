@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::ids::ServerId;
 use futures::executor::block_on;
 use warp_core::channel::ChannelState;
 use warp_server_auth::auth_state::AuthState;
@@ -12,6 +11,7 @@ use super::{
     HeaderOverride, TEAM_UID_HEADER,
 };
 use crate::auth::{AuthClient, AuthClientImpl};
+use crate::ids::ServerId;
 
 struct StaticIapTokenProvider;
 

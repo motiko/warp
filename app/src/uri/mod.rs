@@ -293,7 +293,7 @@ impl UriHost {
             }),
             Self::Settings => W::default(),
             // These URLs always open new windows.
-            Self::Launch| Self::Home => W::Nothing,
+            Self::Launch | Self::Home => W::Nothing,
             // This will actually be handled by [`Action::window_behavior_hint`].
             Self::Action => W::Nothing,
             // Handler picks the window itself based on `?new_window=true`.

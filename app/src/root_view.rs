@@ -1419,7 +1419,6 @@ impl RootView {
         true
     }
 
-
     pub fn add_file_pane(&mut self, path: &PathBuf, ctx: &mut ViewContext<Self>) -> bool {
         let handle = &self.workspace;
         handle.update(ctx, |workspace, ctx| {

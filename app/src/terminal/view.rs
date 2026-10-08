@@ -91,17 +91,16 @@ use warpui::r#async::executor::Background;
 use warpui::r#async::{SpawnedFutureHandle, Timer};
 use warpui::clipboard::ClipboardContent;
 use warpui::elements::new_scrollable::{
-    NewScrollableElement,
-    ScrollableAppearance, SingleAxisConfig,
+    NewScrollableElement, ScrollableAppearance, SingleAxisConfig,
 };
 use warpui::elements::shimmering_text::ShimmeringTextStateHandle;
 use warpui::elements::{
     Align, ChildAnchor, ChildView, Clipped, ClippedScrollStateHandle, ConstrainedBox, Container,
-    CornerRadius, DispatchEventResult, DropTarget, DropTargetData, Empty,
-    EventHandler, Fill, Flex, Hoverable, Icon, LiveElement, MouseStateHandle, NewScrollable,
-    OffsetPositioning, ParentAnchor, ParentElement, ParentOffsetBounds, PositionedElementAnchor,
-    PositionedElementOffsetBounds, Radius, Rect, SavePosition, ScrollStateHandle, Scrollable,
-    ScrollableElement, ScrollbarWidth, Shrinkable, Stack, Text, get_rich_content_position_id,
+    CornerRadius, DispatchEventResult, DropTarget, DropTargetData, Empty, EventHandler, Fill, Flex,
+    Hoverable, Icon, LiveElement, MouseStateHandle, NewScrollable, OffsetPositioning, ParentAnchor,
+    ParentElement, ParentOffsetBounds, PositionedElementAnchor, PositionedElementOffsetBounds,
+    Radius, Rect, SavePosition, ScrollStateHandle, Scrollable, ScrollableElement, ScrollbarWidth,
+    Shrinkable, Stack, Text, get_rich_content_position_id,
 };
 use warpui::event::ModifiersState;
 use warpui::fonts::{Cache as FontCache, FamilyId, Properties};
@@ -140,8 +139,8 @@ use super::warpify::trigger_state::{SshBlockState, WarpifyState};
 use super::{GridType, should_right_click_paste};
 use crate::antivirus::AntivirusInfo;
 use crate::appearance::{Appearance, AppearanceEvent};
-use crate::auth::auth_state::AuthState;
 use crate::auth::AuthStateProvider;
+use crate::auth::auth_state::AuthState;
 use crate::autoupdate::{self, AutoupdateStage, get_update_state};
 use crate::banner::{
     Banner, BannerAction, BannerEvent, BannerState, BannerTextButton, BannerTextContent,
@@ -172,8 +171,8 @@ use crate::remote_server::manager::{
 };
 use crate::server::server_api::ServerApi;
 use crate::server::telemetry::{
-    BootstrappingInfo, NotificationsTurnedOnSource, PaletteSource,
-    SecretInteraction, SlowBootstrapInfo, TelemetryEvent, ToggleBlockFilterSource,
+    BootstrappingInfo, NotificationsTurnedOnSource, PaletteSource, SecretInteraction,
+    SlowBootstrapInfo, TelemetryEvent, ToggleBlockFilterSource,
 };
 use crate::session_management::{CommandContext, SessionNavigationPromptElements};
 #[cfg(feature = "local_fs")]
@@ -230,9 +229,7 @@ use crate::terminal::local_tty::shell::ShellStarter;
 #[cfg(all(windows, feature = "local_tty"))]
 use crate::terminal::local_tty::windows::get_user_and_system_env_variable;
 use crate::terminal::model::ansi::{ClearMode, Handler};
-use crate::terminal::model::block::{
-    Block, BlockMetadata, LONG_RUNNING_BOTTOM_PADDING_LINES,
-};
+use crate::terminal::model::block::{Block, BlockMetadata, LONG_RUNNING_BOTTOM_PADDING_LINES};
 use crate::terminal::model::blocks::{BlockList, BlockListPoint, Gap};
 use crate::terminal::model::escape_sequences::{
     self, C1, EscCodes, ToEscapeSequence, alt_screen_scroll_to_pty_bytes,
@@ -1658,7 +1655,6 @@ pub struct TerminalView {
     show_snackbar: bool,
     hover_near_snackbar_area: bool,
 
-
     /// The ID of the containing window.
     window_id: WindowId,
 
@@ -1752,7 +1748,6 @@ pub struct TerminalView {
 
     /// Per-session PTY recorder for writing PTY bytes to a file.
     pty_recorder: ModelHandle<PtyRecorder>,
-
 
     /// State handle for the shimmering text animation in the remote server loading footer.
     /// Persisted across renders so the animation doesn't restart.
@@ -2857,7 +2852,6 @@ impl TerminalView {
             prompt.update(ctx, |current_prompt, ctx| {
                 current_prompt.set_git_repo_status(None, ctx);
             });
-        
         });
     }
 
@@ -2871,7 +2865,6 @@ impl TerminalView {
             prompt.update(ctx, |current_prompt, ctx| {
                 current_prompt.set_github_repo_model(None, ctx);
             });
-        
         });
 
         // TerminalView doesn't currently subscribe to GitHubRepoModel events
@@ -2971,7 +2964,6 @@ impl TerminalView {
                         prompt.update(ctx, |current_prompt, ctx| {
                             current_prompt.set_github_repo_model(Some(weak_for_prompt), ctx);
                         });
-                    
                     });
                 }
                 Err(err) => {
@@ -3045,7 +3037,6 @@ impl TerminalView {
                     prompt.update(ctx, |current_prompt, ctx| {
                         current_prompt.set_git_repo_status(Some(weak_for_prompt), ctx);
                     });
-                
                 });
                 // Acquire a GitHub-info handle if the terminal's prompt chips need PR or
                 // repository info.
@@ -3201,11 +3192,10 @@ impl TerminalView {
 
     /// Returns whether a specific session is local.
     pub fn session_is_local<C: ModelAsRef>(&self, session_id: SessionId, ctx: &C) -> bool {
-        self
-                .sessions
-                .as_ref(ctx)
-                .get(session_id)
-                .is_some_and(|session| session.is_local())
+        self.sessions
+            .as_ref(ctx)
+            .get(session_id)
+            .is_some_and(|session| session.is_local())
     }
 
     /// Returns whether or not the active session is a local session.  Returns
@@ -4800,10 +4790,8 @@ impl TerminalView {
         self.current_prompt.update(ctx, |prompt_type, ctx| {
             let PromptType::Dynamic { prompt } = prompt_type;
             prompt.update(ctx, |current_prompt, ctx| {
-                current_prompt
-                    .update_context(self.model.lock().block_list().active_block(), ctx);
+                current_prompt.update_context(self.model.lock().block_list().active_block(), ctx);
             });
-        
         });
     }
 
@@ -6379,7 +6367,6 @@ impl TerminalView {
         if self.should_display_vim_banner(&session, ctx) {
             self.insert_vim_mode_banner(ctx);
         }
-
 
         // Make sure we decorate any text that is already in the input.  We
         // need to make sure external commands have finished loading before
@@ -8096,7 +8083,6 @@ impl TerminalView {
                 .into_item(),
         );
 
-
         // Section 2: Command search
         items.extend([
             MenuItem::Separator,
@@ -9641,18 +9627,6 @@ impl TerminalView {
             self.model.lock().block_list_mut().clear_selection();
         }
 
-        // Clear all selected text within rich content block view sub-hierarchies,
-        // except for the rich content block with a matching view ID.
-        for rich_content in self.rich_content_views.iter() {
-            match rich_content.metadata() {
-                Some(RichContentMetadata::WarpifySuccessBlock { .. }) => {
-                    // TODO(Simon): We should be checking for WarpifySuccessBlocks here as well.
-                    // The `WarpifySuccessBlock` implements a `SelectableArea`.
-                }
-                _ => {}
-            }
-        }
-
         // When this function is invoked because of an ongoing text selection within a nested
         // rich content view component (i.e. `CodeEditorView`), setting `is_selecting` to false
         // will prevent the selection from "spilling" into neighbouring blocks.
@@ -9854,7 +9828,6 @@ impl TerminalView {
             self.focus_input_box(ctx);
         }
     }
-
 
     fn context_menu_copy_blocks(&mut self, ctx: &mut ViewContext<Self>) {
         self.copy_blocks(BlockEntity::CommandAndOutput, ctx);

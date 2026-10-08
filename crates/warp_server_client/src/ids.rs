@@ -83,7 +83,6 @@ impl SyncId {
         }
     }
 
-
     /// If this item has been synced to the cloud, extract its server ID.
     pub fn into_server(self) -> Option<ServerId> {
         match self {
@@ -225,7 +224,6 @@ impl ServerId {
     pub fn uid(&self) -> ObjectUid {
         (*self).into()
     }
-
 }
 
 impl TryFrom<&str> for ServerId {

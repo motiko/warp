@@ -29,8 +29,6 @@ use crate::resource_center::ResourceCenterPage;
 use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::server::experiments::ServerExperiments;
 use crate::server::server_api::ServerApiProvider;
-use crate::server::server_api::team::{MockTeamClient, TeamClient};
-use crate::server::server_api::workspace::MockWorkspaceClient;
 use crate::server::telemetry::context_provider::AppTelemetryContextProvider;
 use crate::settings::PrivacySettings;
 use crate::settings_view::DisplayCount;
@@ -50,14 +48,10 @@ use crate::warp_managed_paths_watcher::WarpManagedPathsWatcher;
 use crate::workflows::local_workflows::LocalWorkflows;
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
-use crate::workspaces::user_profiles::UserProfiles;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::{GlobalResourceHandlesProvider, experiments, workspace};
-pub(crate) fn initialize_app(app: &mut App) {
-    initialize_app_with_team_client(app, Arc::new(MockTeamClient::new()));
-}
 
-pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dyn TeamClient>) {
+pub(crate) fn initialize_app(app: &mut App) {
     initialize_settings_for_tests(app);
 
     // Add the necessary singleton models to the App
@@ -71,15 +65,7 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(|_| SystemStats::new());
     app.add_singleton_model(|_| crate::tab::TabShortcutModifierState::new());
-    app.add_singleton_model(|ctx| {
-        UserWorkspaces::mock(
-            team_client,
-            Arc::new(MockWorkspaceClient::new()),
-            vec![],
-            ctx,
-        )
-    });
-    app.add_singleton_model(|_ctx| UserProfiles::new(Vec::new()));
+    app.add_singleton_model(|ctx| UserWorkspaces::mock(vec![], ctx));
     app.add_singleton_model(TeamTesterStatus::mock);
     app.add_singleton_model(TeamUpdateManager::mock);
     app.add_singleton_model(|_| Appearance::mock());
@@ -207,11 +193,7 @@ fn test_open_new_window_for_team_rebinds_current_window_without_creating() {
         let team_changes_for_subscription = team_changes.clone();
         app.update(|ctx| {
             ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), move |_, event, _| {
-                if matches!(
-                    event,
-                    UserWorkspacesEvent::WindowTeamChanged { window_id: changed }
-                        if *changed == window_id
-                ) {
+                if matches!(event, UserWorkspacesEvent::WindowTeamChanged) {
                     team_changes_for_subscription.set(team_changes_for_subscription.get() + 1);
                 }
             });
@@ -262,7 +244,7 @@ fn test_open_new_window_for_team_same_team_is_noop() {
         let team_changes_for_subscription = team_changes.clone();
         app.update(|ctx| {
             ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), move |_, event, _| {
-                if matches!(event, UserWorkspacesEvent::WindowTeamChanged { .. }) {
+                if matches!(event, UserWorkspacesEvent::WindowTeamChanged) {
                     team_changes_for_subscription.set(team_changes_for_subscription.get() + 1);
                 }
             });

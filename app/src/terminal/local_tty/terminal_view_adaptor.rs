@@ -3,9 +3,9 @@ use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 
 use parking_lot::FairMutex;
-use warpui::{AppContext, ViewHandle, WindowId};
 #[cfg(windows)]
 use warpui::ModelHandle;
+use warpui::{AppContext, ViewHandle, WindowId};
 
 use super::terminal_manager::{TerminalManager, TerminalSurfaceInit, TerminalSurfaceResult};
 use crate::context_chips::current_prompt::CurrentPrompt;
@@ -91,7 +91,6 @@ pub(crate) fn create_terminal_view_surface(
                 view,
                 ctx,
             );
-
         },
     }
 }

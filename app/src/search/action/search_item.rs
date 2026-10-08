@@ -12,7 +12,6 @@ use warpui::ui_components::components::UiComponent;
 use warpui::{AppContext, Element, SingletonEntity};
 
 use crate::appearance::Appearance;
-use crate::workflows::workflow_icon_color;
 use crate::search::command_palette::mixer::CommandPaletteItemAction;
 use crate::search::command_palette::render_util::{
     render_search_item_icon, render_search_item_icon_placeholder,
@@ -21,6 +20,7 @@ use crate::search::item::SearchItem;
 use crate::search::result_renderer::ItemHighlightState;
 use crate::ui_components::icons::Icon;
 use crate::util::bindings::{BindingGroup, CommandBinding};
+use crate::workflows::workflow_icon_color;
 
 /// A matched binding from a search query.
 #[derive(Debug)]

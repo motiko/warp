@@ -22,7 +22,6 @@ pub enum FeatureFlag {
 
     RuntimeFeatureFlags,
 
-
     /// If `true`, fetch updated Warp channel versions from the Warp server endpoint instead of
     /// from GCP directly.
     FetchChannelVersionsFromWarpServer,
@@ -57,7 +56,6 @@ pub enum FeatureFlag {
     /// Used to gate an experiment we're doing on WarpDev ONLY
     /// to get a sense of PTY throughput over time.
     RecordPtyThroughput,
-
 
     /// Enables a setting on Intel Dual-GPU Macs to enable use of the integrated GPU over the
     /// discrete GPU.
@@ -106,10 +104,8 @@ pub enum FeatureFlag {
     /// Adds Alacritty as a supported terminal to import settings from.
     AlacrittySettingsImport,
 
-
     /// Enables next action prediction within Warp, powered by AI.
     AgentPredict,
-
 
     /// Enables workflows for use with Agent Mode.
     AgentModeWorkflows,
@@ -135,7 +131,6 @@ pub enum FeatureFlag {
     /// Enables support for using native shell completions to supplement our
     /// completion specs.
     NativeShellCompletions,
-
 
     SshDragAndDrop,
     DragTabsToWindows,
@@ -180,7 +175,6 @@ pub enum FeatureFlag {
 
     /// Enables Kitty image rendering
     KittyImages,
-
 
     /// Enables the revised AI analytics policy banner.
     ///
@@ -291,7 +285,6 @@ pub enum FeatureFlag {
 
     /// Enables code symbols in AI context menu
     AIContextMenuCode,
-
 
     /// Expands code diff edits to replace the current pane instead of opening in a new tab.
     ExpandEditToPane,
@@ -704,7 +697,6 @@ pub enum FeatureFlag {
     /// authenticated with the logged-in user's session token. No manual MCP
     /// setup or API key required.
     FactoryMcp,
-
 
     /// Uses fzf or atuin for history search instead of Warp's command search.
     ShellWidgetHandoff,

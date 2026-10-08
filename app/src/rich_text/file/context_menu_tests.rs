@@ -18,7 +18,6 @@ use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::test_util::settings::initialize_settings_for_tests;
 use crate::workspace::ActiveSession;
 use crate::workspaces::team_tester::TeamTesterStatus;
-use crate::workspaces::user_profiles::UserProfiles;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::{GlobalResourceHandles, GlobalResourceHandlesProvider};
 
@@ -32,7 +31,6 @@ fn initialize_app(app: &mut App) {
 
     app.add_singleton_model(UserWorkspaces::default_mock);
     app.add_singleton_model(TeamTesterStatus::mock);
-    app.add_singleton_model(|_| UserProfiles::new(vec![]));
     app.add_singleton_model(|_| ServerApiProvider::new_for_test());
     app.add_singleton_model(|_| ActiveSession::default());
     app.add_singleton_model(|_| KeybindingChangedNotifier::new());
@@ -63,7 +61,15 @@ fn test_rich_text_actions() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let (_window_id, notebook) = app.add_window(WindowStyle::NotStealFocus, FileNotebookView::new);
+        let (_window_id, notebook) =
+            app.add_window(WindowStyle::NotStealFocus, FileNotebookView::new);
+        // A file notebook's editor is read-only until a file loads; these tests exercise the
+        // editable menu.
+        notebook.update(&mut app, |notebook, ctx| {
+            notebook.editor.update(ctx, |editor, ctx| {
+                editor.set_interaction_state(InteractionState::Editable, ctx)
+            });
+        });
 
         // With no selection, the only text action should be to paste.
         notebook.update(&mut app, |notebook, ctx| {
@@ -121,7 +127,15 @@ fn test_split_pane_actions() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let (_window_id, notebook) = app.add_window(WindowStyle::NotStealFocus, FileNotebookView::new);
+        let (_window_id, notebook) =
+            app.add_window(WindowStyle::NotStealFocus, FileNotebookView::new);
+        // A file notebook's editor is read-only until a file loads; these tests exercise the
+        // editable menu.
+        notebook.update(&mut app, |notebook, ctx| {
+            notebook.editor.update(ctx, |editor, ctx| {
+                editor.set_interaction_state(InteractionState::Editable, ctx)
+            });
+        });
 
         // Set up focus state to simulate being in a split pane.
         let pane_id = PaneId::dummy_pane_id();
@@ -191,7 +205,15 @@ fn test_copy_file_path_action() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let (_window_id, notebook) = app.add_window(WindowStyle::NotStealFocus, FileNotebookView::new);
+        let (_window_id, notebook) =
+            app.add_window(WindowStyle::NotStealFocus, FileNotebookView::new);
+        // A file notebook's editor is read-only until a file loads; these tests exercise the
+        // editable menu.
+        notebook.update(&mut app, |notebook, ctx| {
+            notebook.editor.update(ctx, |editor, ctx| {
+                editor.set_interaction_state(InteractionState::Editable, ctx)
+            });
+        });
 
         // When a path is set, "Copy file path" appears as its own section, separated from the
         // text-action section (here "Paste") and the split-pane section.

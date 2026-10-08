@@ -80,10 +80,7 @@ fn summary_pane_kind_icons_recompute_when_oldest_kind_is_removed() {
 }
 
 fn pane_type_supports_vertical_tabs_detail_sidecar(pane_type: IPaneType) -> bool {
-    matches!(
-        pane_type,
-        IPaneType::Terminal | IPaneType::Code
-    )
+    matches!(pane_type, IPaneType::Terminal | IPaneType::Code)
 }
 
 fn collect_normalized_unique_summary_texts(

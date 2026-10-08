@@ -979,7 +979,6 @@ fn normal_lifecycle_pipeline_emits_completion_and_prompt_side_effects_once() {
     let mut terminal = TerminalModel::mock(None, Some(event_proxy));
     while event_rx.try_recv().is_ok() {}
 
-
     let completed_block_id = terminal.active_block_id().clone();
     let next_block_id = BlockId::new();
     let completion_metadata = CompletionMetadata {
@@ -1069,7 +1068,6 @@ fn normal_lifecycle_pipeline_emits_completion_and_prompt_side_effects_once() {
             .count(),
         1
     );
-
 }
 
 /// The shell ranks its own completions by relevance, so the order it emits them in is information

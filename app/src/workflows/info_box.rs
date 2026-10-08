@@ -8,7 +8,8 @@ use warpui::color::ColorU;
 use warpui::elements::{
     self, Align, Border, Clipped, ClippedScrollStateHandle, ClippedScrollable, ConstrainedBox,
     Container, CornerRadius, CrossAxisAlignment, DropShadow, Flex, Highlight, Icon,
-    MainAxisAlignment, MainAxisSize, MouseStateHandle, ParentElement, Radius, Rect, Shrinkable, Text,
+    MainAxisAlignment, MainAxisSize, MouseStateHandle, ParentElement, Radius, Rect, Shrinkable,
+    Text,
 };
 use warpui::fonts::{Properties, Weight};
 use warpui::geometry::vector::Vector2F;
@@ -444,11 +445,7 @@ impl WorkflowsMoreInfoView {
         )
     }
 
-    fn render_info_box(
-        &self,
-        appearance: &Appearance,
-        input_mode: &InputMode,
-    ) -> Box<dyn Element> {
+    fn render_info_box(&self, appearance: &Appearance, input_mode: &InputMode) -> Box<dyn Element> {
         let content_and_args = self.render_content_and_arguments(appearance);
 
         let workflow = self.workflow.as_workflow();
@@ -474,7 +471,6 @@ impl WorkflowsMoreInfoView {
 
         let mut row_content = Flex::row();
         row_content.add_children([collapse_button, close_button]);
-
 
         let workflow_info = Flex::column()
             .with_children([

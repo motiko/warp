@@ -680,7 +680,6 @@ impl PrivacySettings {
             );
         }
     }
-
 }
 
 /// Events emitted when PrivacySettings is updated.

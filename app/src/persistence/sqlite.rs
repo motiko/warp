@@ -24,9 +24,9 @@ use pathfinder_geometry::vector::Vector2F;
 use persistence::model::AMBIENT_AGENT_PANE_KIND;
 use uuid::Uuid;
 use warp_errors::{report_error, report_if_error};
+use warpui::AppContext;
 use warpui::platform::FullscreenState;
 use warpui::windowing::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH};
-use warpui::AppContext;
 
 use super::block_list::{delete_blocks, save_block};
 use super::model::{
@@ -51,9 +51,7 @@ use crate::auth::UserUid;
 use crate::auth::auth_manager::PersistedCurrentUserInformation;
 use crate::code::editor_management::CodeSource;
 use crate::persistence::block_list::get_all_restored_blocks;
-use crate::persistence::model::{
-    CODE_REVIEW_PANE_KIND, GET_STARTED_PANE_KIND, NewTeamSettings, UserProfile,
-};
+use crate::persistence::model::{CODE_REVIEW_PANE_KIND, GET_STARTED_PANE_KIND, NewTeamSettings};
 use crate::projects::persisted_workspace::EnablementState;
 use crate::server::experiments::ServerExperiment;
 use crate::server::ids::ServerId;
@@ -66,7 +64,6 @@ use crate::terminal::history::PersistedCommand;
 use crate::themes::theme::AnsiColorIdentifier;
 use crate::workspace::tab_group::TabGroupId;
 use crate::workspaces::team::Team as TeamMetadata;
-use crate::workspaces::user_profiles::{UserProfileWithUID, user_profile_from_persistence};
 use crate::workspaces::workspace::{Workspace as WorkspaceMetadata, WorkspaceUid};
 use crate::{safe_info, send_telemetry_from_app_ctx};
 
@@ -607,12 +604,6 @@ fn handle_model_event(event: ModelEvent, connection: &mut SqliteConnection) -> a
         }
         ModelEvent::UpdateFinishedCommand { metadata } => {
             update_finished_command(connection, metadata).context("error updating finished command")
-        }
-        ModelEvent::UpsertUserProfiles { profiles } => {
-            upsert_user_profiles(connection, profiles).context("error updating user profiles")
-        }
-        ModelEvent::ClearUserProfiles => {
-            clear_user_profiles(connection).context("error clearing user profiles")
         }
         ModelEvent::SaveExperiments { experiments } => {
             save_experiments(connection, experiments).context("error saving experiments")
@@ -1674,9 +1665,11 @@ fn read_node(conn: &mut SqliteConnection, node: model::PaneNode) -> Result<PaneN
                     // Rows without a local path held Warp Drive notebooks, which no longer exist;
                     // they restore as fresh terminals so the rest of their tab still restores.
                     match notebook_pane.local_path.map(decode_path) {
-                        Some(path) => LeafContents::Notebook(
-                            NotebookPaneSnapshot::LocalFileNotebook { path: Some(path) },
-                        ),
+                        Some(path) => {
+                            LeafContents::Notebook(NotebookPaneSnapshot::LocalFileNotebook {
+                                path: Some(path),
+                            })
+                        }
                         None => fresh_terminal_pane_contents(),
                     }
                 }
@@ -1816,7 +1809,6 @@ fn read_sqlite_data(
             workspaces: Default::default(),
             current_workspace_uid: None,
             command_history: Default::default(),
-            user_profiles: Default::default(),
             experiments: Default::default(),
             codebase_indices: Default::default(),
             workspace_language_servers: Default::default(),
@@ -2131,16 +2123,6 @@ fn read_sqlite_data(
         Vec::new()
     };
 
-    let user_profiles = if data_scope.user_profiles() {
-        schema::user_profiles::dsl::user_profiles
-            .load_iter::<model::UserProfile, DefaultLoadingMode>(conn)?
-            .filter_map(|user_profile| user_profile.ok())
-            .map(user_profile_from_persistence)
-            .collect()
-    } else {
-        Vec::new()
-    };
-
     let server_experiments = schema::server_experiments::dsl::server_experiments
         .load_iter::<model::ServerExperiment, DefaultLoadingMode>(conn)?
         .filter_map(|server_experiment| server_experiment.ok())
@@ -2159,7 +2141,6 @@ fn read_sqlite_data(
         workspaces,
         current_workspace_uid,
         command_history: commands,
-        user_profiles,
         experiments: server_experiments,
         codebase_indices,
         workspace_language_servers,
@@ -2242,36 +2223,6 @@ fn update_finished_command(
     })
 }
 
-fn upsert_user_profiles(
-    conn: &mut SqliteConnection,
-    profiles: Vec<UserProfileWithUID>,
-) -> Result<(), Error> {
-    use schema::user_profiles::dsl::*;
-
-    conn.transaction::<(), Error, _>(|conn| {
-        for profile in profiles {
-            // Delete any stale profile with that uid
-            diesel::delete(
-                schema::user_profiles::dsl::user_profiles
-                    .filter(firebase_uid.eq(profile.firebase_uid.to_string())),
-            )
-            .execute(conn)?;
-
-            // Insert a new user profile row
-            let new_user_profile = UserProfile {
-                firebase_uid: profile.firebase_uid.to_string(),
-                photo_url: profile.photo_url,
-                display_name: profile.display_name,
-                email: profile.email,
-            };
-            diesel::insert_into(schema::user_profiles::dsl::user_profiles)
-                .values(new_user_profile)
-                .execute(conn)?;
-        }
-        Ok(())
-    })
-}
-
 fn save_experiments(
     conn: &mut SqliteConnection,
     experiments: Vec<ServerExperiment>,
@@ -2289,14 +2240,6 @@ fn save_experiments(
         diesel::insert_into(schema::server_experiments::dsl::server_experiments)
             .values(new_experiments)
             .execute(conn)?;
-        Ok(())
-    })
-}
-
-fn clear_user_profiles(conn: &mut SqliteConnection) -> Result<(), Error> {
-    conn.transaction::<(), Error, _>(|conn| {
-        diesel::delete(schema::user_profiles::dsl::user_profiles).execute(conn)?;
-
         Ok(())
     })
 }

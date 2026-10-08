@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
 use anyhow::{Context as _, Result};
-use crate::ids::ServerId;
 use serde::de::DeserializeOwned;
 use warp_core::channel::ChannelState;
 use warp_errors::{ErrorExt, register_error};
 use warp_graphql::platform_error::{PlatformErrorInfo, PlatformErrorMessageFormat};
 
 use crate::base_client::{AmbientHeaderPolicy, BaseClient, TEAM_UID_HEADER};
+use crate::ids::ServerId;
 
 /// Typed error for HTTP operations so retry classifiers can inspect status failures.
 #[derive(Debug, thiserror::Error)]
