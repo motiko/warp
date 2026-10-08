@@ -1,5 +1,5 @@
 use warp_graphql::billing::{
-    AddonCreditsOption, OveragesPricing, PlanPricing, PricingInfo, StripeSubscriptionPlan,
+    OveragesPricing, PlanPricing, PricingInfo, StripeSubscriptionPlan,
 };
 use warpui::{Entity, ModelContext, SingletonEntity};
 
@@ -50,16 +50,6 @@ impl PricingInfoModel {
         self.plan_pricing(plan)
             .map(|pricing| pricing.monthly_plan_price_per_month_usd_cents as f64 / 100.0)
     }
-
-    pub fn addon_credits_options(&self) -> Option<&[AddonCreditsOption]> {
-        self.pricing_info
-            .as_ref()
-            .map(|info| info.addon_credits_options.as_slice())
-    }
-
-    pub fn promotion_message(&self) -> Option<&str> {
-        self.pricing_info.as_ref()?.promotion_message.as_deref()
-    }
 }
 
 impl Default for PricingInfoModel {
@@ -79,6 +69,3 @@ impl Entity for PricingInfoModel {
 
 impl SingletonEntity for PricingInfoModel {}
 
-#[cfg(test)]
-#[path = "pricing_tests.rs"]
-mod tests;

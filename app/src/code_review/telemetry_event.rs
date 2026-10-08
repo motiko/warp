@@ -208,11 +208,6 @@ pub enum CodeReviewTelemetryEvent {
         /// Number of comments that could not be matched to an exact line and had to fall back.
         fallback_count: usize,
     },
-    /// Emitted when one or more comments are resolved.
-    CommentResolved {
-        /// Number of comments resolved by this operation.
-        resolved_count: usize,
-    },
     /// Emitted when a user clicks a git operation button in the code review
     /// header (primary button or dropdown item).
     GitButtonTriggered {
@@ -340,9 +335,6 @@ impl TelemetryEvent for CodeReviewTelemetryEvent {
                 is_local,
                 fallback_count,
             } => Some(json!({ "is_local": is_local, "fallback_count": fallback_count })),
-            CodeReviewTelemetryEvent::CommentResolved { resolved_count } => {
-                Some(json!({ "resolved_count": resolved_count }))
-            }
             CodeReviewTelemetryEvent::GitButtonTriggered { is_local, button } => {
                 Some(json!({ "is_local": is_local, "button": button }))
             }
@@ -404,7 +396,6 @@ impl TelemetryEventDesc for CodeReviewTelemetryEventDiscriminants {
             Self::CommentListExpanded => "CodeReview.CommentListExpanded",
             Self::CommentListItemClicked => "CodeReview.CommentListItemClicked",
             Self::CommentRelocationFailed => "CodeReview.CommentRelocationFailed",
-            Self::CommentResolved => "CodeReview.CommentResolved",
             Self::GitButtonTriggered => "CodeReview.GitButtonTriggered",
             Self::GitDialogCompleted => "CodeReview.GitDialogCompleted",
         }
@@ -432,7 +423,6 @@ impl TelemetryEventDesc for CodeReviewTelemetryEventDiscriminants {
             Self::CommentRelocationFailed => {
                 "Inline code review comment relocation fell back to approximate line"
             }
-            Self::CommentResolved => "Inline code review comment resolved",
             Self::GitButtonTriggered => {
                 "User clicked a git operation button in the code review header"
             }

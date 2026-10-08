@@ -195,11 +195,6 @@ impl CloudPreferencesSyncer {
         me
     }
 
-    /// Returns whether initial cloud/local preference reconciliation has completed.
-    pub(crate) fn has_completed_initial_load(&self) -> bool {
-        self.has_completed_initial_load
-    }
-
     fn new_internal(
         ctx: &mut ModelContext<Self>,
         client_id_provider: Arc<dyn ClientIdProvider>,

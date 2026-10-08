@@ -17,6 +17,8 @@ use crate::pane_group::TerminalViewResources;
 pub struct MockTerminalManager {
     model: Arc<FairMutex<TerminalModel>>,
 }
+/// Only read by the pane group when `local_tty` is disabled, and by tests.
+#[cfg_attr(feature = "local_tty", allow(dead_code))]
 pub struct MockTerminalManagerInit {
     pub(crate) manager: ModelHandle<Box<dyn TerminalManager>>,
     pub(crate) view: ViewHandle<TerminalView>,

@@ -2,10 +2,10 @@ use std::result::Result as StdResult;
 use std::sync::Arc;
 
 use settings::Setting as _;
+#[cfg(test)]
+use uuid::Uuid;
 #[cfg(target_family = "wasm")]
 use url::Url;
-use uuid::Uuid;
-use warp_core::channel::ChannelState;
 use warp_core::features::FeatureFlag;
 use warp_errors::{report_error, report_if_error};
 use warp_server_auth::user::persistence::PersistedUser;

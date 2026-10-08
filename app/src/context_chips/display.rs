@@ -6,7 +6,7 @@ use warpui::elements::{
     MainAxisSize, ParentElement, Wrap,
 };
 use warpui::{
-    AppContext, Entity, EntityId, FocusContext, ModelHandle, SingletonEntity, TypedActionView,
+    AppContext, Entity, EntityId, FocusContext, ModelHandle, TypedActionView,
     View, ViewContext, ViewHandle,
 };
 

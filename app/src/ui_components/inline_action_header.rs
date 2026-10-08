@@ -59,24 +59,6 @@ impl ExpandedConfig {
         self.on_toggle_expanded = Some(Rc::new(callback));
         self
     }
-
-}
-
-/// Configuration for when we want a right clickable element,
-/// but that element isn't necessarily expandable.
-#[derive(Clone)]
-pub struct RightClickConfig {
-    pub on_right_click: OnRightClickCallback,
-    pub header_mouse_state: MouseStateHandle,
-}
-
-impl RightClickConfig {
-    pub fn new(on_right_click: OnRightClickCallback, header_mouse_state: MouseStateHandle) -> Self {
-        Self {
-            on_right_click,
-            header_mouse_state,
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -88,8 +70,6 @@ pub enum InteractionMode {
     },
     /// Renders expansion chevron, with caller-specified click handler.
     ManuallyExpandable(ExpandedConfig),
-    /// Renders a right-clickable element, with caller-specified right-click handler.
-    RightClickable(RightClickConfig),
 }
 
 #[derive(Clone)]
@@ -121,11 +101,6 @@ impl HeaderConfig {
             corner_radius_override: None,
             soft_wrap_title: false,
         }
-    }
-
-    pub fn with_font_family(mut self, font: FamilyId) -> Self {
-        self.font_family = font;
-        self
     }
 
     pub fn with_icon(mut self, icon: warpui::elements::Icon) -> Self {
@@ -249,7 +224,6 @@ impl HeaderConfig {
                     InteractionMode::ManuallyExpandable(expansion_config) => {
                         expansion_config.is_expanded && !expansion_config.expands_upwards
                     }
-                    InteractionMode::RightClickable(..) => false,
                 });
         let container = Container::new(header_row.finish())
             .with_padding_left(INLINE_ACTION_HORIZONTAL_PADDING)
@@ -297,19 +271,6 @@ impl HeaderConfig {
                     return element;
                 }
             }
-        } else if let Some(InteractionMode::RightClickable(right_click_config)) =
-            &self.interaction_mode
-        {
-            let right_click_callback = right_click_config.on_right_click.clone();
-            let header_mouse_state = right_click_config.header_mouse_state.clone();
-
-            let hoverable = Hoverable::new(header_mouse_state, |_| container).finish();
-            return EventHandler::new(hoverable)
-                .on_right_mouse_down(move |ctx, _, _, _| {
-                    right_click_callback(ctx);
-                    DispatchEventResult::PropagateToParent
-                })
-                .finish();
         }
 
         container
@@ -362,7 +323,6 @@ impl HeaderConfig {
 
                         self.render_header(app, Some(expanded_icon))
                     }
-                    InteractionMode::RightClickable(_) => self.render_header(app, None),
                 }
             }
             _ => self.render_header(app, None),

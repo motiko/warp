@@ -1,22 +1,20 @@
 use std::sync::Arc;
 
-use vim::vim::{VimMode, VimState};
 use warp_completer::completer::Description;
 use warpui::elements::{
     AnchorPair, Border, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
     DispatchEventResult, Element, EventHandler, Flex, OffsetPositioning, OffsetType,
     ParentElement, ParentOffsetBounds, PositionedElementOffsetBounds, PositioningAxis, Radius,
-    Shrinkable, Stack, Text, XAxisAnchor,
+    Shrinkable, Stack, XAxisAnchor,
 };
 use warpui::fonts::Weight;
 use warpui::presenter::ChildView;
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
-use warpui::{AppContext, SingletonEntity, ViewHandle};
+use warpui::{AppContext, ViewHandle};
 
 use crate::appearance::Appearance;
 use crate::terminal::input::{Input, InputAction, InputSuggestionsMode, MenuPositioning};
 use crate::terminal::view::{PADDING_LEFT, TerminalAction};
-use crate::ui_components::icons::Icon;
 
 /// Wraps the given column, assumed to represent the full input content, with appropriate
 /// left padding to be consistent with the terminal content, as well as an event handler to

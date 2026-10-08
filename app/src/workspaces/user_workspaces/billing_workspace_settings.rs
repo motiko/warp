@@ -157,13 +157,4 @@ impl UserWorkspaces {
             .unwrap_or(true)
     }
 
-    /// Whether the current workspace's plan manages BYOK/BYOE centrally.
-    ///
-    /// A workspace-level plan entitlement that turns on the team-scoped `team_byo` policy; see the
-    /// [`crate::workspaces::user_workspaces::team_workspace_settings`] module docs for the
-    /// two-layer model.
-    pub(crate) fn is_managed_byok_byoe_enabled(&self) -> bool {
-        self.current_workspace_billing_metadata()
-            .is_some_and(|billing| billing.is_managed_byok_byoe_enabled())
-    }
 }

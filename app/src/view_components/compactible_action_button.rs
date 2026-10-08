@@ -81,33 +81,6 @@ impl CompactibleActionButton {
         }
     }
 
-    pub fn set_label<T: View>(&mut self, label: String, ctx: &mut ViewContext<T>) {
-        self.expanded_button.update(ctx, |button, ctx| {
-            button.set_label(label.clone(), ctx);
-        });
-        self.compact_button.update(ctx, |button, ctx| {
-            button.set_tooltip(Some(label), ctx);
-        });
-    }
-
-    pub fn set_keybinding<T: View>(
-        &mut self,
-        keybinding: Option<KeystrokeSource>,
-        ctx: &mut ViewContext<T>,
-    ) {
-        self.expanded_button.update(ctx, |button, ctx| {
-            button.set_keybinding(keybinding.clone(), ctx);
-        });
-
-        self.compact_button.update(ctx, |button, ctx| {
-            if let Some(keybinding) = keybinding {
-                button.set_tooltip_sublabel(keybinding.displayed(ctx), ctx);
-            } else {
-                button.set_tooltip_sublabel(None::<String>, ctx);
-            }
-        });
-    }
-
     pub fn set_adjoined_side<T: View>(
         &mut self,
         adjoined_side: AdjoinedSide,

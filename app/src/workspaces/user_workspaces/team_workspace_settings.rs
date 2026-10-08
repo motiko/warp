@@ -68,16 +68,13 @@ impl TeamScope for TeamContext<'_> {
     }
 }
 
+#[cfg_attr(feature = "integration_tests", allow(dead_code))]
 pub struct ResolvedTeamScope(Option<ServerId>);
 
+#[cfg_attr(feature = "integration_tests", allow(dead_code))]
 impl ResolvedTeamScope {
     pub fn from_scope(scope: &(impl TeamScope + ?Sized)) -> Self {
         Self(scope.team_uid())
-    }
-
-    #[cfg(feature = "agent_mode_evals")]
-    pub(crate) fn teamless() -> Self {
-        Self(None)
     }
 }
 

@@ -164,7 +164,7 @@ use crate::cloud_object::model::actions::ObjectActionType;
 use crate::cloud_object::{CloudObject, GenericStringObjectFormat, JsonObjectType};
 #[cfg(feature = "local_fs")]
 use crate::code::editor_management::CodeSource;
-use crate::code_review::diff_state::{DiffMode, GitDeltaPreference};
+use crate::code_review::diff_state::GitDeltaPreference;
 use crate::code_review::git_repo_model::{GitRepoModels, GitRepoStatusModel, GitStatusMetadata};
 use crate::code_review::github_repo_model::GitHubRepoModel;
 use crate::code_review::telemetry_event::CodeReviewPaneEntrypoint;
@@ -259,7 +259,7 @@ use crate::terminal::model::block::{
 };
 use crate::terminal::model::blocks::{
     BlockList,
-    BlockListPoint, Gap, RemovableBlocklistItem,
+    BlockListPoint, Gap,
 };
 use crate::terminal::model::escape_sequences::{
     self, C1, EscCodes, ToEscapeSequence, alt_screen_scroll_to_pty_bytes,
@@ -1968,6 +1968,7 @@ pub struct TerminalView {
 
     pty_spawn_failed: bool,
 
+    #[cfg(test)]
     model_events_handle: ModelHandle<ModelEventDispatcher>,
 
     /// Per-repo git status model for the current repository, if any.
@@ -2293,7 +2294,6 @@ impl TerminalView {
         let input: ViewHandle<Input> = ctx.add_typed_action_view(|ctx| {
             Input::new(
                 model.clone(),
-                resources.server_api.clone(),
                 sessions.clone(),
                 size_info,
                 menu_positioning_provider,
@@ -2733,6 +2733,7 @@ impl TerminalView {
             cursor_position_id: format!("terminal_view:cursor_{}", ctx.view_id()),
             active_session,
             pty_spawn_failed: false,
+            #[cfg(test)]
             model_events_handle,
             git_repo_status: None,
             github_repo_model: None,
@@ -7752,15 +7753,6 @@ impl TerminalView {
         ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
             let toast = DismissibleToast::new(text, flavor);
             toast_stack.add_persistent_toast(toast, window_id, ctx);
-        });
-    }
-
-    /// Adds ephemeral error toast to toast stack.
-    fn show_error_toast(&mut self, text: String, ctx: &mut ViewContext<Self>) {
-        let window_id = ctx.window_id();
-        ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-            let toast = DismissibleToast::error(text);
-            toast_stack.add_ephemeral_toast(toast, window_id, ctx);
         });
     }
 
@@ -13660,10 +13652,6 @@ impl TerminalView {
     #[cfg(feature = "integration_tests")]
     pub fn active_filter_editor_block_index(&self) -> Option<BlockIndex> {
         self.active_filter_editor_block_index
-    }
-
-    pub(crate) fn view_id(&self) -> EntityId {
-        self.view_id
     }
 
     fn cursor_position_id(&self) -> String {

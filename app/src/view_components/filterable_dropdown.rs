@@ -147,23 +147,6 @@ where
         }
     }
 
-    /// Override the top-bar height.
-    /// so callers (e.g. the orchestrate environment picker) that mix
-    /// `Dropdown` and `FilterableDropdown` in the same row can size them
-    /// identically.
-    pub fn set_top_bar_height(&mut self, height: f32, ctx: &mut ViewContext<Self>) {
-        self.top_bar_height = height;
-        ctx.notify();
-    }
-
-    /// Override the vertical margin applied above and below the dropdown's top
-    /// bar (default [`DROPDOWN_PADDING`]). Set to `0.` when the caller manages
-    /// its own spacing and needs the bar to align flush with sibling inputs.
-    pub fn set_vertical_margin(&mut self, vertical_margin: f32, ctx: &mut ViewContext<Self>) {
-        self.vertical_margin = vertical_margin;
-        ctx.notify();
-    }
-
     pub fn set_footer<F>(&mut self, builder: F, ctx: &mut ViewContext<Self>)
     where
         F: Fn(&AppContext) -> Box<dyn Element> + 'static,
@@ -211,21 +194,6 @@ where
             self.selected_item = None;
             ctx.notify();
         }
-    }
-
-    /// Set items from rich menu items (MenuItem). This preserves the rich menu items for
-    /// filtering and passes the filtered items to the internal dropdown.
-    ///
-    /// Rich menu items already carry erased [`DropdownAction`]s. The dropdown dispatches selected
-    /// item actions through normal action propagation, so callers should ensure each action is
-    /// handled by an appropriate view in the containing view hierarchy.
-    pub fn set_rich_items(
-        &mut self,
-        items: Vec<MenuItem<DropdownAction>>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.items = items;
-        self.set_filtered_items(ctx);
     }
 
     /// The number of items in the dropdown.

@@ -153,7 +153,6 @@ impl CommentDisplayState {
 }
 
 pub struct CommentListView {
-    view_handle: WeakViewHandle<Self>,
     parent: WeakViewHandle<CodeReviewView>,
 
     comment_model: Option<ModelHandle<ReviewCommentBatch>>,
@@ -199,7 +198,6 @@ impl CommentListView {
         });
 
         Self {
-            view_handle: ctx.handle(),
             parent,
             comment_model: None,
             comments_by_id: IndexMap::new(),

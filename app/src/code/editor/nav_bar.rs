@@ -50,14 +50,8 @@ struct MouseStateHandles {
     revert_mouse_state: MouseStateHandle,
 }
 
-pub enum NavBarBehavior {
-    Closable,
-    NotClosable,
-}
-
 pub struct NavBar {
     model: ModelHandle<CodeEditorModel>,
-    behavior: NavBarBehavior,
     mouse_state_handles: MouseStateHandles,
     up_label_button: ViewHandle<ActionButton>,
     down_label_button: ViewHandle<ActionButton>,
@@ -87,7 +81,6 @@ impl NavBar {
 
         Self {
             model,
-            behavior: NavBarBehavior::Closable,
             mouse_state_handles: Default::default(),
             up_label_button,
             down_label_button,
@@ -292,9 +285,7 @@ impl View for NavBar {
             row.add_child(self.render_revert_button(appearance));
         }
 
-        if matches!(self.behavior, NavBarBehavior::Closable) {
-            row.add_child(self.render_close_button(appearance));
-        }
+        row.add_child(self.render_close_button(appearance));
 
         Container::new(
             ConstrainedBox::new(row.finish())

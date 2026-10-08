@@ -38,7 +38,7 @@ use session_sharing_protocol::common::ParticipantId;
 use settings::{Setting as _, ToggleableSetting};
 use string_offset::{ByteOffset, CharOffset};
 use vec1::Vec1;
-use vim::vim::{VimHandler, VimMode};
+use vim::vim::VimMode;
 use warp_completer::completer::{
     self, CompleterOptions, CompletionContext, CompletionsFallbackStrategy, Description,
     ExplicitTabCompletion, MatchStrategy, MatchType, PathSeparators, PreparedSuggestion,
@@ -77,7 +77,6 @@ use warpui::{
 
 use self::decorations::InputBackgroundJobOptions;
 use super::alias::is_expandable_alias;
-use super::block_list_viewport::InputMode;
 use super::event::{BlockCompletedEvent, BlockType, UserBlockCompleted};
 use super::ligature_settings::LigatureSettings;
 use super::model::block::{BlockId, BlockMetadata, BlocklistEnvVarMetadata};
@@ -137,7 +136,6 @@ use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::search::QueryFilter;
 use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGISTRY;
 use crate::server::ids::SyncId;
-use crate::server::server_api::ServerApi;
 use crate::server::telemetry::{
     CommandXRayTrigger, EnvVarTelemetryMetadata, PaletteSource, TelemetryEvent, WorkflowTelemetryMetadata,
 };
@@ -1087,7 +1085,6 @@ pub struct Input {
     model: Arc<FairMutex<TerminalModel>>,
     menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
     editor: ViewHandle<EditorView>,
-    server_api: Arc<ServerApi>,
     input_suggestions: ViewHandle<InputSuggestions>,
     suggestions_mode_model: ModelHandle<InputSuggestionsModeModel>,
     completions_menu_resizable_width: ResizableStateHandle,
@@ -1096,7 +1093,6 @@ pub struct Input {
     focus_handle: Option<PaneFocusHandle>,
     active_block_metadata: Option<BlockMetadata>,
     /// The [`EntityId`] of the terminal view that this input view is inside.
-    terminal_view_id: EntityId,
     view_id: EntityId,
     input_render_state_model_handle: ModelHandle<InputRenderStateModel>,
     workflows_state: WorkflowsState,
@@ -1519,7 +1515,6 @@ impl Input {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         model: Arc<FairMutex<TerminalModel>>,
-        server_api: Arc<ServerApi>,
         sessions: ModelHandle<Sessions>,
         size_info: SizeInfo,
         menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
@@ -1860,7 +1855,6 @@ impl Input {
             completions_menu_resizable_height: resizable_state_handle(completions_menu_height),
             editor,
             model,
-            server_api,
             sessions,
             focus_handle: None,
             active_block_metadata: None,
@@ -1890,7 +1884,6 @@ impl Input {
             shared_session_presence_manager: None,
             last_user_block_completed: None,
             hoverable_handle: Default::default(),
-            terminal_view_id,
             #[cfg(feature = "local_fs")]
             conn: None,
             slash_command_model,
@@ -2725,8 +2718,7 @@ impl Input {
             .active_block_mut()
             .set_cloud_env_var_state(env_var_collection_id);
 
-        let did_execute: bool;
-        if self
+        let did_execute = if self
             .model
             .lock()
             .block_list()
@@ -2749,14 +2741,14 @@ impl Input {
                 should_add_command_to_history,
                 ctx,
             );
-            did_execute = true;
+            true
         } else {
             // We don't want to submit the command if precmd has not
             // been received. Instead, we want the user to be aware
             // that the prompt might not be up to date.
             send_telemetry_from_ctx!(TelemetryEvent::TriedToExecuteBeforePrecmd, ctx);
-            did_execute = false;
-        }
+            false
+        };
 
         // Close the workflows info box if it was open.
         self.clear_selected_workflow(ctx);
@@ -6070,17 +6062,14 @@ impl Input {
     }
 
     fn input_shift_tab(&mut self, ctx: &mut ViewContext<Self>) {
-        match self.suggestions_mode_model.as_ref(ctx).mode() {
-            // If the model selector is open and has multiple tabs,
-            // shift + tab should cycle between them.
-            // If we're in CompletionSuggestions mode, shift tab moves to the previous selection.
-            InputSuggestionsMode::CompletionSuggestions { .. } => {
-                self.input_suggestions.update(ctx, |suggestions, ctx| {
-                    suggestions.select_prev(ctx);
-                });
-                return;
-            }
-            _ => {}
+        // In CompletionSuggestions mode, shift tab moves to the previous selection.
+        if let InputSuggestionsMode::CompletionSuggestions { .. } =
+            self.suggestions_mode_model.as_ref(ctx).mode()
+        {
+            self.input_suggestions.update(ctx, |suggestions, ctx| {
+                suggestions.select_prev(ctx);
+            });
+            return;
         }
 
         if let Some(workflows_info_view) = &self

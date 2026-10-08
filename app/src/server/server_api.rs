@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ::http::header::CONTENT_LENGTH;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use auth::AuthClient;
 use block::BlockClient;
 use channel_versions::ChannelVersions;
@@ -24,12 +24,10 @@ use team::TeamClient;
 use url::Url;
 use warp_core::context_flag::ContextFlag;
 use warp_core::telemetry::TelemetryEvent;
-use warp_errors::{AnyhowErrorExt, ErrorExt, report_error};
-use warp_server_client::HttpStatusError;
+use warp_errors::report_error;
 use warp_server_client::auth::{AuthClientImpl, AuthEvent, EXPERIMENT_ID_HEADER};
 use warp_server_client::base_client::{
-    AmbientHeaderPolicy, AuthenticatedGraphqlConfig, BaseClient, GraphqlRoutingConfig,
-    TEAM_UID_HEADER,
+    AuthenticatedGraphqlConfig, BaseClient, GraphqlRoutingConfig,
 };
 use warp_server_client::iap::{IapManager, IapState};
 use warp_server_client::network_logging::NetworkLogModel;
@@ -41,7 +39,6 @@ use super::experiments::{ServerExperiment, ServerExperiments};
 use crate::ChannelState;
 use crate::auth::auth_manager::AuthManager;
 use crate::auth::auth_state::AuthState;
-use crate::server::team_scope::RequestTeamScope;
 use crate::server::telemetry::TelemetryApi;
 use crate::settings::PrivacySettingsSnapshot;
 
@@ -199,33 +196,6 @@ impl ServerApi {
             operation,
             timeout,
         )
-    }
-
-    #[cfg(test)]
-    fn team_uid_header_value(team_scope: RequestTeamScope) -> Option<String> {
-        team_scope
-            .team_uid()
-            .map(|team_uid| team_uid.uid().to_string())
-    }
-
-    /// Converts a non-success public API response into the most specific client error
-    /// available. The returned error always carries an [`HttpStatusError`] in its chain
-    /// (via [`anyhow::Error::context`]) so callers retrying through
-    /// [`is_transient_http_error`](super::retry_strategies::is_transient_http_error) fail
-    /// fast on a deterministic 4xx instead of defaulting to a transient retry.
-    #[cfg(test)]
-    async fn error_from_response(response: http_client::Response) -> anyhow::Error {
-        let status = response.status();
-        // Get the response text first since we may need to try multiple deserializations.
-        let response_text = response.text().await.unwrap_or_default();
-        let status_error = HttpStatusError::new(status.as_u16(), response_text.clone());
-
-        // Try to deserialize error response as { "error": "message" }
-        match serde_json::from_str::<ClientError>(&response_text) {
-            Ok(error_response) => anyhow::Error::new(status_error).context(error_response),
-            Err(_) => anyhow::Error::new(status_error)
-                .context(format!("API request failed with status {status}")),
-        }
     }
 
     /// Sends an authenticated empty POST request to /client/login, which signals to the server
@@ -544,7 +514,3 @@ impl Entity for ServerApiProvider {
 }
 
 impl SingletonEntity for ServerApiProvider {}
-
-#[cfg(test)]
-#[path = "server_api_tests.rs"]
-mod tests;

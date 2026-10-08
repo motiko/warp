@@ -1,7 +1,7 @@
 pub mod auth_manager;
 pub mod auth_redirect;
 mod user_properties;
-use ::settings::{Setting, SettingsManager};
+use ::settings::SettingsManager;
 pub use auth_manager::AuthManager;
 pub use auth_state::AuthStateProvider;
 use itertools::Itertools;

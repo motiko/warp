@@ -329,10 +329,6 @@ impl CommentViewCard {
         }
     }
 
-    pub(crate) fn is_collapsed(&self) -> bool {
-        self.is_collapsed
-    }
-
     /// Updates the comment data and resets the body editor with the new content.
     pub(crate) fn update_source<V: View>(
         &mut self,

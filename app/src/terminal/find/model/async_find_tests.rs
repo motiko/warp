@@ -122,43 +122,42 @@ fn test_async_find_produces_same_results_as_sync_find() {
         // Verify the matches are in the expected blocks and grids.
         let model = terminal_model.lock();
         for sync_match in sync_run.matches() {
-            if let BlockListMatch::CommandBlock(grid_match) = sync_match {
-                let async_matches = test_model.update(&mut app, |m, _ctx| {
-                    m.async_find_controller
-                        .as_ref()
-                        .unwrap()
-                        .matches_for_block_grid(grid_match.block_index, grid_match.grid_type)
-                        .cloned()
-                });
-                assert!(
-                    async_matches.is_some(),
-                    "Async find should have matches for block {:?} grid {:?}",
-                    grid_match.block_index,
-                    grid_match.grid_type
-                );
-
-                // Convert async match to relative range and compare.
-                let block = model.block_list().block_at(grid_match.block_index).unwrap();
-                let grid = match grid_match.grid_type {
-                    GridType::Output => block.output_grid().grid_handler(),
-                    GridType::PromptAndCommand => block.prompt_and_command_grid().grid_handler(),
-                    _ => continue,
-                };
-
-                let async_ranges: Vec<_> = async_matches
+            let BlockListMatch::CommandBlock(grid_match) = sync_match;
+            let async_matches = test_model.update(&mut app, |m, _ctx| {
+                m.async_find_controller
+                    .as_ref()
                     .unwrap()
-                    .iter()
-                    .filter_map(|m| m.to_range(grid))
-                    .collect();
+                    .matches_for_block_grid(grid_match.block_index, grid_match.grid_type)
+                    .cloned()
+            });
+            assert!(
+                async_matches.is_some(),
+                "Async find should have matches for block {:?} grid {:?}",
+                grid_match.block_index,
+                grid_match.grid_type
+            );
 
-                assert!(
-                    async_ranges.contains(&grid_match.range),
-                    "Async find should contain match {:?} in block {:?} grid {:?}",
-                    grid_match.range,
-                    grid_match.block_index,
-                    grid_match.grid_type
-                );
-            }
+            // Convert async match to relative range and compare.
+            let block = model.block_list().block_at(grid_match.block_index).unwrap();
+            let grid = match grid_match.grid_type {
+                GridType::Output => block.output_grid().grid_handler(),
+                GridType::PromptAndCommand => block.prompt_and_command_grid().grid_handler(),
+                _ => continue,
+            };
+
+            let async_ranges: Vec<_> = async_matches
+                .unwrap()
+                .iter()
+                .filter_map(|m| m.to_range(grid))
+                .collect();
+
+            assert!(
+                async_ranges.contains(&grid_match.range),
+                "Async find should contain match {:?} in block {:?} grid {:?}",
+                grid_match.range,
+                grid_match.block_index,
+                grid_match.grid_type
+            );
         }
     });
 }

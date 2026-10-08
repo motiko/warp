@@ -626,20 +626,9 @@ pub enum BannerSeverity {
     Error,
 }
 
-/// Visual style for an individual banner action button.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum BannerButtonVariant {
-    /// No fill, no border, just text (and optional icon). Used for the primary
-    /// action in the Figma design (e.g. "Fix with Warp Agent").
-    Naked,
-    /// Border-only, no fill (e.g. "Open file").
-    Outlined,
-}
-
 struct WorkspaceBannerButtonDetails {
     text: String,
     action: WorkspaceAction,
-    variant: BannerButtonVariant,
     /// Optional leading icon shown before the label.
     icon: Option<Icon>,
     /// If set, renders an adjacent "More info" pill that dispatches this action.
@@ -6130,17 +6119,6 @@ impl Workspace {
                 });
             }
         }
-    }
-
-    fn attach_path_as_context(&mut self, path: PathBuf, ctx: &mut ViewContext<Self>) {
-        let Some(view) = self.active_session_view(ctx) else {
-            log::warn!("No active terminal view session when trying to attach path as context");
-            return;
-        };
-
-        view.update(ctx, |terminal_view, ctx| {
-            terminal_view.attach_path_as_context(&path, ctx);
-        });
     }
 
     fn cd_to_directory(&mut self, path: PathBuf, ctx: &mut ViewContext<Self>) {
@@ -14758,7 +14736,6 @@ impl Workspace {
             button: Some(WorkspaceBannerButtonDetails {
                 text: "Open file".to_owned(),
                 action: WorkspaceAction::OpenSettingsFile,
-                variant: BannerButtonVariant::Outlined,
                 icon: None,
                 more_info_button_action: None,
             }),
@@ -14797,7 +14774,6 @@ impl Workspace {
                         button: Some(WorkspaceBannerButtonDetails {
                             text: "Update Warp manually".to_string(),
                             action: WorkspaceAction::DownloadNewVersion,
-                            variant: BannerButtonVariant::Outlined,
                             icon: None,
                             more_info_button_action: Some(WorkspaceAction::AutoupdateFailureLink),
                         }),
@@ -14822,7 +14798,6 @@ impl Workspace {
                         button: Some(WorkspaceBannerButtonDetails {
                             text: "Update Warp manually".to_string(),
                             action: WorkspaceAction::DownloadNewVersion,
-                            variant: BannerButtonVariant::Outlined,
                             icon: None,
                             more_info_button_action: Some(WorkspaceAction::AutoupdateFailureLink),
                         }),
@@ -14840,7 +14815,6 @@ impl Workspace {
                             button: Some(WorkspaceBannerButtonDetails {
                                 text: "Update now".to_string(),
                                 action: WorkspaceAction::ApplyUpdate,
-                                variant: BannerButtonVariant::Outlined,
                                 icon: None,
                                 more_info_button_action: None,
                             }),
@@ -14858,7 +14832,6 @@ impl Workspace {
                                     button: Some(WorkspaceBannerButtonDetails {
                                         text: "Restart app and update now".to_string(),
                                         action: WorkspaceAction::ApplyUpdate,
-                                        variant: BannerButtonVariant::Outlined,
                                         icon: None,
                                         more_info_button_action: None,
                                     }),
@@ -14966,7 +14939,6 @@ impl Workspace {
                 let more_info_details = WorkspaceBannerButtonDetails {
                     text: "More info".to_owned(),
                     action: more_info_button_action,
-                    variant: BannerButtonVariant::Outlined,
                     icon: None,
                     more_info_button_action: None,
                 };
@@ -15033,9 +15005,8 @@ impl Workspace {
         .finish()
     }
 
-    /// Renders a single banner action button using the Figma-spec'd Naked or
-    /// Secondary variants: no fill by default, optional 1px border, text and
-    /// icon tinted with the banner's contrast-safe text color.
+    /// Renders a single banner action button: no fill by default, a 1px border, and text and icon
+    /// tinted with the banner's contrast-safe text color.
     fn render_banner_action_button(
         &self,
         details: WorkspaceBannerButtonDetails,
@@ -15046,7 +15017,6 @@ impl Workspace {
         let WorkspaceBannerButtonDetails {
             text,
             action,
-            variant,
             icon,
             ..
         } = details;
@@ -15080,10 +15050,8 @@ impl Workspace {
 
             let mut container = Container::new(row.finish())
                 .with_corner_radius(CornerRadius::with_all(Radius::Pixels(4.)))
-                .with_horizontal_padding(8.);
-            if matches!(variant, BannerButtonVariant::Outlined) {
-                container = container.with_border(Border::all(1.).with_border_color(text_color));
-            }
+                .with_horizontal_padding(8.)
+                .with_border(Border::all(1.).with_border_color(text_color));
             if state.is_hovered() {
                 container = container.with_background_color(coloru_with_opacity(text_color, 20));
             }

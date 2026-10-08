@@ -14,7 +14,6 @@ pub mod find;
 pub mod keyboard_navigable_buttons;
 mod markdown_toggle_view;
 mod submittable_text_input;
-mod warning_box;
 
 pub use alert::Alert;
 pub use compact_dropdown::{CompactDropdown, CompactDropdownEvent, CompactDropdownItem};

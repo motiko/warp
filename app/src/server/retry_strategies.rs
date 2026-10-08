@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use warpui::{RetryOption, duration_with_jitter};
+use warpui::RetryOption;
 
 /// Common duration for a periodic poll. In our app, we generally have the following to update the same data:
 /// - RTC messages

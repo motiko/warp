@@ -3,8 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use warp_core::features::FeatureFlag;
-use warp_core::settings::{ChangeEventReason, Setting};
-use warp_core::user_preferences::GetUserPreferences;
+use warp_core::settings::ChangeEventReason;
 use warp_errors::report_error;
 use warpui::{
     AppContext, Entity, ModelContext, SingletonEntity, Tracked, ViewContext, WeakViewHandle,
@@ -43,7 +42,9 @@ pub(crate) mod team_workspace_settings;
 pub(crate) use team_workspace_settings::TeamContextForOperation;
 #[cfg(test)]
 pub(crate) use team_workspace_settings::TeamlessScopeForTest;
-pub use team_workspace_settings::{ResolvedTeamScope, TeamContext, TeamContextResolver, TeamScope};
+#[cfg(any(test, not(feature = "integration_tests")))]
+pub use team_workspace_settings::ResolvedTeamScope;
+pub use team_workspace_settings::{TeamContext, TeamContextResolver, TeamScope};
 
 const STRIPE_SUBSCRIPTION_INTERVAL_PAGE_PREFIX: &str = "/upgrade";
 

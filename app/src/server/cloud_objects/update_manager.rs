@@ -1015,11 +1015,6 @@ impl UpdateManager {
         self.has_initial_load.wait()
     }
 
-    /// Returns whether the current account's initial cloud-object load has completed.
-    pub(crate) fn has_completed_initial_load(&self) -> bool {
-        self.has_initial_load.is_set()
-    }
-
     /// Reset the initial-load condition so that subsequent callers of
     /// [`initial_load_complete`](Self::initial_load_complete) will block until
     /// the next load finishes. Call this when the user identity changes (e.g.
@@ -2951,6 +2946,7 @@ impl UpdateManager {
         self.spawned_futures.push(future.future_id());
     }
 
+    #[cfg(any(test, feature = "integration_tests"))]
     pub fn delete_object_by_user(
         &mut self,
         id: CloudObjectTypeAndId,

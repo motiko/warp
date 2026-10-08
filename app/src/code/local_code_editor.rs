@@ -19,7 +19,6 @@ use lsp::{
 use lsp_types::FormattingOptions;
 use markdown_parser::FormattedText;
 use num_traits::SaturatingSub;
-use pathfinder_color::ColorU;
 use pathfinder_geometry::rect::RectF;
 use pathfinder_geometry::vector::Vector2F;
 use remote_server::manager::RemoteServerManager;
@@ -63,13 +62,6 @@ use crate::code_review::comments::CommentId;
 use crate::menu::{Event, Menu, MenuItem, MenuItemFields};
 use crate::projects::persisted_workspace::{PersistedWorkspace, PersistedWorkspaceEvent};
 use crate::settings::CodeSettings;
-
-const DROP_SHADOW_COLOR: ColorU = ColorU {
-    r: 0,
-    g: 0,
-    b: 0,
-    a: 48,
-};
 
 const HOVER_DEBOUNCE_PERIOD: Duration = Duration::from_millis(500);
 

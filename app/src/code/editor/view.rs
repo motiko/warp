@@ -67,7 +67,7 @@ use crate::code::editor::line::EditorLineLocation;
 use crate::code::editor::model::{
     CodeEditorModel, CodeEditorModelEvent, HoverableLink, LineBound, StableEditorLine,
 };
-use crate::code::editor::nav_bar::{NavBar, NavBarBehavior, NavBarEvent};
+use crate::code::editor::nav_bar::{NavBar, NavBarEvent};
 use crate::code::editor::scroll::{ScrollPosition, ScrollTrigger, ScrollWheelBehavior};
 use crate::code::{
     NoopCommentEditorProvider, NoopFindReferencesCardProvider, ShowCommentEditorProvider,
@@ -901,10 +901,6 @@ impl CodeEditorView {
         self
     }
 
-    pub(crate) fn starting_line_number(&self) -> Option<usize> {
-        self.display_options.starting_line_number
-    }
-
     fn handle_searcher_event(&mut self, _event: &SearchEvent, ctx: &mut ViewContext<Self>) {
         // Only update decorations if the find bar is open.
         if self.find_bar_open(ctx) {
@@ -1259,9 +1255,6 @@ impl CodeEditorView {
                         ScrollPosition::LineAndColumn(line_col) => {
                             self.jump_to_line_column(line_col.line_num, line_col.column_num, ctx);
                         }
-                        ScrollPosition::FocusedDiffHunk => {
-                            self.navigate_current_diff_hunk(ctx);
-                        }
                         ScrollPosition::Fraction(fraction) => {
                             self.scroll_to_fraction(fraction, ctx);
                         }
@@ -1403,10 +1396,6 @@ impl CodeEditorView {
         ctx.notify();
     }
 
-    pub fn is_selecting(&self) -> bool {
-        self.is_selecting
-    }
-
     /// Extend the selection to the given offset.  This is used for shift-clicking to extend the
     /// selection, and not for dragging the selection.
     fn selection_extend(&mut self, offset: CharOffset, ctx: &mut ViewContext<Self>) {
@@ -1492,24 +1481,6 @@ impl CodeEditorView {
         self.model.as_ref(ctx).buffer_version(ctx)
     }
 
-    /// Append text to the end of the buffer regardless of cursor position.
-    /// This is used for streaming content where we always want to append at the end,
-    /// not at the current cursor position since the user may select text while it's streaming.
-    pub fn append_at_end(&self, text: &str, ctx: &mut ViewContext<Self>) {
-        self.model.update(ctx, |model, ctx| {
-            // Use append_at_end to insert at the end of buffer regardless of cursor position.
-            // This ensures streaming code blocks always append at the end, even when user
-            // has clicked somewhere else in the editor.
-            model.append_at_end(text, ctx);
-        });
-    }
-
-    pub fn truncate(&self, len: usize, ctx: &mut ViewContext<Self>) {
-        self.model.update(ctx, |model, ctx| {
-            model.truncate(len, ctx);
-        });
-    }
-
     /// Identifies which line (current or removed) is at the given content-space
     /// vertical offset. Delegates to [`CodeEditorModel::line_at_vertical_offset`].
     #[allow(dead_code)]
@@ -1565,12 +1536,6 @@ impl CodeEditorView {
 
     pub fn is_editable(&self, app: &AppContext) -> bool {
         self.model.as_ref(app).interaction_state() == InteractionState::Editable
-    }
-
-    fn navigate_current_diff_hunk(&self, ctx: &mut ViewContext<Self>) {
-        self.nav_bar.update(ctx, |nav_bar, ctx| {
-            nav_bar.autoscroll(ctx);
-        });
     }
 
     pub fn selected_text(&self, ctx: &AppContext) -> Option<String> {
@@ -1865,31 +1830,6 @@ impl CodeEditorView {
             .map(|d| d.to_string())
             .unwrap_or_default();
         result_parts.join(&delimiter)
-    }
-
-    /// If there's a single selection, returns its starting and ending line numbers.
-    pub fn selected_lines(&self, app: &AppContext) -> Option<(u32, u32)> {
-        // Query the buffer model directly to determine if we have a selection
-        let selection_model = self.model.as_ref(app).buffer_selection_model().as_ref(app);
-
-        if !selection_model.is_single_selection() {
-            return None;
-        }
-
-        let offsets = selection_model.selection_offsets();
-        let selection_offsets = offsets.first();
-        if selection_offsets.head == selection_offsets.tail {
-            return None;
-        }
-
-        let buffer = self.model.as_ref(app).buffer().as_ref(app);
-        let (start_offset, end_offset) = (
-            selection_offsets.head.min(selection_offsets.tail),
-            selection_offsets.head.max(selection_offsets.tail),
-        );
-        let start_line = start_offset.to_buffer_point(buffer).row;
-        let end_line = end_offset.to_buffer_point(buffer).row;
-        Some((start_line, end_line))
     }
 
     /// If vim keybindings are enabled, return the [`VimMode`]. Otherwise, return None.
