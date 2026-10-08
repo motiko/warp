@@ -58,9 +58,8 @@ The GUI desktop app is the `app/` crate on the WarpUI pixel/GPU framework (`warp
 
 **Main app** (`app/`) — the GUI desktop app:
 - Terminal emulation and shell management (`terminal/`)
-- AI integration including Agent Mode (`ai/`)
-- Cloud synchronization and Drive features (`drive/`)
-- Authentication and user management (`auth/`)
+- Opt-in AI settings and custom model endpoints (`ai/`); there is no Agent Mode, account or cloud sync
+- File editor and code panes (`code/`), local git diff review (`code_review/`)
 - Settings and preferences (`settings/`)
 - Workspace and session management (`workspace/`)
 
@@ -69,15 +68,15 @@ The GUI desktop app is the `app/` crate on the WarpUI pixel/GPU framework (`warp
 - `crates/editor/` - Text editing functionality
 - `crates/warpui/` and `crates/warpui_core/` - Custom UI framework
 - `crates/ipc/` - Inter-process communication
-- `crates/graphql/` - GraphQL client and schema
+- `crates/warp_completer/` - Command completion engine
+- `crates/persistence/` - SQLite schema and migrations
 
 ### Key Architectural Patterns
 
 1. **Entity-Handle System**: Views reference other views via handles, not direct ownership
-2. **Modular Structure**: Workspace contains multiple workspace configurations, each with terminals, notebooks, etc.
+2. **Modular Structure**: Workspace contains multiple workspace configurations, each with terminals, editors, etc.
 3. **Cross-Platform**: Native implementations for macOS, Windows, Linux, plus WASM target
-4. **AI Integration**: Built-in AI assistant with context awareness and codebase indexing
-5. **Cloud Sync**: Objects can be synchronized across devices via Warp Drive
+4. **Offline by default**: no server, login or telemetry; AI only through a user-configured endpoint
 
 ### Development Guidelines
 
@@ -171,10 +170,6 @@ for itself.
 - Uses Diesel ORM with SQLite
 - Migrations in `crates/persistence/migrations/`
 - Schema defined in `crates/persistence/src/schema.rs`
-
-**GraphQL**:
-- Schema and client code generation from `crates/warp_graphql_schema/api/schema.graphql`
-- TypeScript types generated for frontend integration
 
 ### Feature Flags
 

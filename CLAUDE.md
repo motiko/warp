@@ -42,7 +42,7 @@ builds `alefbet` / channel `oss`.
 - Ownership chain: `RootView` (`app/src/root_view.rs`) → `Workspace` (`app/src/workspace/view.rs`, one
   per window, owns `tabs: Vec<TabData>`) → `TabData` (`app/src/tab.rs`) → `PaneGroup`
   (`app/src/pane_group/mod.rs`, a split tree of `Box<dyn AnyPaneContent>` keyed by `PaneId`) → pane
-  kinds in `app/src/pane_group/pane/` (terminal, code, notebook, settings, ai_document, ...) →
+  kinds in `app/src/pane_group/pane/` (terminal, code, file, settings, ...) →
   `TerminalPane` wraps a `TerminalView` whose `TerminalManager` exposes
   `Arc<FairMutex<TerminalModel>>`.
 - Session restore mirrors that tree in `app/src/app_state.rs` (`AppState` → `WindowSnapshot` →
@@ -73,16 +73,20 @@ builds `alefbet` / channel `oss`.
   `TerminalManager` implementations wiring the model to I/O (`local_tty/`, `remote_tty/`,
   `shared_session/`), and the renderers (`block_list_element.rs`, `grid_renderer*`).
 
-### AI and server transport
+### Opt-in AI and network
 
-- `crates/ai_types` (plain types) → `crates/ai` (UI-agnostic agent, codebase index, skills, providers)
-  → `app/src/ai` (UI and orchestration: agent_sdk, ambient agents, MCP UI, execution profiles).
-  `crates/mcp` is the MCP client (rmcp); `crates/computer_use` is per-OS screen control.
-- Agent requests go through `app/src/ai/agent/api/impl.rs`, which builds a protobuf request (from the
-  `warp-proto-apis` git dependency) and streams responses with
-  `warp_multi_agent_client::generate_multi_agent_output` over SSE. Everything else uses the
-  `ServerApi` wrapper in `app/src/server/server_api.rs` on top of `crates/warp_server_client`
-  (`BaseClient`), with GraphQL via `crates/graphql` and subscriptions via `crates/websocket`.
+- There is no Warp server, account or agent. `alefbet` uses `WarpServerConfig::offline()`; the
+  server transport, auth, Drive, teams, billing and Agent Mode were deleted in M3. Do not add code
+  that talks to `*.warp.dev`.
+- What remains for the M5 opt-in AI: `AISettings::is_any_ai_enabled` (`app/src/settings/ai.rs`, a
+  local setting, off by default), custom endpoint types and `LLMId` in `crates/ai_config`, endpoint
+  storage in `app/src/ai/custom_endpoints.rs`, the "AI (optional)" settings page
+  (`settings_view/ai_page.rs`), and the `#` natural-language command search, which asks a
+  `NaturalLanguageCommandProvider` (`app/src/search/command_search/natural_language.rs`) that has no
+  implementation yet. `crates/input_classifier` and `crates/natural_language_detection` are local
+  heuristics kept for that work.
+- Outbound HTTP for user-triggered downloads (LSP servers, Node runtime) goes through
+  `crates/http_client`.
 
 ### Settings
 
@@ -92,16 +96,8 @@ builds `alefbet` / channel `oss`.
   `private`, `toml_path`, and `description`.
 - Values serialize through the `SettingsValue` trait (`crates/settings_value`, derive in
   `settings_value_derive`). Public settings persist to the user's `settings.toml`; private ones to
-  platform-native prefs. `cloud_preferences_syncer.rs` pushes `SyncToCloud` settings as Drive objects.
+  platform-native prefs.
 - Remember the AGENTS.md rule: a toggleable setting also needs a Command Palette entry.
-
-### Cloud objects (Drive)
-
-Layered crates: `cloud_objects` (ids, metadata, sharing primitives) → `cloud_object_models` (concrete
-object types) → `cloud_object_persistence` (SQLite helpers) → `cloud_object_client` (`ObjectClient`
-trait over GraphQL, `#[automock]` under `test-util`). In the app, `app/src/cloud_object/model/` holds
-`CloudModel`, `app/src/server/cloud_objects/update_manager.rs` plus `sync_queue.rs` push local changes,
-and `listener.rs` applies server pushes from the websocket subscription.
 
 ### Platform backends
 
@@ -119,8 +115,8 @@ the MCP runtime, and the CLI. App-level platform code is in `app/src/platform/`.
   `crates/integration/tests/integration.rs`, app-side steps/assertions in
   `app/src/integration_testing/`. Read `crates/integration/tests/INTEGRATION_TESTING.md` first.
 - Logging: `safe_info!` / `safe_warn!` / `safe_error!` etc. are in `crates/warp_core/src/safe_log.rs`
-  (`safe:` text always logs, `full:` text only on dogfood). Sentry reporting requires `report_error!`
-  from `crates/warp_errors`; plain `log::error!` does not create Sentry events.
+  (`safe:` text always logs, `full:` text only on dogfood). `report_error!` from `crates/warp_errors`
+  is the error-reporting macro (Sentry only in builds with the `crash_reporting` feature).
 
 ## Contribution workflow (from CONTRIBUTING.md)
 
