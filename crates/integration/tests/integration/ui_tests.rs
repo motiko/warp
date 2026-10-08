@@ -144,9 +144,6 @@ integration_tests! {
     test_open_input_context_menu,
     test_copy_all_from_input_context_menu,
     test_cut_paste_from_input_context_menu,
-    test_inline_model_selector_restores_prompt_on_dismissal,
-    test_inline_model_selector_restores_prompt_on_model_selection,
-    test_inline_model_selector_restores_prompt_on_chip_toggle_close,
     test_paste_and_type_characters_before_bootstrap,
     #[ignore = "Flaking on CI - KC looking into 3/31/26"]
     test_code_review_scroll_anchor_preserved_when_inserting_above,
@@ -207,7 +204,6 @@ integration_tests! {
     test_copy_secret_respects_safe_mode_setting,
     test_alt_screen_secret_detection,
     test_secret_case_sensitivity,
-    test_secrets_are_always_redacted_in_ai_inputs,
 
     // OSC 8 hyperlink tests (GH6393)
     test_osc8_open_close_renders_visible_text,
@@ -262,8 +258,6 @@ integration_tests! {
     test_latest_buffer_operations,
 
     test_pass_control_sequences_to_long_running_block,
-    test_execution_profiles_load_from_settings_file,
-    test_execution_profile_model_persists_and_hot_reloads_settings_file,
     test_settings_file_migration_from_native_store,
     test_settings_file_hot_reload_applies_new_values,
 
@@ -283,55 +277,11 @@ integration_tests! {
     test_settings_search_clear_restores_umbrella_state,
     test_settings_search_preserved_on_sidebar_click,
 
-    test_copy_selection_within_ai_block,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_first_to_last_through_ai_simple,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_copy_on_select_first_to_last_through_ai_simple,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_first_to_last_through_ai_semantic,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_first_to_last_through_ai_lines,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_last_to_first_through_ai_simple,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_last_to_first_through_ai_semantic,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_last_to_first_through_ai_lines,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_first_to_ai_simple,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_first_to_ai_semantic,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_first_to_ai_lines,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_ai_to_first_simple,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_ai_to_first_semantic,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_ai_to_first_lines,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_ai_to_last_simple,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_ai_to_last_semantic,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_ai_to_last_lines,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_last_to_ai_simple,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_last_to_ai_semantic,
-    #[ignore = "Affected by agent_view feature flag UI changes"]
-    test_selection_last_to_ai_lines,
-    test_restored_ai_block_renders_mermaid_and_local_images,
 
     // Middle-click-paste is only implemented for Linux right now.
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     test_middle_click_paste,
-    test_agent_mode_pane_minimum_size,
 
-    test_rule_creation,
-    test_rule_update,
-    test_rule_pane_opening,
     test_undo_close_stack_timeout_cleanup,
 
     test_file_tree_opens_files_in_warp,
@@ -354,8 +304,6 @@ integration_tests! {
     test_code_editor_relative_line_numbers_follow_cursor,
 
     // AI document tests
-    test_copy_ai_document_as_markdown_from_overflow_menu,
-    test_restored_ai_document_populates_code_block_after_first_layout,
 
     // Keyboard protocol tests
     test_keyboard_protocol_disabled_shift_enter,

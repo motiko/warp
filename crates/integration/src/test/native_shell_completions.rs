@@ -22,7 +22,6 @@ use warp::integration_testing::view_getters::{
     single_input_suggestions_view_for_tab, single_input_view_for_tab, single_terminal_view_for_tab,
 };
 use warp::settings::{NativeShellCompletionsEnabled, WarpCompletionsEnabled};
-use warp::terminal::model::block::TranscriptScope;
 use warp::terminal::shell::ShellType;
 use warpui_core::async_assert;
 use warpui_core::units::Lines;
@@ -225,7 +224,7 @@ fn assert_no_visible_generator_block()
                 .block_list()
                 .blocks()
                 .iter()
-                .filter(|block| block.height(&TranscriptScope::Terminal) != Lines::zero())
+                .filter(|block| block.height() != Lines::zero())
                 .map(|block| block.command_with_secrets_unobfuscated(false))
                 .filter(|command| {
                     command
