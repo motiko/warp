@@ -70,6 +70,7 @@ pub fn initialize_settings_for_tests_with_mode(
     CloudPreferencesSettings::register(app);
     CommandSearchSettings::register(app);
     DebugSettings::register(app);
+    crate::settings::DefaultSessionSettings::register(app);
     AppIconSettings::register(app);
     EmacsBindingsSettings::register(app);
 

@@ -1972,14 +1972,7 @@ impl Iterator for ViewportIter<'_> {
                 }
             }
 
-            match item {
-                BlockHeightItem::RichContent(_) => return next,
-                _ => {
-                    if block_height.as_f64() > 0. {
-                        return next;
-                    }
-                }
-            }
+            return next;
         }
     }
 }

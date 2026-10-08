@@ -10521,6 +10521,7 @@ impl TerminalView {
     }
 
     fn focus_input_box(&mut self, ctx: &mut ViewContext<Self>) {
+        self.clear_selected_blocks(ctx);
         self.update_find_selection(ctx);
         ctx.focus(&self.input);
         ctx.notify();

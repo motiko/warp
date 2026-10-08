@@ -6612,6 +6612,11 @@ impl Input {
         if matches!(edit_origin, EditOrigin::UserTyped) {
             self.model.lock().set_is_input_dirty(true);
         }
+        // Clear any active text selections in the blocklist when inserting new text. Note that the
+        // TerminalModel lock is instantly dropped after this expression, since it's stored in a
+        // temporary variable.
+        self.model.lock().block_list_mut().clear_selection();
+
         ctx.focus(&self.editor);
         self.editor.update(ctx, |editor, ctx| match edit_origin {
             EditOrigin::UserTyped => editor.user_insert(text, ctx),
