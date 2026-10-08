@@ -2,7 +2,6 @@ pub mod auth_manager;
 pub mod auth_redirect;
 mod user_properties;
 use ::settings::{Setting, SettingsManager};
-use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
 pub use auth_manager::AuthManager;
 pub use auth_state::AuthStateProvider;
 use itertools::Itertools;
@@ -13,13 +12,6 @@ use warp_errors::report_error;
 pub use warp_server_auth::{auth_state, credentials, user, user_uid};
 use warpui::{AppContext, SingletonEntity};
 
-use crate::ai::agent_conversations_model::AgentConversationsModel;
-use crate::ai::blocklist::BlocklistAIHistoryModel;
-use crate::ai::chatgpt_subscription::ChatGPTSubscriptionModel;
-use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
-#[cfg(not(target_family = "wasm"))]
-use crate::ai::mcp::TemplatableMCPServerManager;
-use crate::ai::request_usage_model::AIRequestUsageModel;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::env_vars::manager::EnvVarCollectionManager;
 use crate::notebooks::manager::NotebookManager;
@@ -40,10 +32,6 @@ use crate::{GlobalResourceHandlesProvider, persistence, send_telemetry_sync_from
 pub fn log_out(app: &mut AppContext) {
     send_telemetry_sync_from_app_ctx!(TelemetryEvent::LogOut, app);
 
-    CodebaseIndexManager::handle(app).update(app, |index_manager, ctx| {
-        index_manager.reset_codebase_indexing(ctx);
-    });
-
     let global_resource_handles = GlobalResourceHandlesProvider::as_ref(app).get();
 
     // As part of Logout v0, we remove sqlite3 so sessions and cloud objects don't persist between accounts.
@@ -52,24 +40,6 @@ pub fn log_out(app: &mut AppContext) {
 
     AuthManager::handle(app).update(app, |auth_manager, ctx| {
         auth_manager.log_out(ctx);
-    });
-    // Detach built-in Warp-hosted MCP servers; they authenticate with the
-    // credentials that were just cleared.
-    #[cfg(not(target_family = "wasm"))]
-    TemplatableMCPServerManager::handle(app).update(app, |manager, ctx| {
-        manager.sync_builtin_servers(false, ctx);
-    });
-    AIRequestUsageModel::handle(app).update(app, |usage_model, ctx| {
-        usage_model.reset_server_availability(ctx);
-    });
-    if FeatureFlag::ChatGPTSubscription.is_enabled() {
-        ChatGPTSubscriptionModel::handle(app).update(app, |model, ctx| model.reset(ctx));
-    }
-    BlocklistAIHistoryModel::handle(app).update(app, |history_model, _| {
-        history_model.reset();
-    });
-    AgentConversationsModel::handle(app).update(app, |agent_conversations_model, _| {
-        agent_conversations_model.reset();
     });
     CloudModel::handle(app).update(app, |cloud_model, _| {
         cloud_model.reset();
@@ -87,13 +57,6 @@ pub fn log_out(app: &mut AppContext) {
         manager.stop_polling_for_workspace_metadata_updates();
     });
     remove_cloud_persisted_settings(app);
-
-    let settings_profiles_are_explicit = AISettings::as_ref(app)
-        .execution_profiles
-        .is_value_explicitly_set();
-    AIExecutionProfilesModel::handle(app).update(app, |profiles, _| {
-        profiles.reset(settings_profiles_are_explicit);
-    });
 
     NotebookManager::handle(app).update(app, |manager, _| manager.reset());
     EnvVarCollectionManager::handle(app).update(app, |manager, _| manager.reset());

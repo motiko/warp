@@ -1,4 +1,4 @@
-use ai::api_keys::{
+use ai_config::api_keys::{
     ApiKeyManager, CustomEndpointDefinition, CustomEndpointDefinitions, CustomEndpointId,
     CustomEndpointModel, CustomEndpointParams,
 };
@@ -8,9 +8,6 @@ use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
 use crate::LaunchMode;
 use crate::global_resource_handles::GlobalResourceHandlesProvider;
-use crate::settings::cloud_preferences_syncer::{
-    CloudPreferencesSyncer, CloudPreferencesSyncerEvent,
-};
 use crate::settings::{AISettings, AISettingsChangedEvent, SettingsFileError};
 use crate::user_config::{WarpConfig, WarpConfigUpdateEvent};
 
@@ -49,17 +46,7 @@ impl CustomEndpointSettingsModel {
                 | WarpConfigUpdateEvent::LaunchConfigs
                 | WarpConfigUpdateEvent::TabConfigs
                 | WarpConfigUpdateEvent::TabConfigErrors(_)
-                | WarpConfigUpdateEvent::ModelConfigs
-                | WarpConfigUpdateEvent::ModelConfigErrors(_)
                 | WarpConfigUpdateEvent::Settings => {}
-            },
-        );
-        ctx.subscribe_to_model(
-            &CloudPreferencesSyncer::handle(ctx),
-            |model, _, event, ctx| {
-                if matches!(event, CloudPreferencesSyncerEvent::InitialLoadCompleted) {
-                    model.sync_or_migrate(ctx);
-                }
             },
         );
         let mut model = Self {
@@ -83,9 +70,6 @@ impl CustomEndpointSettingsModel {
         let setting = &AISettings::as_ref(ctx).custom_endpoints;
         if setting.is_value_explicitly_set() || !self.imports_legacy_endpoints {
             set_active_definitions(setting.value().clone(), ctx);
-            return;
-        }
-        if !CloudPreferencesSyncer::as_ref(ctx).has_completed_initial_load() {
             return;
         }
         let legacy = ApiKeyManager::as_ref(ctx).keys().custom_endpoints.clone();

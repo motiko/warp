@@ -53,14 +53,10 @@ pub struct WorkspaceState {
     pub is_command_search_open: bool,
     pub is_workflow_modal_open: bool,
     pub is_prompt_editor_open: bool,
-    pub is_agent_toolbar_editor_open: bool,
     pub is_header_toolbar_editor_open: bool,
     pub is_import_modal_open: bool,
     pub is_close_session_confirmation_dialog_open: bool,
-    pub is_rewind_confirmation_dialog_open: bool,
     pub is_native_quit_modal_open: bool,
-    pub is_suggested_agent_mode_workflow_modal_open: bool,
-    pub is_suggested_rule_modal_open: bool,
     pub is_tab_config_params_modal_open: bool,
     pub is_session_config_modal_open: bool,
     pub is_new_worktree_modal_open: bool,
@@ -86,11 +82,8 @@ impl WorkspaceState {
             || self.is_launch_config_save_modal_open
             || self.is_command_search_open
             || self.is_prompt_editor_open
-            || self.is_agent_toolbar_editor_open
             || self.is_header_toolbar_editor_open
             || self.is_import_modal_open
-            || self.is_suggested_rule_modal_open
-            || self.is_suggested_agent_mode_workflow_modal_open
             || self.is_tab_config_params_modal_open
             || self.is_session_config_modal_open
             || self.is_new_worktree_modal_open
@@ -117,11 +110,8 @@ impl WorkspaceState {
         self.is_command_search_open = false;
         self.is_workflow_modal_open = false;
         self.is_prompt_editor_open = false;
-        self.is_agent_toolbar_editor_open = false;
         self.is_header_toolbar_editor_open = false;
         self.is_import_modal_open = false;
-        self.is_suggested_rule_modal_open = false;
-        self.is_suggested_agent_mode_workflow_modal_open = false;
         self.is_tab_config_params_modal_open = false;
         self.is_session_config_modal_open = false;
         self.is_new_worktree_modal_open = false;
@@ -279,26 +269,6 @@ pub fn is_terminal_view_in_same_tab(
         .any(|tab_pane_group| {
             tab_pane_group.terminal_ids.contains(terminal_view_id_1)
                 && tab_pane_group.terminal_ids.contains(terminal_view_id_2)
-        })
-}
-
-/// Returns the active terminal session view in the active tab. This is used as the target for any
-/// selections in the adjacent editor.
-pub fn get_context_target_terminal_view(
-    window_id: WindowId,
-    ctx: &AppContext,
-) -> Option<ViewHandle<TerminalView>> {
-    ctx.views_of_type::<Workspace>(window_id)
-        .as_ref()
-        .and_then(|v| v.first())
-        .and_then(|handle| {
-            handle.read(ctx, |workspace, w_ctx| {
-                workspace
-                    .active_tab_pane_group()
-                    .read(w_ctx, |active_group, a_ctx| {
-                        active_group.active_session_view(a_ctx)
-                    })
-            })
         })
 }
 

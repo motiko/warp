@@ -1,7 +1,7 @@
 //! The "AI (optional)" settings page: the master AI switch and the user's own custom inference
 //! endpoints.
 
-use ::ai::api_keys::{ApiKeyManager, CustomEndpointParams};
+use ai_config::api_keys::{ApiKeyManager, CustomEndpointParams};
 use settings::ToggleableSetting as _;
 use warp_core::ui::theme::color::internal_colors;
 use warpui::elements::{
@@ -190,7 +190,7 @@ impl AIPageView {
                         appearance
                             .ui_builder()
                             .switch(global_ai_switch_state.clone())
-                            .check(AISettings::as_ref(app).is_any_ai_enabled(app))
+                            .check(AISettings::as_ref(app).is_any_ai_enabled())
                             .build()
                             .on_click(move |ctx, _, _| {
                                 ctx.dispatch_typed_action(AIPageAction::ToggleGlobalAI);
@@ -219,7 +219,7 @@ impl AIPageView {
     }
 
     fn custom_endpoint_controls_enabled(app: &AppContext) -> bool {
-        AISettings::as_ref(app).is_any_ai_enabled(app)
+        AISettings::as_ref(app).is_any_ai_enabled()
     }
 
     fn sync_custom_endpoint_buttons(&mut self, ctx: &mut ViewContext<Self>) {
@@ -447,18 +447,10 @@ impl TypedActionView for AIPageView {
     fn handle_action(&mut self, action: &AIPageAction, ctx: &mut ViewContext<Self>) {
         match action {
             AIPageAction::ToggleGlobalAI => {
-                match AISettings::handle(ctx).update(ctx, |settings, ctx| {
+                if let Err(e) = AISettings::handle(ctx).update(ctx, |settings, ctx| {
                     settings.is_any_ai_enabled.toggle_and_save_value(ctx)
                 }) {
-                    Ok(new_value) => {
-                        send_telemetry_from_ctx!(
-                            TelemetryEvent::ToggleGlobalAI {
-                                is_ai_enabled: new_value,
-                            },
-                            ctx
-                        );
-                    }
-                    Err(e) => log::warn!("Failed to set value for Global AI setting: {e:?}"),
+                    log::warn!("Failed to set value for Global AI setting: {e:?}");
                 }
                 ctx.notify();
             }

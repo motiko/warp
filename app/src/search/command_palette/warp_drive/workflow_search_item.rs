@@ -35,18 +35,12 @@ impl SearchItem for WorkflowSearchItem {
         highlight_state: ItemHighlightState,
         appearance: &Appearance,
     ) -> Box<dyn Element> {
-        let (icon, icon_color) = if self.cloud_workflow.model().data.is_agent_mode_workflow() {
-            (
-                Icon::Prompt,
-                warp_drive_icon_color(appearance, DriveObjectType::AgentModeWorkflow),
-            )
-        } else {
-            (
-                Icon::Workflow,
-                warp_drive_icon_color(appearance, DriveObjectType::Workflow),
-            )
-        };
-        render_search_item_icon(appearance, icon, icon_color, highlight_state)
+        render_search_item_icon(
+            appearance,
+            Icon::Workflow,
+            warp_drive_icon_color(appearance, DriveObjectType::Workflow),
+            highlight_state,
+        )
     }
 
     fn icon_location(&self, appearance: &Appearance) -> IconLocation {

@@ -21,7 +21,7 @@ pub fn warp_drive_icon_color(
                 )
                 .into()
         }
-        DriveObjectType::Notebook { .. } => {
+        DriveObjectType::Notebook => {
             let color: Fill = appearance.theme().terminal_colors().normal.blue.into();
             color
                 .on_background(
@@ -43,13 +43,5 @@ pub fn warp_drive_icon_color(
             // Match File Tree styling - use text_sub color
             blended_colors::text_sub(appearance.theme(), appearance.theme().background())
         }
-        DriveObjectType::AIFactCollection
-        | DriveObjectType::AIFact
-        | DriveObjectType::MCPServer
-        | DriveObjectType::MCPServerCollection
-        | DriveObjectType::AgentModeWorkflow => appearance
-            .theme()
-            .main_text_color(appearance.theme().background())
-            .into(),
     }
 }

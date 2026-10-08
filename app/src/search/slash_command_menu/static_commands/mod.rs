@@ -5,77 +5,31 @@ use bitflags::bitflags;
 pub use commands::SlashCommandId;
 
 bitflags! {
-    /// Specifies the requirements for a slash command to be available.
-    ///
-    /// Each flag represents a requirement that the session context must satisfy. The command is
-    /// available when the session supports *all* of the command's requirement flags.
-    ///
-    /// A few common cases:
-    /// * If neither [`Self::AGENT_VIEW`] nor [`Self::TERMINAL_VIEW`] is set, the command is available in all modes.
-    ///   A command should *not* set both flags to be available in both modes - this results in requirements that cannot be satisfied.
-    /// * Most `/fork`-like slash commands require [`Self::NO_LRC_CONTROL`] and [`Self::ACTIVE_CONVERSATION`]
+    /// Specifies the requirements for a slash command to be available. The command is available
+    /// when the session supports *all* of the command's requirement flags.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct Availability: u16 {
+    pub struct Availability: u8 {
         /// No requirements — always available.
         const ALWAYS = 0;
-        /// Requires the agent view.
-        const AGENT_VIEW = 1 << 0;
-        /// Requires the terminal view.
-        const TERMINAL_VIEW = 1 << 1;
-        /// Requires a local session (not available in remote/cloud sessions).
-        const LOCAL = 1 << 2;
+        /// Requires a local session (not available in remote sessions).
+        const LOCAL = 1 << 0;
         /// Requires a git repository.
-        const REPOSITORY = 1 << 3;
-        /// Requires that the agent is not currently in control of a long-running command.
-        const NO_LRC_CONTROL = 1 << 4;
-        /// Requires an active AI conversation.
-        const ACTIVE_CONVERSATION = 1 << 5;
-        /// Requires codebase context to be enabled.
-        const CODEBASE_CONTEXT = 1 << 6;
-        /// Requires AI to be globally enabled.
-        const AI_ENABLED = 1 << 7;
+        const REPOSITORY = 1 << 1;
     }
 }
+
 /// Stable identity for a static slash command.
 ///
 /// Front-ends dispatch on this value instead of matching command-name strings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SlashCommandKind {
-    Agent,
-    CreateNewProject,
-    EditSkill,
-    InvokeSkill,
-    AddRule,
     Edit,
     RenameTab,
-    RenameConversation,
     SetTabColor,
-    Fork,
     OpenCodeReview,
-    Index,
-    Init,
-    OpenProjectRules,
     OpenSettingsFile,
     Changelog,
     Feedback,
-    OpenRepo,
-    OpenRules,
-    New,
-    Model,
-    Profile,
-    Plan,
-    Compact,
-    CompactAnd,
-    Queue,
-    ForkAndCompact,
-    ForkFrom,
-    Cost,
-    Conversations,
-    Prompts,
-    Rewind,
-    ExportToClipboard,
-    ExportToFile,
-    CopyDebuggingId,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -128,9 +82,6 @@ pub struct StaticCommand {
     pub icon_path: &'static str,
     /// Specifies the requirements for this command to be available. See [`Availability`].
     pub availability: Availability,
-    /// Whether this command requires AI mode when executed.
-    /// If true, AI mode will be activated when the command is accepted.
-    pub auto_enter_ai_mode: bool,
     pub argument: Option<Argument>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]

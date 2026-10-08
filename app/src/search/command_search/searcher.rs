@@ -51,17 +51,8 @@ pub enum CommandSearchItemAction {
     /// The user accepted an EVC search item.
     AcceptEnvVarCollection(Box<CloudEnvVarCollection>),
 
-    /// The user accepted the AI query search item with this query text.
-    AcceptAIQuery(String),
-
-    /// The user requested to run the AI query search item with this query text.
-    RunAIQuery(String),
-
-    /// The user accepted the search item to open Warp AI.
-    OpenWarpAI,
-
-    /// The user accepted the search item to translate the query to a command using Warp AI.
-    TranslateUsingWarpAI,
+    /// The user accepted the search item to translate the query into a command.
+    TranslateNaturalLanguage,
 }
 
 #[cfg(test)]

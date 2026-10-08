@@ -11,7 +11,7 @@ agent_mode_evals = []
 test-util = ["cloud_objects/test-util"]
 
 [dependencies]
-ai.workspace = true
+ai_config.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
 cfg-if.workspace = true

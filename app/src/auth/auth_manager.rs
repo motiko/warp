@@ -1,7 +1,6 @@
 use std::result::Result as StdResult;
 use std::sync::Arc;
 
-use ai::api_keys::{ApiKeyManager, ChatGPTConnectFailure};
 use settings::Setting as _;
 #[cfg(target_family = "wasm")]
 use url::Url;
@@ -18,8 +17,6 @@ use super::credentials::{Credentials, FirebaseToken, LoginToken};
 use super::user::User;
 use super::user_properties::UserProperties;
 use super::{AuthStateProvider, UserUid};
-use crate::ai::AIRequestUsageModel;
-use crate::ai::llms::LLMPreferences;
 use crate::autoupdate::AutoupdateState;
 use crate::persistence::ModelEvent;
 use crate::server::cloud_objects::update_manager::UpdateManager;
@@ -149,16 +146,6 @@ impl AuthManager {
                 return;
             }
             send_telemetry_from_ctx!(TelemetryEvent::AnonymousUserLinkedFromBrowser, ctx);
-        } else if self.incoming_login_conflicts_with_pending_chatgpt_connect(&user_uid, ctx) {
-            // A connect attempt only ever expects a link result, never a login. A login for
-            // another account here would silently switch the user's Warp account.
-            log::warn!(
-                "Ignoring login handoff for a different user while a ChatGPT connect is pending"
-            );
-            ApiKeyManager::handle(ctx).update(ctx, |manager, ctx| {
-                manager.fail_chatgpt_oauth(ChatGPTConnectFailure::AccountMismatch, ctx);
-            });
-            return;
         }
 
         let _ = ctx.spawn(
@@ -206,7 +193,6 @@ impl AuthManager {
                 let UserProperties {
                     user,
                     server_experiments,
-                    llms,
                 } = user_output.into();
 
                 self.complete_authentication(user.clone(), credentials, ctx);
@@ -251,14 +237,6 @@ impl AuthManager {
                     model.handle_user_fetched(self.auth_state.clone(), ctx)
                 });
 
-                AIRequestUsageModel::handle(ctx).update(ctx, |usage_model, ctx| {
-                    usage_model.refresh_request_usage_async(ctx);
-                });
-
-                LLMPreferences::handle(ctx).update(ctx, |prefs, ctx| {
-                    prefs.update_feature_model_choices(Ok(llms), ctx);
-                });
-
                 if !user.is_user_anonymous() {
                     GeneralSettings::handle(ctx).update(ctx, |settings, ctx| {
                         report_if_error!(
@@ -299,7 +277,7 @@ impl AuthManager {
                 // Fetch the user's privacy settings from the server if any or update the server settings.
                 let privacy_settings_handle = PrivacySettings::handle(ctx);
                 let privacy_settings_snapshot =
-                    privacy_settings_handle.as_ref(ctx).get_snapshot(ctx);
+                    privacy_settings_handle.as_ref(ctx).get_snapshot();
                 ctx.update_model(&privacy_settings_handle, |privacy_settings, ctx| {
                     privacy_settings.fetch_or_update_settings(ctx);
                 });
@@ -499,23 +477,6 @@ impl AuthManager {
             true
         } else {
             false
-        }
-    }
-
-    fn incoming_login_conflicts_with_pending_chatgpt_connect(
-        &self,
-        incoming_user_uid: &Option<UserUid>,
-        ctx: &AppContext,
-    ) -> bool {
-        if !FeatureFlag::ChatGPTSubscription.is_enabled()
-            || self.auth_state.is_anonymous_or_logged_out()
-            || !ApiKeyManager::as_ref(ctx).chatgpt_oauth_pending()
-        {
-            return false;
-        }
-        match (self.auth_state.user_id(), incoming_user_uid) {
-            (Some(current_uid), Some(incoming_uid)) => current_uid != *incoming_uid,
-            _ => false,
         }
     }
 

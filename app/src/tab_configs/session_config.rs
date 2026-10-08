@@ -11,38 +11,11 @@ use super::tab_config::{
 use crate::app_state::{BranchSnapshot, LeafContents, LeafSnapshot, PaneNodeSnapshot};
 use crate::launch_configs::launch_config::SplitDirection;
 use crate::themes::theme::AnsiColorIdentifier;
-use crate::ui_components::icons::Icon;
-
-/// The type of session the user wants to start.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SessionType {
-    Terminal,
-    Oz,
-}
-
-impl SessionType {
-    /// The icon to display for this session type.
-    pub(crate) fn icon(&self) -> Icon {
-        match self {
-            SessionType::Terminal => Icon::Terminal,
-            SessionType::Oz => Icon::Agent,
-        }
-    }
-
-    /// Short label for the session type pill in the modal.
-    pub(crate) fn pill_label(&self) -> &'static str {
-        match self {
-            SessionType::Terminal => "Terminal",
-            SessionType::Oz => "Warp Agent",
-        }
-    }
-}
 
 /// The user's selections from the session config modal.
 ///
 /// This is the modal's output — the caller decides what to do with it.
 pub struct SessionConfigSelection {
-    pub session_type: SessionType,
     pub directory: PathBuf,
     pub enable_worktree: bool,
     pub autogenerate_worktree_branch_name: bool,
@@ -81,7 +54,6 @@ fn config_name(directory: &Path, enable_worktree: bool) -> String {
 /// that can be either rendered directly (via `render_tab_config`) or
 /// serialized to disk (via `write_tab_config`).
 pub fn build_tab_config(
-    session_type: &SessionType,
     directory: &Path,
     enable_worktree: bool,
     autogenerate_worktree_branch_name: bool,
@@ -119,18 +91,13 @@ pub fn build_tab_config(
         }
     }
 
-    let pane_type = match session_type {
-        SessionType::Oz => TabConfigPaneType::Agent,
-        SessionType::Terminal => TabConfigPaneType::Terminal,
-    };
-
     TabConfig {
         name: config_name(directory, enable_worktree),
         title,
         color: None,
         panes: vec![TabConfigPaneNode {
             id: "main".to_string(),
-            pane_type: Some(pane_type),
+            pane_type: Some(TabConfigPaneType::Terminal),
             split: None,
             children: None,
             is_focused: None,
@@ -254,23 +221,15 @@ fn snapshot_to_flat_panes(
             *counter += 1;
             let my_id = format!("p{counter}");
 
-            let (directory, pane_type) = match contents {
-                LeafContents::Terminal(terminal) => {
-                    // If the agent view was open in fullscreen, treat as an Agent pane.
-                    let pane_type = if terminal.active_conversation_id.is_some() {
-                        TabConfigPaneType::Agent
-                    } else {
-                        TabConfigPaneType::Terminal
-                    };
-                    (terminal.cwd.clone(), pane_type)
-                }
+            let directory = match contents {
+                LeafContents::Terminal(terminal) => terminal.cwd.clone(),
                 // Non-terminal panes become empty terminal panes to preserve layout.
-                _ => (None, TabConfigPaneType::Terminal),
+                _ => None,
             };
 
             panes.push(TabConfigPaneNode {
                 id: my_id.clone(),
-                pane_type: Some(pane_type),
+                pane_type: Some(TabConfigPaneType::Terminal),
                 split: None,
                 children: None,
                 is_focused: if *is_focused { Some(true) } else { None },

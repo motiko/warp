@@ -1,0 +1,22 @@
+[package]
+name = "ai_config"
+version = "0.1.0"
+edition = "2024"
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+hex.workspace = true
+indexmap = { version = "2.0.2", features = ["serde"] }
+log.workspace = true
+schemars = "1"
+serde.workspace = true
+serde_json.workspace = true
+settings_value.workspace = true
+sha2 = "0.10.8"
+url.workspace = true
+uuid.workspace = true
+warp_errors.workspace = true
+warpui_core.workspace = true
+warpui_extras = { workspace = true, features = ["default"] }

@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 use string_offset::CharOffset;
-use warp_core::features::FeatureFlag;
 use warp_core::settings::Setting;
 use warp_errors::report_error;
 use warpui::color::ColorU;
@@ -29,8 +28,7 @@ use super::command_parser::{
 };
 use super::workflow::Argument;
 use super::workflow_view::env_var_selector::{EnvVarSelector, EnvVarSelectorEvent};
-use super::{AIWorkflowOrigin, CloudWorkflow};
-use crate::ai::blocklist::ai_brand_color;
+use super::CloudWorkflow;
 use crate::appearance::Appearance;
 use crate::cloud_object::CloudObjectMetadataExt;
 use crate::cloud_object::model::actions::{ObjectActionType, ObjectActions};
@@ -128,7 +126,7 @@ pub struct WorkflowsMoreInfoView {
     /// View for selecting environment variables to apply to the workflow.
     ///
     /// This is `None` for AI workflows.
-    environment_variables_dropdown: Option<ViewHandle<EnvVarSelector>>,
+    environment_variables_dropdown: ViewHandle<EnvVarSelector>,
 
     scroll_state: ClippedScrollStateHandle,
 }
@@ -159,19 +157,15 @@ impl WorkflowsMoreInfoView {
             ..
         } = compute_workflow_display_data(workflow.as_workflow());
 
-        let environment_variables_dropdown = (!workflow.as_workflow().is_agent_mode_workflow())
-            .then(|| {
-                let dropdown = ctx.add_typed_action_view(|ctx| {
-                    let mut dropdown = EnvVarSelector::new(ctx);
-                    dropdown.set_orientation(FilterableDropdownOrientation::Up, ctx);
-                    dropdown.set_width(ENV_VAR_DROPDOWN_WIDTH, ctx);
-                    dropdown
-                });
-                ctx.subscribe_to_view(&dropdown, |me, _, event, ctx| {
-                    me.handle_env_var_selector_event(event, ctx);
-                });
-                dropdown
-            });
+        let environment_variables_dropdown = ctx.add_typed_action_view(|ctx| {
+            let mut dropdown = EnvVarSelector::new(ctx);
+            dropdown.set_orientation(FilterableDropdownOrientation::Up, ctx);
+            dropdown.set_width(ENV_VAR_DROPDOWN_WIDTH, ctx);
+            dropdown
+        });
+        ctx.subscribe_to_view(&environment_variables_dropdown, |me, _, event, ctx| {
+            me.handle_env_var_selector_event(event, ctx);
+        });
 
         Self {
             workflow,
@@ -208,11 +202,10 @@ impl WorkflowsMoreInfoView {
         env_vars_id: Option<SyncId>,
         ctx: &mut ViewContext<Self>,
     ) {
-        if let Some(dropdown) = self.environment_variables_dropdown.as_ref() {
-            dropdown.update(ctx, |dropdown, ctx| {
+        self.environment_variables_dropdown
+            .update(ctx, |dropdown, ctx| {
                 dropdown.set_selected_env_vars(env_vars_id, ctx)
             });
-        }
     }
 
     fn handle_env_var_selector_event(
@@ -251,15 +244,10 @@ impl WorkflowsMoreInfoView {
         cloud_workflow: &CloudWorkflow,
         appearance: &Appearance,
     ) -> Box<dyn Element> {
-        let label = if cloud_workflow.model().data.is_agent_mode_workflow() {
-            "Edit prompt"
-        } else {
-            "Edit workflow"
-        };
         let workflow = cloud_workflow.clone();
         render_hoverable_card_button(
             icons::Icon::Rename,
-            Some(label.to_owned()),
+            Some("Edit workflow".to_owned()),
             self.button_mouse_states.edit_cloud_workflow.clone(),
             move |ctx: &mut warpui::EventContext<'_>, _, _| {
                 ctx.dispatch_typed_action(TerminalAction::OpenWorkflowModalWithCloudWorkflow(
@@ -346,11 +334,7 @@ impl WorkflowsMoreInfoView {
             .ui_builder()
             .wrappable_text(title_string, matches!(wrap_text, WrapText::Yes))
             .with_style(UiComponentStyles {
-                font_family_id: Some(if self.workflow.as_workflow().is_agent_mode_workflow() {
-                    appearance.ui_font_family()
-                } else {
-                    appearance.monospace_font_family()
-                }),
+                font_family_id: Some(appearance.monospace_font_family()),
                 font_color: Some(
                     appearance
                         .theme()
@@ -540,7 +524,7 @@ impl WorkflowsMoreInfoView {
             Some("Save as workflow".to_string()),
             self.button_mouse_states.save_as_workflow.clone(),
             move |ctx, _, _| {
-                ctx.dispatch_typed_action(TerminalAction::OpenWorkflowModalForAIWorkflow(
+                ctx.dispatch_typed_action(TerminalAction::OpenWorkflowModalForGeneratedWorkflow(
                     workflow.clone(),
                 ));
             },
@@ -584,7 +568,7 @@ impl WorkflowsMoreInfoView {
         .with_margin_right(ENV_VAR_HORIZONTAL_MARGIN)
         .finish();
 
-        let environment_variables_dropdown = self.environment_variables_dropdown.as_ref()?;
+        let environment_variables_dropdown = &self.environment_variables_dropdown;
         let dropdown_element = if environment_variables_dropdown.as_ref(app).has_env_vars(app) {
             ChildView::new(environment_variables_dropdown).finish()
         } else {
@@ -713,7 +697,7 @@ impl WorkflowsMoreInfoView {
                 let edit_button = self.render_edit_button(cloud_workflow, appearance);
                 row_content.add_children([edit_button, collapse_button, close_button]);
             }
-            WorkflowType::AIGenerated { .. } => {
+            WorkflowType::AIGenerated(_) => {
                 let save_as_workflow_button = self.render_save_workflow_button(appearance);
                 row_content.add_children([save_as_workflow_button, collapse_button, close_button]);
             }
@@ -796,17 +780,8 @@ impl WorkflowsMoreInfoView {
     fn render_content(&self, appearance: &Appearance) -> Box<dyn Element> {
         let selected_argument = self.selected_workflow_state.currently_selected_argument;
 
-        let (font_family, font_size) = if self.workflow.as_workflow().is_agent_mode_workflow() {
-            (
-                appearance.ui_font_family(),
-                appearance.monospace_font_size(),
-            )
-        } else {
-            (
-                appearance.monospace_font_family(),
-                appearance.monospace_font_size() * 0.85,
-            )
-        };
+        let font_family = appearance.monospace_font_family();
+        let font_size = appearance.monospace_font_size() * 0.85;
 
         let mut content_text = appearance
             .ui_builder()
@@ -851,8 +826,7 @@ impl WorkflowsMoreInfoView {
         content_text.build().finish()
     }
 
-    /// Renders the "content" of the workflow (command for Workflow::Command, query for Workflow::AgentMode)
-    /// with its interleaved arguments.
+    /// Renders the command of the workflow with its interleaved arguments.
     fn render_content_and_arguments(&self, appearance: &Appearance) -> Box<dyn Element> {
         let content = self.render_content(appearance);
 
@@ -909,31 +883,14 @@ impl WorkflowsMoreInfoView {
         appearance: &Appearance,
     ) -> Box<dyn Element> {
         match &self.workflow {
-            WorkflowType::AIGenerated {
-                workflow,
-                origin: source,
-            } => {
-                let icon = if FeatureFlag::AgentMode.is_enabled() {
-                    match source {
-                        AIWorkflowOrigin::AgentMode => {
-                            Icon::new(icons::Icon::Prompt.into(), appearance.theme().accent())
-                                .finish()
-                        }
-                        _ => Icon::new(
-                            icons::Icon::Prompt.into(),
-                            ai_brand_color(appearance.theme()),
-                        )
-                        .finish(),
-                    }
-                } else {
-                    Icon::new(
-                        icons::Icon::AiAssistant.into(),
-                        appearance
-                            .theme()
-                            .main_text_color(appearance.theme().background()),
-                    )
-                    .finish()
-                };
+            WorkflowType::AIGenerated(workflow) => {
+                let icon = Icon::new(
+                    icons::Icon::AiAssistant.into(),
+                    appearance
+                        .theme()
+                        .main_text_color(appearance.theme().background()),
+                )
+                .finish();
 
                 let ai_icon = Container::new(
                     ConstrainedBox::new(icon)

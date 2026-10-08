@@ -154,16 +154,11 @@ fn every_host_scoped_request_has_a_response_disposition() {
             M::DiscardFiles(_) => "host_response::discard_files_result",
             // Richer responses parsed at the manager call site.
             M::ReadFileContext(_) => "manager::read_file_context",
-            M::GetFragmentMetadataFromHash(_) => "manager::get_fragment_metadata_from_hash",
             M::GetBranches(_) => "manager::get_branches",
-            M::IndexCodebase(_) => "manager::index_codebase",
-            M::DropCodebaseIndex(_) => "manager::drop_codebase_index",
-            M::ResyncCodebase(_) => "manager::resync_codebase",
             M::ResolveConflict(_) => "manager::resolve_conflict",
             M::GitCommitChain(_) => "manager::commit_chain",
             M::GitPush(_) => "manager::push",
             M::GitCreatePr(_) => "manager::create_pr",
-            M::GitGenerateCommitMessage(_) => "manager::generate_commit_message",
             M::GitGetCommittedBranchFiles(_) => "manager::get_committed_branch_files",
             M::RipgrepSearch(_) => "manager::start_ripgrep_search",
         }

@@ -30,12 +30,11 @@ use warpui::{
     AppContext, Entity, SingletonEntity, TypedActionView, View, ViewContext, WeakViewHandle,
 };
 
-use crate::ai::blocklist::{AIQueryHistory, AIQueryHistoryOutputStatus, render_ai_agent_mode_icon};
 use crate::appearance::Appearance;
 use crate::terminal::HistoryEntry;
 use crate::terminal::history::LinkedWorkflowData;
 use crate::terminal::model::session::SessionId;
-use crate::terminal::rich_history::{render_ai_query_rich_history, render_rich_history};
+use crate::terminal::rich_history::render_rich_history;
 use crate::ui_components::icons::Icon as UIComponentsIcon;
 use crate::util::time_format::format_approx_duration_from_now;
 
@@ -47,7 +46,6 @@ pub enum DetailContent {
     RichHistory(Box<HistoryEntry>),
     /// A details panel for a simple string.
     Description(String),
-    AIQueryHistory(Box<AIQueryHistoryEntryDetails>),
 }
 
 impl From<HistoryEntry> for DetailContent {
@@ -76,8 +74,6 @@ pub struct Item {
     icon_type: Option<ItemIconType>,
     /// How precisely this items matches the search term.
     match_type: MatchType,
-    /// True if this Item represents a query sent to an AI model.
-    is_ai_query: bool,
     /// True if this Item represents a history item.
     is_history_item: bool,
 }
@@ -94,7 +90,6 @@ impl Item {
             match_type: MatchType::Prefix {
                 is_case_sensitive: true,
             },
-            is_ai_query: false,
             is_history_item: false,
         }
     }
@@ -120,10 +115,6 @@ impl Item {
             _ => None,
         }
     }
-
-    pub fn is_ai_query(&self) -> bool {
-        self.is_ai_query
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -134,7 +125,6 @@ pub enum ItemIconType {
     File,
     Folder,
     GitBranch,
-    AIQuery,
 }
 
 impl ItemIconType {
@@ -146,7 +136,6 @@ impl ItemIconType {
             ItemIconType::File => FILE_ICON_PATH,
             ItemIconType::Folder => FOLDER_ICON_PATH,
             ItemIconType::GitBranch => GIT_BRANCH_ICON_PATH,
-            ItemIconType::AIQuery => UIComponentsIcon::AgentMode.into(),
         }
     }
 
@@ -294,7 +283,6 @@ fn items_from_prepared_suggestions(
             matches: Some(suggestion.matching_indices),
             icon_type: Some(icon_type(&suggestion.suggestion)),
             match_type: suggestion.match_type,
-            is_ai_query: false,
             is_history_item: false,
         })
         .collect::<Vec<_>>()
@@ -432,8 +420,7 @@ impl InputSuggestions {
                                 matches: Some(result.matched_indices),
                                 icon_type: None,
                                 match_type: MatchType::Fuzzy,
-                                is_ai_query: false,
-                                is_history_item: false,
+                                                    is_history_item: false,
                             },
                         )
                     })
@@ -459,8 +446,7 @@ impl InputSuggestions {
                 matches: None,
                 icon_type: None,
                 match_type: MatchType::Other,
-                is_ai_query: false,
-                is_history_item: false,
+                    is_history_item: false,
             })
             .collect();
 
@@ -489,11 +475,10 @@ impl InputSuggestions {
                         display: None,
                         details: entry.details(),
                         matches: Some((0..trimmed_prefix.len()).collect()),
-                        icon_type: entry.icon_type(),
+                        icon_type: None,
                         match_type: MatchType::Prefix {
                             is_case_sensitive: true,
                         },
-                        is_ai_query: entry.is_ai_query(),
                         is_history_item: true,
                     })
                 } else {
@@ -568,10 +553,6 @@ impl InputSuggestions {
                     .start_ts
                     .map(|ts| format!("Last ran {}", format_approx_duration_from_now(ts))),
                 DetailContent::Description(desc) => Some(desc.clone()),
-                DetailContent::AIQueryHistory(entry) => Some(format!(
-                    "Last ran {}",
-                    format_approx_duration_from_now(entry.start_time)
-                )),
             })
     }
 
@@ -707,11 +688,6 @@ impl InputSuggestions {
             DetailContent::Description(description) => {
                 self.render_descriptions_box(item.text.clone(), description.clone(), appearance)
             }
-            DetailContent::AIQueryHistory(entry) => {
-                ConstrainedBox::new(render_ai_query_rich_history(entry, ctx))
-                    .with_max_width(HISTORY_DETAILS_PANEL_WIDTH)
-                    .finish()
-            }
         };
 
         Some(details)
@@ -789,39 +765,23 @@ impl InputSuggestions {
                                 Flex::row().with_cross_axis_alignment(CrossAxisAlignment::End);
 
                             if let Some(icon_type) = item.icon_type.as_ref() {
-                                let icon_container = if let ItemIconType::AIQuery = icon_type {
-                                    Container::new(render_ai_agent_mode_icon(
-                                        app,
-                                        if is_selected {
-                                            theme.background()
-                                        } else {
-                                            AnsiColorIdentifier::Yellow
-                                                .to_ansi_color(&theme.terminal_colors().normal)
-                                                .into()
-                                        },
-                                    ))
-                                    .with_padding_right(6. * (em_width / 6.))
-                                    .with_padding_left(icon_type.left_padding())
-                                    .finish()
-                                } else {
-                                    let icon_width = font_size
-                                        * icon_type.width_font_size_multiplication_factor();
-                                    Container::new(
-                                        ConstrainedBox::new(
-                                            Icon::new(
-                                                icon_type.icon_path(),
-                                                theme.main_text_color(background_color),
-                                            )
-                                            .finish(),
+                                let icon_width =
+                                    font_size * icon_type.width_font_size_multiplication_factor();
+                                let icon_container = Container::new(
+                                    ConstrainedBox::new(
+                                        Icon::new(
+                                            icon_type.icon_path(),
+                                            theme.main_text_color(background_color),
                                         )
-                                        .with_width(icon_width)
-                                        .with_height(icon_width)
                                         .finish(),
                                     )
-                                    .with_padding_left(icon_type.left_padding())
-                                    .with_padding_right(icon_type.right_padding())
-                                    .finish()
-                                };
+                                    .with_width(icon_width)
+                                    .with_height(icon_width)
+                                    .finish(),
+                                )
+                                .with_padding_left(icon_type.left_padding())
+                                .with_padding_right(icon_type.right_padding())
+                                .finish();
 
                                 row.add_child(icon_container);
                             }
@@ -886,8 +846,7 @@ impl InputSuggestions {
                                 let ignore_button_mouse_state =
                                     input_suggestions.ignore_button_handles[index].clone();
 
-                                // This matches the behavior of `render_ai_agent_mode_icon`; the heights of both the AM
-                                // icon and the X button need to be the same to avoid jittering in the history menu.
+                                // The X button is as tall as a text line to avoid jittering in the history menu.
                                 let line_height = app.font_cache().line_height(
                                     appearance.monospace_font_size(),
                                     appearance.line_height_ratio(),
@@ -1150,30 +1109,21 @@ impl PartialOrd for HistoryOrder {
     }
 }
 
-/// Types of input that can be suggested.
+/// A history command that can be suggested.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum HistoryInputSuggestion<'a> {
-    Command { entry: &'a HistoryEntry },
-    AIQuery { entry: AIQueryHistory },
+pub(crate) struct HistoryInputSuggestion<'a> {
+    pub entry: &'a HistoryEntry,
 }
 
 impl HistoryInputSuggestion<'_> {
     /// The timestamp this history entry was created. Useful for sorting.
     pub fn start_time(&self) -> DateTime<Local> {
-        match self {
-            HistoryInputSuggestion::Command { entry } => {
-                entry.start_ts.unwrap_or(DateTime::default())
-            }
-            HistoryInputSuggestion::AIQuery { entry } => entry.start_time,
-        }
+        self.entry.start_ts.unwrap_or(DateTime::default())
     }
 
     /// Text to display for the suggestion.
     pub fn text(&self) -> &str {
-        match self {
-            HistoryInputSuggestion::Command { entry } => entry.command.as_str(),
-            HistoryInputSuggestion::AIQuery { entry } => &entry.query_text,
-        }
+        self.entry.command.as_str()
     }
 
     pub fn normalized_text(&self) -> &str {
@@ -1182,30 +1132,9 @@ impl HistoryInputSuggestion<'_> {
 
     /// Which type of detail panel to show for this suggestion, if any.
     fn details(&self) -> Option<DetailContent> {
-        match self {
-            HistoryInputSuggestion::Command { entry } => {
-                entry.has_metadata().then(|| ((*entry).clone()).into())
-            }
-            HistoryInputSuggestion::AIQuery { entry } => Some(DetailContent::AIQueryHistory(
-                Box::new(AIQueryHistoryEntryDetails::from(entry)),
-            )),
-        }
-    }
-
-    /// Which input suggestion icon to use for this suggestion, if any.
-    fn icon_type(&self) -> Option<ItemIconType> {
-        match self {
-            HistoryInputSuggestion::Command { .. } => None,
-            HistoryInputSuggestion::AIQuery { .. } => Some(ItemIconType::AIQuery),
-        }
-    }
-
-    /// True if this history item is for an AI query.
-    pub(crate) fn is_ai_query(&self) -> bool {
-        match self {
-            HistoryInputSuggestion::Command { .. } => false,
-            HistoryInputSuggestion::AIQuery { .. } => true,
-        }
+        self.entry
+            .has_metadata()
+            .then(|| self.entry.clone().into())
     }
 
     pub fn cmp(
@@ -1229,46 +1158,19 @@ impl HistoryInputSuggestion<'_> {
         current_session_id: Option<SessionId>,
         _all_live_session_ids: &HashSet<SessionId>,
     ) -> HistoryOrder {
-        match self {
-            HistoryInputSuggestion::Command { entry } => {
-                // Restored blocks are always treated as CurrentSession
-                if entry.is_for_restored_block {
-                    return HistoryOrder::CurrentSession;
-                }
-                // Check if this entry belongs to the current session
-                if let (Some(entry_session_id), Some(current_session_id)) =
-                    (entry.session_id, current_session_id)
-                    && entry_session_id == current_session_id
-                {
-                    return HistoryOrder::CurrentSession;
-                }
-                // Other live session, or past session
-                HistoryOrder::DifferentSession
-            }
-            HistoryInputSuggestion::AIQuery { entry } => entry.history_order,
+        // Restored blocks are always treated as CurrentSession
+        if self.entry.is_for_restored_block {
+            return HistoryOrder::CurrentSession;
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct AIQueryHistoryEntryDetails {
-    /// The time the input was sent.
-    pub(crate) start_time: DateTime<Local>,
-
-    /// The status of the output streaming from the AI API.
-    pub(crate) output_status: AIQueryHistoryOutputStatus,
-
-    /// The working directory when the AI query was submitted.
-    pub(crate) working_directory: Option<String>,
-}
-
-impl From<&AIQueryHistory> for AIQueryHistoryEntryDetails {
-    fn from(value: &AIQueryHistory) -> Self {
-        Self {
-            start_time: value.start_time,
-            output_status: value.output_status.clone(),
-            working_directory: value.working_directory.clone(),
+        // Check if this entry belongs to the current session
+        if let (Some(entry_session_id), Some(current_session_id)) =
+            (self.entry.session_id, current_session_id)
+            && entry_session_id == current_session_id
+        {
+            return HistoryOrder::CurrentSession;
         }
+        // Other live session, or past session
+        HistoryOrder::DifferentSession
     }
 }
 

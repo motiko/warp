@@ -61,21 +61,21 @@ use crate::search::command_search::settings::{
     CommandSearchSettings, ShowGlobalWorkflowsInUniversalSearch,
 };
 use crate::server::telemetry::TelemetryEvent;
-use crate::settings::ai::AISettings;
 use crate::settings::native_preference::{NativePreferenceSettings, UserNativePreference};
 use crate::settings::{
-    AISettingsChangedEvent, AliasExpansionEnabled, AliasExpansionSettings, AppEditorSettings,
-    AtContextMenuInTerminalMode, AutocompleteSymbols, AutosuggestionKeybindingHint,
+    AliasExpansionEnabled, AliasExpansionSettings, AppEditorSettings,
+    AutocompleteSymbols, AutosuggestionKeybindingHint,
     ChangelogSettings, CloudPreferencesSettings, CodeSettings, CommandCorrections,
     CompletionsOpenWhileTyping, CopyOnSelect, CtrlTabBehavior, DEFAULT_QUAKE_MODE_SIZE_PERCENTAGES,
-    DefaultSessionMode, EnableSlashCommandsInTerminal, ErrorUnderliningEnabled, ExtraMetaKeys,
+    DefaultSessionMode, DefaultSessionSettings, DefaultSessionSettingsChangedEvent,
+    EnableSlashCommandsInTerminal, ErrorUnderliningEnabled, ExtraMetaKeys,
     GPUSettings, GlobalHotkeyMode, InputSettings, InputSettingsChangedEvent,
     LinuxSelectionClipboard, MiddleClickPasteEnabled, MouseScrollMultiplier,
-    NativeShellCompletionsEnabled, OutlineCodebaseSymbolsForAtContextMenu, PreferLowPowerGPU,
+    NativeShellCompletionsEnabled, PreferLowPowerGPU,
     PreferredGraphicsBackend, QUAKE_WINDOW_AUTOHIDE_SUPPORTED, QuakeModeSettings,
     RightClickBehavior, RightClickBehaviorSetting, ScrollSettings, ScrollSettingsChangedEvent,
     SelectionSettings, SelectionSettingsChangedEvent, ShowAutosuggestionIgnoreButton,
-    ShowChangelogAfterUpdate, ShowTerminalInputMessageBar, SshSettings, SyntaxHighlighting,
+    ShowChangelogAfterUpdate, SshSettings, SyntaxHighlighting,
     TabBehavior, UserNativeRedirectPreference, VimModeEnabled, VimStatusBar,
     VimUnnamedSystemClipboard, WarpCompletionsEnabled,
 };
@@ -100,7 +100,7 @@ use crate::terminal::session_settings::{
 };
 use crate::terminal::settings::{
     AsyncFindEnabled, MaximumGridSize, Osc52ClipboardAccess, Osc52ClipboardAccessSetting,
-    ShowTerminalZeroStateBlock, TerminalSettings, TerminalSettingsChangedEvent, UseAudibleBell,
+    TerminalSettings, TerminalSettingsChangedEvent, UseAudibleBell,
 };
 use crate::terminal::{BlockListSettings, PreserveInputFocusOnBlockSelection, SnackbarEnabled};
 use crate::undo_close::UndoCloseSettings;
@@ -357,21 +357,6 @@ pub fn init_actions_from_parent_view<T: Action + Clone>(
     );
     toggle_binding_pairs.push(
         ToggleSettingActionPair::new(
-            "agent task completion notifications",
-            builder(SettingsAction::FeaturesPageToggle(
-                FeaturesPageAction::ToggleAgentTaskCompletedNotifications,
-            )),
-            &(context.to_owned() & id!(flags::NOTIFICATIONS_CONTEXT_FLAG)),
-            flags::AGENT_TASK_COMPLETED_NOTIFICATIONS_FLAG,
-        )
-        .is_supported_on_current_platform(
-            SessionSettings::as_ref(app)
-                .notifications
-                .is_supported_on_current_platform(),
-        ),
-    );
-    toggle_binding_pairs.push(
-        ToggleSettingActionPair::new(
             "needs-attention notifications",
             builder(SettingsAction::FeaturesPageToggle(
                 FeaturesPageAction::ToggleNeedsAttentionNotifications,
@@ -569,51 +554,6 @@ pub fn init_actions_from_parent_view<T: Action + Clone>(
         context,
         flags::SMART_SELECT_FLAG,
     ));
-    if FeatureFlag::AgentView.is_enabled() && AISettings::as_ref(app).is_any_ai_enabled(app) {
-        toggle_binding_pairs.push(
-            ToggleSettingActionPair::new(
-                "help block in new sessions",
-                builder(SettingsAction::FeaturesPageToggle(
-                    FeaturesPageAction::ToggleShowTerminalZeroStateBlock,
-                )),
-                context,
-                flags::SHOW_TERMINAL_ZERO_STATE_BLOCK_FLAG,
-            )
-            .is_supported_on_current_platform(
-                TerminalSettings::as_ref(app)
-                    .show_terminal_zero_state_block
-                    .is_supported_on_current_platform(),
-            ),
-        );
-    }
-
-    toggle_binding_pairs.push(
-        ToggleSettingActionPair::new(
-            "terminal input message line",
-            builder(SettingsAction::FeaturesPageToggle(
-                FeaturesPageAction::ToggleShowTerminalInputMessageLine,
-            )),
-            context,
-            flags::SHOW_TERMINAL_INPUT_MESSAGE_LINE_FLAG,
-        )
-        .with_enabled(|| FeatureFlag::AgentView.is_enabled()),
-    );
-    toggle_binding_pairs.push(
-        ToggleSettingActionPair::new(
-            "'@' context menu in terminal mode",
-            builder(SettingsAction::FeaturesPageToggle(
-                FeaturesPageAction::ToggleAtContextMenuInTerminalMode,
-            )),
-            context,
-            flags::AT_CONTEXT_MENU_IN_TERMINAL_FLAG,
-        )
-        .is_supported_on_current_platform(
-            InputSettings::as_ref(app)
-                .at_context_menu_in_terminal_mode
-                .is_supported_on_current_platform(),
-        ),
-    );
-
     toggle_binding_pairs.push(ToggleSettingActionPair::new(
         "preserve input focus on block selection",
         builder(SettingsAction::FeaturesPageToggle(
@@ -623,40 +563,21 @@ pub fn init_actions_from_parent_view<T: Action + Clone>(
         flags::PRESERVE_INPUT_FOCUS_ON_BLOCK_SELECTION_FLAG,
     ));
 
-    if FeatureFlag::AgentView.is_enabled() && AISettings::as_ref(app).is_any_ai_enabled(app) {
-        toggle_binding_pairs.push(
-            ToggleSettingActionPair::new(
-                "slash commands in terminal mode",
-                builder(SettingsAction::FeaturesPageToggle(
-                    FeaturesPageAction::ToggleSlashCommandsInTerminalMode,
-                )),
-                context,
-                flags::SLASH_COMMANDS_IN_TERMINAL_FLAG,
-            )
-            .is_supported_on_current_platform(
-                InputSettings::as_ref(app)
-                    .enable_slash_commands_in_terminal
-                    .is_supported_on_current_platform(),
-            ),
-        );
-    }
-    if FeatureFlag::AIContextMenuCode.is_enabled() {
-        toggle_binding_pairs.push(
-            ToggleSettingActionPair::new(
-                "codebase symbols in the '@' context menu",
-                builder(SettingsAction::FeaturesPageToggle(
-                    FeaturesPageAction::ToggleOutlineCodebaseSymbolsForAtContextMenu,
-                )),
-                context,
-                flags::OUTLINE_CODEBASE_SYMBOLS_FOR_AT_CONTEXT_MENU_FLAG,
-            )
-            .is_supported_on_current_platform(
-                InputSettings::as_ref(app)
-                    .outline_codebase_symbols_for_at_context_menu
-                    .is_supported_on_current_platform(),
-            ),
-        );
-    }
+    toggle_binding_pairs.push(
+        ToggleSettingActionPair::new(
+            "slash commands in terminal mode",
+            builder(SettingsAction::FeaturesPageToggle(
+                FeaturesPageAction::ToggleSlashCommandsInTerminalMode,
+            )),
+            context,
+            flags::SLASH_COMMANDS_IN_TERMINAL_FLAG,
+        )
+        .is_supported_on_current_platform(
+            InputSettings::as_ref(app)
+                .enable_slash_commands_in_terminal
+                .is_supported_on_current_platform(),
+        ),
+    );
     toggle_binding_pairs.push(
         ToggleSettingActionPair::new(
             "global workflows in Command Search",
@@ -756,7 +677,6 @@ pub enum FeaturesPageAction {
     ToggleCodeAsDefaultEditor,
     ToggleShowInputHintText,
     ToggleUseAudibleBell,
-    ToggleShowTerminalZeroStateBlock,
     TogglePreferLowPowerGPU,
     ToggleVimMode,
     ToggleVimUnnamedSystemClipboard,
@@ -787,7 +707,6 @@ pub enum FeaturesPageAction {
     SetLongRunningNotificationThreshold,
     /// Legacy. To be combined with `ToggleNeedsAttentionNotifications` when desktop notifs are unflagged.
     TogglePasswordPromptNotifications,
-    ToggleAgentTaskCompletedNotifications,
     ToggleNeedsAttentionNotifications,
     ToggleNotificationSound,
     ToggleShowWarningBeforeQuitting,
@@ -813,11 +732,7 @@ pub enum FeaturesPageAction {
     ToggleForceX11,
     ToggleAutosuggestionKeybindingHint,
     ToggleShowAutosuggestionIgnoreButton,
-    ToggleAtContextMenuInTerminalMode,
     ToggleSlashCommandsInTerminalMode,
-    ToggleOutlineCodebaseSymbolsForAtContextMenu,
-    ToggleAutoOpenCodeReviewPane,
-    ToggleShowTerminalInputMessageLine,
     TogglePreserveInputFocusOnBlockSelection,
     MakeWarpDefaultTerminal,
 }
@@ -996,13 +911,6 @@ impl FeaturesPageAction {
                     value: to_string(*settings.show_hint_text),
                 }
             }
-            Self::ToggleShowTerminalInputMessageLine => {
-                let settings = InputSettings::as_ref(ctx);
-                TelemetryEvent::FeaturesPageAction {
-                    action: "ToggleShowTerminalInputMessageLine".to_string(),
-                    value: to_string(settings.is_terminal_input_message_bar_enabled()),
-                }
-            }
             Self::ActivationKeybindEditorClicked => TelemetryEvent::FeaturesPageAction {
                 action: "ActivationKeybindEditorClicked".to_string(),
                 value: String::new(),
@@ -1126,14 +1034,6 @@ impl FeaturesPageAction {
                     SessionSettings::as_ref(ctx)
                         .notifications
                         .is_password_prompt_enabled,
-                ),
-            },
-            Self::ToggleAgentTaskCompletedNotifications => TelemetryEvent::FeaturesPageAction {
-                action: "ToggleAgentTaskCompletedNotifications".to_string(),
-                value: to_string(
-                    SessionSettings::as_ref(ctx)
-                        .notifications
-                        .is_agent_task_completed_enabled,
                 ),
             },
             Self::ToggleNeedsAttentionNotifications => TelemetryEvent::FeaturesPageAction {
@@ -1276,10 +1176,6 @@ impl FeaturesPageAction {
                 action: "ToggleConfirmCloseSession".to_string(),
                 value: to_string(*SessionSettings::as_ref(ctx).should_confirm_close_session),
             },
-            Self::ToggleShowTerminalZeroStateBlock => TelemetryEvent::FeaturesPageAction {
-                action: "ToggleShowTerminalZeroStateBlock".to_string(),
-                value: to_string(*TerminalSettings::as_ref(ctx).show_terminal_zero_state_block),
-            },
             Self::ToggleShowChangelogAfterUpdate => {
                 let changelog_settings = ChangelogSettings::as_ref(ctx);
                 TelemetryEvent::FeaturesPageAction {
@@ -1303,14 +1199,6 @@ impl FeaturesPageAction {
                     value: to_string(setting),
                 }
             }
-            Self::ToggleAtContextMenuInTerminalMode => TelemetryEvent::FeaturesPageAction {
-                action: "ToggleAtContextMenuInTerminalMode".to_string(),
-                value: to_string(
-                    *InputSettings::as_ref(ctx)
-                        .at_context_menu_in_terminal_mode
-                        .value(),
-                ),
-            },
             Self::ToggleSlashCommandsInTerminalMode => TelemetryEvent::FeaturesPageAction {
                 action: "ToggleSlashCommandsInTerminalMode".to_string(),
                 value: to_string(
@@ -1319,25 +1207,9 @@ impl FeaturesPageAction {
                         .value(),
                 ),
             },
-            Self::ToggleOutlineCodebaseSymbolsForAtContextMenu => {
-                TelemetryEvent::FeaturesPageAction {
-                    action: "ToggleOutlineCodebaseSymbolsForAtContextMenu".to_string(),
-                    value: to_string(
-                        *InputSettings::as_ref(ctx)
-                            .outline_codebase_symbols_for_at_context_menu
-                            .value(),
-                    ),
-                }
-            }
             Self::MakeWarpDefaultTerminal => TelemetryEvent::FeaturesPageAction {
                 action: "MakeWarpDefaultTerminal".to_string(),
                 value: to_string(DefaultTerminal::as_ref(ctx).is_warp_default()),
-            },
-            Self::ToggleAutoOpenCodeReviewPane => TelemetryEvent::FeaturesPageAction {
-                action: "ToggleAutoOpenCodeReviewPane".to_string(),
-                value: to_string(
-                    *GeneralSettings::as_ref(ctx).auto_open_code_review_pane_on_first_agent_change,
-                ),
             },
             Self::TogglePreserveInputFocusOnBlockSelection => {
                 let settings = BlockListSettings::as_ref(ctx);
@@ -1367,8 +1239,7 @@ struct MouseStateHandles {
     quake_mode_width_height_reset: MouseStateHandle,
     quake_mode_pin_window_check: MouseStateHandle,
     long_running_notifications_checkbox: MouseStateHandle,
-    agent_task_completed_notifications_checkbox: MouseStateHandle,
-    agent_needs_attention_notifications_checkbox: MouseStateHandle,
+    needs_attention_notifications_checkbox: MouseStateHandle,
     #[cfg(target_os = "macos")]
     notification_sound_checkbox: MouseStateHandle,
     change_keybinding: MouseStateHandle,
@@ -1781,29 +1652,13 @@ impl TypedActionView for FeaturesPageView {
                 });
                 ctx.notify();
             }
-            ToggleAgentTaskCompletedNotifications => {
-                let current_settings = SessionSettings::as_ref(ctx).notifications.value().clone();
-                let is_agent_task_completed_enabled =
-                    !current_settings.is_agent_task_completed_enabled;
-
-                SessionSettings::handle(ctx).update(ctx, |settings, ctx| {
-                    let new_settings = NotificationsSettings {
-                        is_agent_task_completed_enabled,
-                        ..current_settings
-                    };
-                    if let Err(e) = settings.notifications.set_value(new_settings, ctx) {
-                        report_error!(e.context("Error persisting notifications setting"));
-                    }
-                });
-                ctx.notify();
-            }
             ToggleNeedsAttentionNotifications => {
                 let current_settings = SessionSettings::as_ref(ctx).notifications.value().clone();
-                let is_agent_needs_attention_enabled = !current_settings.is_needs_attention_enabled;
+                let is_needs_attention_enabled = !current_settings.is_needs_attention_enabled;
 
                 SessionSettings::handle(ctx).update(ctx, |settings, ctx| {
                     let new_settings = NotificationsSettings {
-                        is_needs_attention_enabled: is_agent_needs_attention_enabled,
+                        is_needs_attention_enabled,
                         ..current_settings
                     };
                     if let Err(e) = settings.notifications.set_value(new_settings, ctx) {
@@ -1900,15 +1755,6 @@ impl TypedActionView for FeaturesPageView {
                     report_if_error!(input_settings.show_hint_text.toggle_and_save_value(ctx));
                 });
             }
-            ToggleShowTerminalInputMessageLine => {
-                InputSettings::handle(ctx).update(ctx, |input_settings, ctx| {
-                    report_if_error!(
-                        input_settings
-                            .show_terminal_input_message_bar
-                            .toggle_and_save_value(ctx)
-                    );
-                });
-            }
             ToggleLinkTooltip => {
                 GeneralSettings::handle(ctx).update(ctx, |settings, ctx| {
                     report_if_error!(settings.link_tooltip.toggle_and_save_value(ctx));
@@ -1995,14 +1841,14 @@ impl TypedActionView for FeaturesPageView {
             }
             SetDefaultSessionMode(mode) => self.set_default_session_mode(mode, ctx),
             SetDefaultTabConfig(path) => {
-                AISettings::handle(ctx).update(ctx, |ai_settings, ctx| {
+                DefaultSessionSettings::handle(ctx).update(ctx, |settings, ctx| {
                     report_if_error!(
-                        ai_settings
+                        settings
                             .default_session_mode_internal
                             .set_value(DefaultSessionMode::TabConfig, ctx)
                     );
                     report_if_error!(
-                        ai_settings
+                        settings
                             .default_tab_config_path
                             .set_value(path.clone(), ctx)
                     );
@@ -2075,15 +1921,6 @@ impl TypedActionView for FeaturesPageView {
                     ctx.notify();
                 })
             }
-            ToggleShowTerminalZeroStateBlock => {
-                TerminalSettings::handle(ctx).update(ctx, |terminal_settings, ctx| {
-                    report_if_error!(
-                        terminal_settings
-                            .show_terminal_zero_state_block
-                            .toggle_and_save_value(ctx)
-                    );
-                });
-            }
             ToggleShowChangelogAfterUpdate => {
                 ChangelogSettings::handle(ctx).update(ctx, |changelog_settings, ctx| {
                     report_if_error!(
@@ -2125,15 +1962,6 @@ impl TypedActionView for FeaturesPageView {
             ToggleLoginItem => GeneralSettings::handle(ctx).update(ctx, |settings, ctx| {
                 report_if_error!(settings.add_app_as_login_item.toggle_and_save_value(ctx));
             }),
-            ToggleAtContextMenuInTerminalMode => {
-                InputSettings::handle(ctx).update(ctx, |input_settings, ctx| {
-                    report_if_error!(
-                        input_settings
-                            .at_context_menu_in_terminal_mode
-                            .toggle_and_save_value(ctx)
-                    );
-                });
-            }
             ToggleSlashCommandsInTerminalMode => {
                 InputSettings::handle(ctx).update(ctx, |input_settings, ctx| {
                     report_if_error!(
@@ -2142,24 +1970,6 @@ impl TypedActionView for FeaturesPageView {
                             .toggle_and_save_value(ctx)
                     );
                 });
-            }
-            ToggleOutlineCodebaseSymbolsForAtContextMenu => {
-                InputSettings::handle(ctx).update(ctx, |input_settings, ctx| {
-                    report_if_error!(
-                        input_settings
-                            .outline_codebase_symbols_for_at_context_menu
-                            .toggle_and_save_value(ctx)
-                    );
-                });
-            }
-            ToggleAutoOpenCodeReviewPane => {
-                GeneralSettings::handle(ctx).update(ctx, |settings, ctx| {
-                    report_if_error!(
-                        settings
-                            .auto_open_code_review_pane_on_first_agent_change
-                            .toggle_and_save_value(ctx)
-                    );
-                })
             }
             TogglePreserveInputFocusOnBlockSelection => {
                 BlockListSettings::handle(ctx).update(ctx, |blocklist_settings, ctx| {
@@ -2331,11 +2141,11 @@ impl FeaturesPageView {
             ctx.notify();
         });
 
-        ctx.subscribe_to_model(&AISettings::handle(ctx), |me, _, event, ctx| {
+        ctx.subscribe_to_model(&DefaultSessionSettings::handle(ctx), |me, _, event, ctx| {
             if matches!(
                 event,
-                AISettingsChangedEvent::IsAnyAIEnabled { .. }
-                    | AISettingsChangedEvent::DefaultSessionMode { .. }
+                DefaultSessionSettingsChangedEvent::DefaultSessionMode { .. }
+                    | DefaultSessionSettingsChangedEvent::DefaultTabConfigPath { .. }
             ) {
                 Self::update_default_session_mode_dropdown(
                     me.default_session_mode_dropdown.clone(),
@@ -2893,32 +2703,10 @@ impl FeaturesPageView {
         }
 
         if input_settings
-            .at_context_menu_in_terminal_mode
-            .is_supported_on_current_platform()
-        {
-            editor_widgets.push(Box::new(AtContextMenuInTerminalModeWidget::default()));
-        }
-
-        if FeatureFlag::AgentView.is_enabled()
-            && input_settings
-                .enable_slash_commands_in_terminal
+            .enable_slash_commands_in_terminal
                 .is_supported_on_current_platform()
         {
             editor_widgets.push(Box::new(SlashCommandsInTerminalModeWidget::default()));
-        }
-
-        if input_settings
-            .outline_codebase_symbols_for_at_context_menu
-            .is_supported_on_current_platform()
-            && FeatureFlag::AIContextMenuCode.is_enabled()
-        {
-            editor_widgets.push(Box::new(
-                OutlineCodebaseSymbolsForAtContextMenuWidget::default(),
-            ));
-        }
-
-        if FeatureFlag::AgentView.is_enabled() {
-            editor_widgets.push(Box::new(ShowTerminalInputMessageLineWidget::default()));
         }
 
         editor_widgets.push(Box::new(TabKeyBehaviorWidget::default()));
@@ -2959,10 +2747,6 @@ impl FeaturesPageView {
             .is_supported_on_current_platform()
         {
             terminal_widgets.push(Box::new(AudibleBellWidget::default()));
-        }
-
-        if FeatureFlag::AgentView.is_enabled() {
-            terminal_widgets.push(Box::new(ShowTerminalZeroStateBlockWidget::default()));
         }
 
         terminal_widgets.push(Box::new(SmartSelectWidget::default()));
@@ -3634,17 +3418,9 @@ impl FeaturesPageView {
         dropdown.update(
             ctx,
             |dropdown: &mut FilterableDropdown<FeaturesPageAction>, ctx| {
-                let is_ai_enabled = AISettings::as_ref(ctx).is_any_ai_enabled(ctx);
-
-                if is_ai_enabled {
-                    dropdown.set_enabled(ctx);
-                } else {
-                    dropdown.set_disabled(ctx);
-                }
-
-                let ai_settings = AISettings::as_ref(ctx);
-                let current_mode = ai_settings.default_session_mode(ctx);
-                let current_tab_config_path = ai_settings.default_tab_config_path().to_string();
+                let settings = DefaultSessionSettings::as_ref(ctx);
+                let current_mode = settings.default_session_mode();
+                let current_tab_config_path = settings.default_tab_config_path().to_string();
 
                 // Build items: built-in modes (skip TabConfig since configs are listed individually,
                 // and skip DockerSandbox when its feature flag is disabled).
@@ -3700,9 +3476,9 @@ impl FeaturesPageView {
         value: &DefaultSessionMode,
         ctx: &mut ViewContext<Self>,
     ) {
-        AISettings::handle(ctx).update(ctx, |ai_settings, ctx| {
+        DefaultSessionSettings::handle(ctx).update(ctx, |settings, ctx| {
             report_if_error!(
-                ai_settings
+                settings
                     .default_session_mode_internal
                     .set_value(*value, ctx)
             );
@@ -5186,27 +4962,16 @@ impl SettingsWidget for DesktopNotificationsWidget {
             NotificationsMode::Enabled
         ) {
             let toggles = vec![
-                view.render_notification_toggle(
-                    session_settings
-                        .notifications
-                        .is_agent_task_completed_enabled,
-                    "Notify when an agent completes a task",
-                    FeaturesPageAction::ToggleAgentTaskCompletedNotifications,
-                    view.button_mouse_states
-                        .agent_task_completed_notifications_checkbox
-                        .clone(),
-                    appearance,
-                ),
                 view.render_long_running_notifications_setting(
                     &session_settings.notifications,
                     appearance,
                 ),
                 view.render_notification_toggle(
                     session_settings.notifications.is_needs_attention_enabled,
-                    "Notify when a command or agent needs your attention to continue",
+                    "Notify when a command needs your attention to continue",
                     FeaturesPageAction::ToggleNeedsAttentionNotifications,
                     view.button_mouse_states
-                        .agent_needs_attention_notifications_checkbox
+                        .needs_attention_notifications_checkbox
                         .clone(),
                     appearance,
                 ),
@@ -6226,58 +5991,6 @@ impl SettingsWidget for VimModeWidget {
 }
 
 #[derive(Default)]
-struct AtContextMenuInTerminalModeWidget {
-    switch_state: SwitchStateHandle,
-}
-
-impl SettingsWidget for AtContextMenuInTerminalModeWidget {
-    type View = FeaturesPageView;
-
-    fn search_terms(&self) -> &str {
-        "@ at sign context menu terminal mode AI assistant"
-    }
-
-    fn render(
-        &self,
-        view: &Self::View,
-        appearance: &Appearance,
-        app: &AppContext,
-    ) -> Box<dyn Element> {
-        let ui_builder = appearance.ui_builder();
-        render_body_item::<FeaturesPageAction>(
-            "Enable '@' context menu in terminal mode".into(),
-            None,
-            LocalOnlyIconState::for_setting(
-                AtContextMenuInTerminalMode::storage_key(),
-                AtContextMenuInTerminalMode::sync_to_cloud(),
-                &mut view
-                    .button_mouse_states
-                    .local_only_icon_tooltip_states
-                    .borrow_mut(),
-                app,
-            ),
-            ToggleState::Enabled,
-            appearance,
-            ui_builder
-                .switch(self.switch_state.clone())
-                .check(
-                    *InputSettings::as_ref(app)
-                        .at_context_menu_in_terminal_mode
-                        .value(),
-                )
-                .build()
-                .on_click(move |ctx, _, _| {
-                    ctx.dispatch_typed_action(
-                        FeaturesPageAction::ToggleAtContextMenuInTerminalMode,
-                    );
-                })
-                .finish(),
-            None,
-        )
-    }
-}
-
-#[derive(Default)]
 struct SlashCommandsInTerminalModeWidget {
     switch_state: SwitchStateHandle,
 }
@@ -6287,10 +6000,6 @@ impl SettingsWidget for SlashCommandsInTerminalModeWidget {
 
     fn search_terms(&self) -> &str {
         "slash commands terminal mode input menu"
-    }
-
-    fn should_render(&self, app: &AppContext) -> bool {
-        AISettings::as_ref(app).is_any_ai_enabled(app)
     }
 
     fn render(
@@ -6325,106 +6034,6 @@ impl SettingsWidget for SlashCommandsInTerminalModeWidget {
                 .on_click(move |ctx, _, _| {
                     ctx.dispatch_typed_action(
                         FeaturesPageAction::ToggleSlashCommandsInTerminalMode,
-                    );
-                })
-                .finish(),
-            None,
-        )
-    }
-}
-
-#[derive(Default)]
-struct OutlineCodebaseSymbolsForAtContextMenuWidget {
-    switch_state: SwitchStateHandle,
-}
-
-impl SettingsWidget for OutlineCodebaseSymbolsForAtContextMenuWidget {
-    type View = FeaturesPageView;
-
-    fn search_terms(&self) -> &str {
-        "outline codebase symbols context menu code indexing"
-    }
-
-    fn render(
-        &self,
-        view: &Self::View,
-        appearance: &Appearance,
-        app: &AppContext,
-    ) -> Box<dyn Element> {
-        let ui_builder = appearance.ui_builder();
-        render_body_item::<FeaturesPageAction>(
-            "Outline codebase symbols for '@' context menu".into(),
-            None,
-            LocalOnlyIconState::for_setting(
-                OutlineCodebaseSymbolsForAtContextMenu::storage_key(),
-                OutlineCodebaseSymbolsForAtContextMenu::sync_to_cloud(),
-                &mut view
-                    .button_mouse_states
-                    .local_only_icon_tooltip_states
-                    .borrow_mut(),
-                app,
-            ),
-            ToggleState::Enabled,
-            appearance,
-            ui_builder
-                .switch(self.switch_state.clone())
-                .check(
-                    *InputSettings::as_ref(app)
-                        .outline_codebase_symbols_for_at_context_menu
-                        .value(),
-                )
-                .build()
-                .on_click(move |ctx, _, _| {
-                    ctx.dispatch_typed_action(
-                        FeaturesPageAction::ToggleOutlineCodebaseSymbolsForAtContextMenu,
-                    );
-                })
-                .finish(),
-            None,
-        )
-    }
-}
-
-#[derive(Default)]
-struct ShowTerminalInputMessageLineWidget {
-    switch_state: SwitchStateHandle,
-}
-
-impl SettingsWidget for ShowTerminalInputMessageLineWidget {
-    type View = FeaturesPageView;
-
-    fn search_terms(&self) -> &str {
-        "terminal input message line bar agent"
-    }
-
-    fn render(
-        &self,
-        view: &Self::View,
-        appearance: &Appearance,
-        app: &AppContext,
-    ) -> Box<dyn Element> {
-        let ui_builder = appearance.ui_builder();
-        render_body_item::<FeaturesPageAction>(
-            "Show terminal input message line".into(),
-            None,
-            LocalOnlyIconState::for_setting(
-                ShowTerminalInputMessageBar::storage_key(),
-                ShowTerminalInputMessageBar::sync_to_cloud(),
-                &mut view
-                    .button_mouse_states
-                    .local_only_icon_tooltip_states
-                    .borrow_mut(),
-                app,
-            ),
-            ToggleState::Enabled,
-            appearance,
-            ui_builder
-                .switch(self.switch_state.clone())
-                .check(InputSettings::as_ref(app).is_terminal_input_message_bar_enabled())
-                .build()
-                .on_click(move |ctx, _, _| {
-                    ctx.dispatch_typed_action(
-                        FeaturesPageAction::ToggleShowTerminalInputMessageLine,
                     );
                 })
                 .finish(),
@@ -7108,57 +6717,6 @@ struct CopyOnSelectWidget {
     switch_state: SwitchStateHandle,
 }
 
-#[derive(Default)]
-struct ShowTerminalZeroStateBlockWidget {
-    switch_state: SwitchStateHandle,
-}
-
-impl SettingsWidget for ShowTerminalZeroStateBlockWidget {
-    type View = FeaturesPageView;
-
-    fn search_terms(&self) -> &str {
-        "zero state new conversation terminal block welcome output first"
-    }
-
-    fn should_render(&self, app: &AppContext) -> bool {
-        AISettings::as_ref(app).is_any_ai_enabled(app)
-    }
-
-    fn render(
-        &self,
-        view: &Self::View,
-        appearance: &Appearance,
-        app: &AppContext,
-    ) -> Box<dyn Element> {
-        let ui_builder = appearance.ui_builder();
-        let terminal_settings = TerminalSettings::as_ref(app);
-        render_body_item::<FeaturesPageAction>(
-            "Show help block in new sessions".into(),
-            None,
-            LocalOnlyIconState::for_setting(
-                ShowTerminalZeroStateBlock::storage_key(),
-                ShowTerminalZeroStateBlock::sync_to_cloud(),
-                &mut view
-                    .button_mouse_states
-                    .local_only_icon_tooltip_states
-                    .borrow_mut(),
-                app,
-            ),
-            ToggleState::Enabled,
-            appearance,
-            ui_builder
-                .switch(self.switch_state.clone())
-                .check(*terminal_settings.show_terminal_zero_state_block)
-                .build()
-                .on_click(move |ctx, _, _| {
-                    ctx.dispatch_typed_action(FeaturesPageAction::ToggleShowTerminalZeroStateBlock)
-                })
-                .finish(),
-            None,
-        )
-    }
-}
-
 impl SettingsWidget for CopyOnSelectWidget {
     type View = FeaturesPageView;
 
@@ -7282,7 +6840,7 @@ impl SettingsWidget for DefaultSessionModeWidget {
     type View = FeaturesPageView;
 
     fn search_terms(&self) -> &str {
-        "default session mode agent terminal new pane tab open config"
+        "default session mode terminal new pane tab open config"
     }
 
     fn render(

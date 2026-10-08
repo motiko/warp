@@ -2981,7 +2981,7 @@ fn cmd_enter_from_active_non_empty_agent_view_requires_confirmation() {
 fn test_clear_session_flag_state() {
     use warp_terminal::shell::ShellType;
 
-    use crate::ai::blocklist::SerializedBlockListItem;
+    use crate::ai::blocklist::SerializedBlock;
     use crate::terminal::ShellHost;
     use crate::terminal::model::block::SerializedBlock;
 
@@ -2998,8 +2998,8 @@ fn test_clear_session_flag_state() {
             hostname: "remote".to_string(), // Remote hostname indicates a remote session
         });
 
-        // Convert to SerializedBlockListItem
-        let restored_blocks = [SerializedBlockListItem::Command {
+        // Convert to SerializedBlock
+        let restored_blocks = [SerializedBlock::Command {
             block: Box::new(remote_block),
         }];
 

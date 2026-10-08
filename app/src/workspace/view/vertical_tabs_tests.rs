@@ -8,23 +8,19 @@ use warpui::EntityId;
 use warpui::elements::PositionedElementOffsetBounds;
 
 use super::{
-    AgentTabTextPreference, SummaryPaneKind, SummaryPaneKindIcons, TerminalAgentText,
-    TerminalPrimaryLineData, TerminalPrimaryLineFont, VerticalTabsDetailTarget,
-    VerticalTabsDetailTargetKind, VerticalTabsSummaryBranchEntry, VerticalTabsSummaryData,
-    VerticalTabsSummaryPrimaryLabel, branch_label_display, coalesce_summary_branch_entries,
+    SummaryPaneKind, SummaryPaneKindIcons, TERMINAL_KIND_LABEL, TerminalPrimaryLineFont,
+    VerticalTabsDetailTarget, VerticalTabsDetailTargetKind, VerticalTabsSummaryBranchEntry,
+    VerticalTabsSummaryData, branch_label_display, coalesce_summary_branch_entries,
     code_detail_kind_label, compact_branch_subtitle_display, detail_sidecar_width_and_bounds,
     detail_target_for_hovered_row, group_display_name, group_name_highlight_indices,
     matched_group_ids, merge_group_name_matches, non_terminal_search_text_fragments,
-    pane_ids_for_display_granularity, pane_search_text_fragments, preferred_agent_tab_title,
-    push_normalized_unique_summary_label, search_fragments_contain_query,
+    pane_ids_for_display_granularity, pane_search_text_fragments, search_fragments_contain_query,
     select_summary_pane_kind_icons, should_keep_detail_sidecar_visible_for_mouse_position,
-    should_show_tab_group_header, shows_synced_inputs_indicator,
-    sort_summary_primary_labels_status_first, summary_overflow_count,
-    summary_search_text_fragments, tab_admitted_by_group_name, terminal_kind_badge_label,
-    terminal_primary_line_data, terminal_pull_request_badge_label, terminal_search_text_fragments,
-    uses_outer_group_container, visible_pane_ids_for_detail_target, vtab_diff_stats_text,
+    should_show_tab_group_header, shows_synced_inputs_indicator, summary_overflow_count,
+    summary_search_text_fragments, tab_admitted_by_group_name, terminal_primary_line_data,
+    terminal_pull_request_badge_label, terminal_search_text_fragments, uses_outer_group_container,
+    visible_pane_ids_for_detail_target, vtab_diff_stats_text,
 };
-use crate::ai::agent::conversation::ConversationStatus;
 use crate::context_chips::display_chip::GitLineChanges;
 use crate::pane_group::pane::IPaneType;
 use crate::pane_group::{PaneId, TerminalPaneId};
@@ -32,13 +28,6 @@ use crate::safe_triangle::SafeTriangle;
 use crate::tab::{ShortcutModifierKind, reveals_shortcut_hints};
 use crate::workspace::tab_group::{TabGroup, TabGroupId};
 use crate::workspace::tab_settings::VerticalTabsDisplayGranularity;
-
-fn label(text: &str) -> VerticalTabsSummaryPrimaryLabel {
-    VerticalTabsSummaryPrimaryLabel {
-        text: text.to_string(),
-        status: None,
-    }
-}
 
 fn pane_id() -> PaneId {
     TerminalPaneId::dummy_terminal_pane_id().into()
@@ -66,10 +55,7 @@ fn summary_pane_kind_icons_pick_two_oldest_distinct_pane_kinds() {
         select_summary_pane_kind_icons([
             (EntityId::from_usize(30), SummaryPaneKind::Terminal),
             (EntityId::from_usize(20), code_summary_kind("main.rs")),
-            (
-                EntityId::from_usize(40),
-                SummaryPaneKind::Notebook { is_plan: false },
-            ),
+            (EntityId::from_usize(40), SummaryPaneKind::Notebook),
             (EntityId::from_usize(10), SummaryPaneKind::Terminal),
         ]),
         Some(SummaryPaneKindIcons::Pair {
@@ -93,62 +79,6 @@ fn summary_pane_kind_icons_recompute_when_oldest_kind_is_removed() {
     );
 }
 
-#[test]
-fn summary_pane_kind_icons_distinguish_agent_terminals_from_plain_terminals() {
-    assert_eq!(
-        select_summary_pane_kind_icons([
-            (EntityId::from_usize(10), SummaryPaneKind::Terminal),
-            (EntityId::from_usize(30), SummaryPaneKind::OzAgent),
-        ]),
-        Some(SummaryPaneKindIcons::Pair {
-            primary: SummaryPaneKind::Terminal,
-            secondary: SummaryPaneKind::OzAgent,
-        })
-    );
-}
-
-#[test]
-fn preferred_agent_tab_title_defaults_to_conversation_title() {
-    let agent_text = TerminalAgentText {
-        conversation_display_title: Some("Generated Warp Agent title".to_string()),
-        conversation_latest_user_prompt: Some("Latest Warp Agent prompt".to_string()),
-        is_oz_agent: true,
-    };
-
-    assert_eq!(
-        preferred_agent_tab_title(&agent_text, AgentTabTextPreference::ConversationTitle),
-        Some("Generated Warp Agent title".to_string())
-    );
-}
-
-#[test]
-fn preferred_agent_tab_title_uses_latest_prompt_when_enabled() {
-    let agent_text = TerminalAgentText {
-        conversation_display_title: Some("Generated Warp Agent title".to_string()),
-        conversation_latest_user_prompt: Some("Latest Warp Agent prompt".to_string()),
-        is_oz_agent: true,
-    };
-
-    assert_eq!(
-        preferred_agent_tab_title(&agent_text, AgentTabTextPreference::LatestUserPrompt),
-        Some("Latest Warp Agent prompt".to_string())
-    );
-}
-
-#[test]
-fn preferred_agent_tab_title_falls_back_when_preferred_text_is_missing() {
-    let agent_text = TerminalAgentText {
-        conversation_display_title: Some("Generated Warp Agent title".to_string()),
-        conversation_latest_user_prompt: None,
-        is_oz_agent: true,
-    };
-
-    assert_eq!(
-        preferred_agent_tab_title(&agent_text, AgentTabTextPreference::LatestUserPrompt),
-        Some("Generated Warp Agent title".to_string())
-    );
-}
-
 fn pane_type_supports_vertical_tabs_detail_sidecar(pane_type: IPaneType) -> bool {
     matches!(
         pane_type,
@@ -157,8 +87,6 @@ fn pane_type_supports_vertical_tabs_detail_sidecar(pane_type: IPaneType) -> bool
             | IPaneType::Notebook
             | IPaneType::Workflow
             | IPaneType::EnvVarCollection
-            | IPaneType::AIFact
-            | IPaneType::AIDocument
     )
 }
 
@@ -199,12 +127,6 @@ fn detail_sidecar_supports_terminal_code_and_warp_drive_object_panes() {
     ));
     assert!(pane_type_supports_vertical_tabs_detail_sidecar(
         IPaneType::EnvVarCollection
-    ));
-    assert!(pane_type_supports_vertical_tabs_detail_sidecar(
-        IPaneType::AIFact
-    ));
-    assert!(pane_type_supports_vertical_tabs_detail_sidecar(
-        IPaneType::AIDocument
     ));
     assert!(!pane_type_supports_vertical_tabs_detail_sidecar(
         IPaneType::Settings
@@ -533,7 +455,6 @@ fn tab_group_header_distinguishes_two_auto_named_multi_pane_tabs() {
 fn terminal_primary_line_uses_terminal_title_as_fallback() {
     let line = terminal_primary_line_data(
         false,
-        None,
         "nvim src/workspace/view/vertical_tabs.rs",
         "~/warp",
         Some("cargo nextest run".to_string()),
@@ -546,7 +467,6 @@ fn terminal_primary_line_uses_terminal_title_as_fallback() {
 fn terminal_primary_line_uses_last_completed_command_when_shell_title_matches_working_directory() {
     let line = terminal_primary_line_data(
         false,
-        None,
         "~/warp",
         "~/warp",
         Some("cargo nextest run".to_string()),
@@ -557,35 +477,22 @@ fn terminal_primary_line_uses_last_completed_command_when_shell_title_matches_wo
 
 #[test]
 fn terminal_primary_line_falls_back_to_new_session() {
-    let line = terminal_primary_line_data(false, None, "~/warp", "~/warp", None);
+    let line = terminal_primary_line_data(false, "~/warp", "~/warp", None);
 
     assert_eq!(line.text(), "New session");
-    assert!(matches!(
-        line,
-        TerminalPrimaryLineData::Text {
-            font: TerminalPrimaryLineFont::Ui,
-            ..
-        }
-    ));
+    assert!(line.font == TerminalPrimaryLineFont::Ui);
 }
 
 #[test]
 fn terminal_primary_line_uses_monospace_for_last_completed_command() {
     let line = terminal_primary_line_data(
         false,
-        None,
         "~/warp",
         "~/warp",
         Some("cargo nextest run".to_string()),
     );
 
-    assert!(matches!(
-        line,
-        TerminalPrimaryLineData::Text {
-            font: TerminalPrimaryLineFont::Monospace,
-            ..
-        }
-    ));
+    assert!(line.font == TerminalPrimaryLineFont::Monospace);
 }
 
 #[test]
@@ -594,7 +501,7 @@ fn terminal_search_fragments_include_rendered_terminal_badges() {
         "Review the failing tests".to_string(),
         "~/warp".to_string(),
         Some("main".to_string()),
-        terminal_kind_badge_label(true),
+        TERMINAL_KIND_LABEL.to_string(),
         Some(terminal_pull_request_badge_label(
             "https://github.com/warpdotdev/warp-internal/pull/12345",
         )),
@@ -605,7 +512,7 @@ fn terminal_search_fragments_include_rendered_terminal_badges() {
         }),
     );
 
-    assert!(search_fragments_contain_query(&fragments, "warp agent"));
+    assert!(search_fragments_contain_query(&fragments, "terminal"));
     assert!(search_fragments_contain_query(
         &fragments,
         "review the failing tests"
@@ -622,7 +529,7 @@ fn pane_search_fragments_prepend_custom_title_and_keep_generated_metadata() {
         vec![
             "cargo nextest run".to_string(),
             "~/warp".to_string(),
-            "Claude".to_string(),
+            "htop".to_string(),
         ],
     );
 
@@ -630,7 +537,7 @@ fn pane_search_fragments_prepend_custom_title_and_keep_generated_metadata() {
     assert!(search_fragments_contain_query(&fragments, "production api"));
     assert!(search_fragments_contain_query(&fragments, "cargo nextest"));
     assert!(search_fragments_contain_query(&fragments, "~/warp"));
-    assert!(search_fragments_contain_query(&fragments, "claude"));
+    assert!(search_fragments_contain_query(&fragments, "htop"));
 }
 
 #[test]
@@ -813,118 +720,6 @@ fn summary_overflow_count_caps_visible_region() {
 }
 
 #[test]
-fn primary_labels_dedupe_preserves_first_seen_status() {
-    let mut values = Vec::new();
-    let mut seen = std::collections::HashMap::new();
-    push_normalized_unique_summary_label(&mut values, &mut seen, "  cargo   test  ", None);
-    push_normalized_unique_summary_label(
-        &mut values,
-        &mut seen,
-        "cargo test",
-        Some(ConversationStatus::InProgress),
-    );
-
-    assert_eq!(
-        values,
-        vec![VerticalTabsSummaryPrimaryLabel {
-            text: "cargo test".to_string(),
-            status: None,
-        }]
-    );
-}
-
-#[test]
-fn primary_labels_preserve_status_through_aggregation() {
-    let mut values = Vec::new();
-    let mut seen = std::collections::HashMap::new();
-    push_normalized_unique_summary_label(
-        &mut values,
-        &mut seen,
-        "Plan a refactor",
-        Some(ConversationStatus::InProgress),
-    );
-    push_normalized_unique_summary_label(
-        &mut values,
-        &mut seen,
-        "Investigate failure",
-        Some(ConversationStatus::Success),
-    );
-    push_normalized_unique_summary_label(&mut values, &mut seen, "cargo build", None);
-
-    assert_eq!(
-        values,
-        vec![
-            VerticalTabsSummaryPrimaryLabel {
-                text: "Plan a refactor".to_string(),
-                status: Some(ConversationStatus::InProgress),
-            },
-            VerticalTabsSummaryPrimaryLabel {
-                text: "Investigate failure".to_string(),
-                status: Some(ConversationStatus::Success),
-            },
-            VerticalTabsSummaryPrimaryLabel {
-                text: "cargo build".to_string(),
-                status: None,
-            },
-        ]
-    );
-}
-
-#[test]
-fn sort_summary_primary_labels_moves_status_first_and_preserves_order() {
-    let mut values = vec![
-        VerticalTabsSummaryPrimaryLabel {
-            text: "plain terminal".to_string(),
-            status: None,
-        },
-        VerticalTabsSummaryPrimaryLabel {
-            text: "first conversation".to_string(),
-            status: Some(ConversationStatus::InProgress),
-        },
-        VerticalTabsSummaryPrimaryLabel {
-            text: "code pane".to_string(),
-            status: None,
-        },
-        VerticalTabsSummaryPrimaryLabel {
-            text: "second conversation".to_string(),
-            status: Some(ConversationStatus::Success),
-        },
-        VerticalTabsSummaryPrimaryLabel {
-            text: "last terminal".to_string(),
-            status: None,
-        },
-    ];
-
-    sort_summary_primary_labels_status_first(&mut values);
-
-    assert_eq!(
-        values,
-        vec![
-            VerticalTabsSummaryPrimaryLabel {
-                text: "first conversation".to_string(),
-                status: Some(ConversationStatus::InProgress),
-            },
-            VerticalTabsSummaryPrimaryLabel {
-                text: "second conversation".to_string(),
-                status: Some(ConversationStatus::Success),
-            },
-            VerticalTabsSummaryPrimaryLabel {
-                text: "plain terminal".to_string(),
-                status: None,
-            },
-            VerticalTabsSummaryPrimaryLabel {
-                text: "code pane".to_string(),
-                status: None,
-            },
-            VerticalTabsSummaryPrimaryLabel {
-                text: "last terminal".to_string(),
-                status: None,
-            },
-        ]
-    );
-}
-
-#[test]
 fn synced_inputs_indicator_shows_on_synced_terminal_rows() {
     assert!(shows_synced_inputs_indicator(true, true, true));
 }
@@ -960,14 +755,11 @@ fn reveals_shortcut_hints_requires_overlap_with_binding_modifiers() {
 fn summary_search_fragments_include_hidden_overflow_values() {
     let summary = VerticalTabsSummaryData {
         primary_labels: vec![
-            VerticalTabsSummaryPrimaryLabel {
-                text: "Claude".to_string(),
-                status: Some(ConversationStatus::InProgress),
-            },
-            label("Warp Agent"),
-            label("cargo"),
-            label("code review"),
-            label("hidden work"),
+            "htop".to_string(),
+            "vim".to_string(),
+            "cargo".to_string(),
+            "code review".to_string(),
+            "hidden work".to_string(),
         ],
         working_directories: vec!["~/warp-internal".to_string(), "~/warp-server".to_string()],
         branch_entries: vec![
@@ -1009,7 +801,7 @@ fn summary_search_fragments_include_hidden_overflow_values() {
     let fragments = summary_search_text_fragments(&summary, Some("Custom tab"));
 
     assert!(search_fragments_contain_query(&fragments, "custom tab"));
-    assert!(search_fragments_contain_query(&fragments, "claude"));
+    assert!(search_fragments_contain_query(&fragments, "htop"));
     assert!(search_fragments_contain_query(&fragments, "hidden work"));
     assert!(search_fragments_contain_query(&fragments, "hidden-branch"));
     assert!(search_fragments_contain_query(&fragments, "#789"));

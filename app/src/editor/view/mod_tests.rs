@@ -2054,9 +2054,6 @@ fn test_autosuggestions() -> Result<()> {
             view.set_autosuggestion(
                 "foo\nbar",
                 AutosuggestionLocation::EndOfBuffer,
-                AutosuggestionType::Command {
-                    was_intelligent_autosuggestion: false,
-                },
                 ctx,
             );
             view
@@ -2151,9 +2148,6 @@ fn test_partial_autosuggestion() -> Result<()> {
             view.set_autosuggestion(
                 "foo\nbar",
                 AutosuggestionLocation::EndOfBuffer,
-                AutosuggestionType::Command {
-                    was_intelligent_autosuggestion: false,
-                },
                 ctx,
             );
             view
@@ -2186,9 +2180,6 @@ fn test_partial_autosuggestion() -> Result<()> {
             view.set_autosuggestion(
                 " {восибing}",
                 AutosuggestionLocation::EndOfBuffer,
-                AutosuggestionType::Command {
-                    was_intelligent_autosuggestion: false,
-                },
                 ctx,
             );
         });
@@ -2217,9 +2208,6 @@ fn test_partial_autosuggestion() -> Result<()> {
             view.set_autosuggestion(
                 " --files-without-match \"git\" ~/.oh-my-zsh/themes/*",
                 AutosuggestionLocation::EndOfBuffer,
-                AutosuggestionType::Command {
-                    was_intelligent_autosuggestion: false,
-                },
                 ctx,
             );
         });
@@ -2400,9 +2388,6 @@ fn test_placeholder_text() {
             view.set_autosuggestion(
                 "single line",
                 AutosuggestionLocation::EndOfBuffer,
-                AutosuggestionType::Command {
-                    was_intelligent_autosuggestion: false,
-                },
                 ctx,
             );
         });

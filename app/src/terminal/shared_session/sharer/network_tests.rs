@@ -30,19 +30,16 @@ use warpui::{App, ModelHandle, RetryOption};
 use websocket::{Error as WebsocketError, Message, Sink, Stream, WebsocketMessage as _};
 
 use super::{
-    AMBIENT_CREATE_SESSION_MAX_ATTEMPTS, ConfirmedReconnection, MAX_PRE_RECONNECT_BYTES,
-    MAX_PRE_RECONNECT_MESSAGES, Network, NetworkEvent, PTY_READS_BATCH_THRESHOLD,
-    PtyBytesBatchStatus, Stage, StartupFailure, StartupRetryState, confirm_reconnection,
-    share_with_team_uid_for_init_payload, startup_max_attempts,
+    ConfirmedReconnection, MAX_PRE_RECONNECT_BYTES, MAX_PRE_RECONNECT_MESSAGES, Network,
+    NetworkEvent, PTY_READS_BATCH_THRESHOLD, PtyBytesBatchStatus, Stage, StartupFailure,
+    StartupRetryState, confirm_reconnection, share_with_team_uid_for_init_payload,
 };
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::AuthManager;
 use crate::server::server_api::ServerApiProvider;
 use crate::server::telemetry::context_provider::AppTelemetryContextProvider;
 use crate::terminal::TerminalModel;
-use crate::terminal::shared_session::{
-    MAX_BYTES_SHAREABLE, SELECTION_THROTTLE_PERIOD, SharedSessionSource,
-};
+use crate::terminal::shared_session::{MAX_BYTES_SHAREABLE, SELECTION_THROTTLE_PERIOD};
 use crate::test_util::assert_eventually;
 
 fn is_upstream_message_pty_bytes_read(
@@ -604,16 +601,7 @@ fn test_share_with_team_uid_for_init_payload_omits_personal_view() {
     );
 }
 
-#[test]
-fn test_startup_max_attempts_only_retries_ambient_agent_sources() {
-    assert_eq!(
-        startup_max_attempts(&SharedSessionSource::ambient_agent(Some(
-            "task-id".to_string()
-        ))),
-        AMBIENT_CREATE_SESSION_MAX_ATTEMPTS
-    );
-    assert_eq!(startup_max_attempts(&SharedSessionSource::user(None)), 1);
-}
+const STARTUP_MAX_ATTEMPTS: usize = 3;
 
 #[test]
 fn test_startup_failure_retryability() {
@@ -654,7 +642,7 @@ fn test_should_retry_startup_failure_respects_attempt_budget() {
             network.stage = Stage::BeforeStarted {
                 startup_retry: StartupRetryState {
                     current_attempt: 1,
-                    max_attempts: AMBIENT_CREATE_SESSION_MAX_ATTEMPTS,
+                    max_attempts: STARTUP_MAX_ATTEMPTS,
                     timeout_abort_handle: None,
                     transport_abort_handle: None,
                 },
@@ -663,8 +651,8 @@ fn test_should_retry_startup_failure_respects_attempt_budget() {
 
             network.stage = Stage::BeforeStarted {
                 startup_retry: StartupRetryState {
-                    current_attempt: AMBIENT_CREATE_SESSION_MAX_ATTEMPTS,
-                    max_attempts: AMBIENT_CREATE_SESSION_MAX_ATTEMPTS,
+                    current_attempt: STARTUP_MAX_ATTEMPTS,
+                    max_attempts: STARTUP_MAX_ATTEMPTS,
                     timeout_abort_handle: None,
                     transport_abort_handle: None,
                 },
@@ -694,7 +682,7 @@ fn test_startup_attempt_stale_filtering() {
             network.stage = Stage::BeforeStarted {
                 startup_retry: StartupRetryState {
                     current_attempt: 1,
-                    max_attempts: AMBIENT_CREATE_SESSION_MAX_ATTEMPTS,
+                    max_attempts: STARTUP_MAX_ATTEMPTS,
                     timeout_abort_handle: None,
                     transport_abort_handle: None,
                 },

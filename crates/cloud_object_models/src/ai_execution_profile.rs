@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use ai::LLMId;
+use ai_config::LLMId;
 use cloud_objects::cloud_object::{
     GenericCloudObject, GenericServerObject, GenericStringModel, JsonObjectType,
 };

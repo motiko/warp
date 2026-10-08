@@ -1660,7 +1660,7 @@ impl SettingsWidget for CloudConversationStorageWidget {
         // Hide the toggle entirely when AI is disabled: the setting has no
         // effect without AI (no agent conversations are produced), so showing
         // it is confusing.
-        if !AISettings::as_ref(app).is_any_ai_enabled(app) {
+        if !AISettings::as_ref(app).is_any_ai_enabled() {
             return false;
         }
 

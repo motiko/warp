@@ -22,11 +22,8 @@ use warpui::platform::TerminationMode;
 use warpui::{AppContext, SingletonEntity as _, TypedActionView, WindowId};
 
 use self::docker::open_docker_container;
-use crate::ai::agent::api::ServerConversationToken;
-use crate::ai::chatgpt_subscription::{CHATGPT_LINK_URI_HOST, ChatGPTSubscriptionModel};
 use crate::features::FeatureFlag;
 use crate::launch_configs::launch_config::LaunchConfig;
-use crate::linear::{LinearAction, LinearIssueWork};
 use crate::root_view::{OpenLaunchConfigArg, open_new_window_get_handles};
 use crate::server::telemetry::{LaunchConfigUiLocation, TelemetryEvent};
 use crate::settings_view::{SettingsSection, settings_widget_deeplink_target};
@@ -71,23 +68,15 @@ pub enum UriHost {
     Launch,
     /// Supports joining shared sessions via a warp:// URI.
     SharedSession,
-    /// Supports viewing AI conversations via a warp:// URI.
-    Conversation,
     /// Supports opening warp's settings panel via URI
     Settings,
     /// A host prefix for a general-purpose home/landing page. Unlike other intent URIs, the home
     /// page behavior may change over time and vary from platform to platform.
     Home,
-    /// Actions related to MCP servers (e.g.: oauth callbacks).
-    Mcp,
-    /// Actions triggered from Linear integrations (e.g. work on issue).
-    Linear,
     /// Opens a saved tab config in an existing window or a new one.
     TabConfig,
     /// Focuses a specific terminal pane by its persistent session UUID.
     Session,
-    /// Result of a browser flow that links a ChatGPT account to the signed-in user.
-    ChatGPTLink,
 }
 
 impl FromStr for UriHost {
@@ -101,16 +90,10 @@ impl FromStr for UriHost {
             "shared_session" if FeatureFlag::ViewingSharedSessions.is_enabled() => {
                 Ok(Self::SharedSession)
             }
-            "conversation" => Ok(Self::Conversation),
             "settings" => Ok(Self::Settings),
             "home" => Ok(Self::Home),
-            "mcp" => Ok(Self::Mcp),
-            "linear" => Ok(Self::Linear),
             "tab_config" if FeatureFlag::TabConfigs.is_enabled() => Ok(Self::TabConfig),
             "session" => Ok(Self::Session),
-            CHATGPT_LINK_URI_HOST if FeatureFlag::ChatGPTSubscription.is_enabled() => {
-                Ok(Self::ChatGPTLink)
-            }
             _ => Err(anyhow!("Received url with unexpected host: {}", s)),
         }
     }
@@ -140,14 +123,6 @@ impl UriHost {
                             log::Level::Info,
                         );
                     });
-            }
-            UriHost::ChatGPTLink => {
-                ChatGPTSubscriptionModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.handle_link_redirect(url, ctx);
-                });
-                if let Some(window_id) = primary_window_id {
-                    ctx.windows().show_window_and_focus_app(window_id);
-                }
             }
             UriHost::Action => {
                 match Action::parse(url) {
@@ -214,40 +189,6 @@ impl UriHost {
                     }
                 } else {
                     log::warn!("Failed to join shared session with uri={url}");
-                }
-            }
-            UriHost::Conversation => {
-                // We expect the uri to have the conversation ID as the last segment.
-                // e.g. warp://conversation/{conversation_id}
-                let conversation_id: Option<ServerConversationToken> = url
-                    .path_segments()
-                    .into_iter()
-                    .flatten()
-                    .last()
-                    .map(|s| ServerConversationToken::new(s.to_owned()));
-
-                if let Some(conversation_id) = conversation_id {
-                    // If there's an existing window, open the conversation in a new tab. Otherwise, open a new window.
-                    match primary_window_id.and_then(|window_id| {
-                        ctx.root_view_id(window_id)
-                            .map(|view_id| (window_id, view_id))
-                    }) {
-                        Some((primary_window_id, root_view_id)) => {
-                            ctx.dispatch_action(
-                                primary_window_id,
-                                &[root_view_id],
-                                "root_view:open_cloud_conversation_in_existing_window",
-                                &conversation_id,
-                                log::Level::Info,
-                            );
-                        }
-                        None => ctx.dispatch_global_action(
-                            "root_view:open_conversation_viewer",
-                            &conversation_id,
-                        ),
-                    }
-                } else {
-                    log::warn!("Failed to open conversation with uri={url}");
                 }
             }
             UriHost::Settings => {
@@ -331,31 +272,6 @@ impl UriHost {
             UriHost::Home => {
                 ctx.dispatch_global_action("root_view::open_new", &());
             }
-            UriHost::Mcp => {
-                #[cfg(not(target_family = "wasm"))]
-                {
-                    let result = crate::ai::mcp::TemplatableMCPServerManager::handle(ctx)
-                        .update(ctx, |manager, _ctx| manager.handle_oauth_callback(url));
-                    if let Err(e) = result {
-                        report_error!(e.context("Failed to handle MCP OAuth callback"));
-                    }
-                }
-            }
-            UriHost::Linear => match LinearAction::parse(url) {
-                Ok(LinearAction::WorkOnIssue) => {
-                    let args = LinearIssueWork::from_url(url);
-                    dispatch_action_in_new_or_existing_window(
-                        primary_window_id,
-                        "root_view:open_linear_issue_work_in_existing_window",
-                        "root_view:open_linear_issue_work_in_new_window",
-                        &args,
-                        ctx,
-                    );
-                }
-                Err(err) => {
-                    log::warn!("{err}");
-                }
-            },
             UriHost::Session => {
                 let uuid_hex = url
                     .path_segments()
@@ -417,18 +333,12 @@ impl UriHost {
             }),
             Self::Settings => W::default(),
             // These URLs always open new windows.
-            Self::Launch | Self::SharedSession | Self::Conversation | Self::Home => W::Nothing,
+            Self::Launch | Self::SharedSession | Self::Home => W::Nothing,
             // This will actually be handled by [`Action::window_behavior_hint`].
             Self::Action => W::Nothing,
-            // TODO(vorporeal): probably want to focus the window with the MCP pane open
-            Self::Mcp => W::Nothing,
-            // Linear deeplink opens a new tab with agent view
-            Self::Linear => W::default(),
             // Handler picks the window itself based on `?new_window=true`.
             Self::TabConfig => W::Nothing,
             Self::Session => W::Nothing,
-            // The handler focuses the primary window itself once the result is recorded.
-            Self::ChatGPTLink => W::Nothing,
         }
     }
 }
@@ -743,7 +653,6 @@ enum Action {
     },
     Docker,
     OpenRepo,
-    NewAgentConversation,
 }
 
 impl Action {
@@ -757,7 +666,6 @@ impl Action {
             }
             "/docker/open_subshell" => Ok(Self::Docker),
             "/open-repo" => Ok(Self::OpenRepo),
-            "/new_agent_conversation" => Ok(Self::NewAgentConversation),
             _ => Err(anyhow!(
                 "Received \"action\" intent with unexpected action: {}",
                 url.path()
@@ -831,26 +739,6 @@ impl Action {
                     }
                 }
             }
-            Action::NewAgentConversation => {
-                let window_id =
-                    primary_window_id.or_else(|| Some(open_new_window_get_handles(None, ctx).0));
-
-                let Some(window_id) = window_id else {
-                    log::warn!("unable to determine window for new agent conversation action");
-                    return;
-                };
-
-                let Some(workspace) = WorkspaceRegistry::as_ref(ctx).get(window_id, ctx) else {
-                    log::warn!(
-                        "no workspace found in window {window_id} for new agent conversation action"
-                    );
-                    return;
-                };
-
-                workspace.update(ctx, |workspace, ctx| {
-                    workspace.handle_action(&WorkspaceAction::AddAgentTab, ctx);
-                });
-            }
         }
     }
 
@@ -862,7 +750,7 @@ impl Action {
             Self::Docker
             | Self::OpenFileEditor { .. }
             | Self::OpenRepo
-            | Self::NewAgentConversation => W::default(),
+            => W::default(),
             Self::NewTab => W::ShowPrimaryWindow(WindowActivationFallbackBehavior::Notify {
                 title: "New tab created".to_owned(),
                 description: "Go to Warp to see your new tab.".to_owned(),
@@ -1221,13 +1109,10 @@ fn validate_custom_uri(url: &Url) -> Result<UriHost> {
         UriHost::Action
         | UriHost::Launch
         | UriHost::SharedSession
-        | UriHost::Conversation
         | UriHost::Settings
-        | UriHost::Mcp
-        | UriHost::Linear
         | UriHost::TabConfig
         | UriHost::Session
-        | UriHost::ChatGPTLink => true,
+        => true,
         // Auth and Home only allow the desktop redirect path
         UriHost::Auth | UriHost::Home => false,
     };

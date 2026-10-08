@@ -10,11 +10,9 @@ use std::ops::RangeInclusive;
 use std::sync::{Arc, Mutex};
 
 use event_listener::Event;
-use warpui::EntityId;
 
 use super::BlockInfo;
 use crate::terminal::block_list_element::GridType;
-use crate::terminal::model::blocks::TotalIndex;
 use crate::terminal::model::terminal_model::BlockIndex;
 
 /// A unit of work for the background find task.
@@ -28,11 +26,6 @@ pub enum FindWorkItem {
         grid_type: GridType,
         row_range: RangeInclusive<usize>,
         num_lines_truncated: u64,
-    },
-    /// Request scanning of an AI block on the main thread.
-    AIBlock {
-        view_id: EntityId,
-        total_index: TotalIndex,
     },
 }
 
@@ -70,27 +63,14 @@ impl FindWorkQueue {
 
     /// Populates the queue with initial scan items from a block info list.
     ///
-    /// Terminal blocks become [`FindWorkItem::ScanFullBlock`] items and rich
-    /// content blocks become [`FindWorkItem::ScanAIBlock`] items. Items are
-    /// pushed in the order provided (typically newest-first from
+    /// Each block becomes a [`FindWorkItem::FullBlock`] item. Items are pushed
+    /// in the order provided (typically newest-first from
     /// [`collect_block_info`](super::collect_block_info)).
     pub fn enqueue_full_scan(&self, blocks: &[BlockInfo]) {
         let mut inner = self.inner.lock().unwrap();
-        for block in blocks {
-            let item = match block {
-                BlockInfo::Terminal { block_index, .. } => FindWorkItem::FullBlock {
-                    block_index: *block_index,
-                },
-                BlockInfo::RichContent {
-                    view_id,
-                    total_index,
-                } => FindWorkItem::AIBlock {
-                    view_id: *view_id,
-                    total_index: *total_index,
-                },
-            };
-            inner.items.push_back(item);
-        }
+        inner.items.extend(blocks.iter().map(|block| FindWorkItem::FullBlock {
+            block_index: block.block_index,
+        }));
         drop(inner);
         // Wake the background task if it is waiting.
         self.event.notify(1);

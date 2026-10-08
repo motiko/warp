@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use std::ops::Range;
-use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::Sender;
@@ -8,7 +7,6 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use pathfinder_color::ColorU;
 use pathfinder_geometry::vector::Vector2F;
-use warp_core::features::FeatureFlag;
 use warp_errors::report_error;
 use warpui::accessibility::{AccessibilityContent, WarpA11yRole};
 use warpui::elements::{
@@ -25,13 +23,12 @@ use warpui::{
     ViewContext, ViewHandle, WeakViewHandle,
 };
 
-use super::ai_queries::AIQueriesDataSource;
 use super::env_var_collections::EnvVarCollectionDataSource;
 use super::history::history_data_source_for_session;
-use super::warp_ai::WarpAIDataSource;
+use super::natural_language::{NaturalLanguageCommandContext, NaturalLanguageCommandRegistry};
+use super::natural_language_data_source::NaturalLanguageDataSource;
 use super::workflows::{WorkflowsDataSource, cloud_workflows_data_source};
 use super::zero_state::{CommandSearchZeroStateEvent, CommandSearchZeroStateView};
-use crate::ai::execution_context::WarpAiExecutionContext;
 use crate::appearance::Appearance;
 use crate::completer::SessionContext;
 use crate::drive::settings::WarpDriveSettings;
@@ -41,7 +38,6 @@ use crate::search::mixer::AddAsyncSourceOptions;
 use crate::search::result_renderer::{QueryResultRenderer, QueryResultRendererStyles};
 use crate::search::search_bar::{SearchBar, SearchBarEvent, SearchBarState, SearchResultOrdering};
 use crate::send_telemetry_from_ctx;
-use crate::server::server_api::ai::AIClient;
 use crate::server::telemetry::TelemetryEvent;
 use crate::settings::AISettings;
 use crate::terminal::input::MenuPositioning;
@@ -110,7 +106,6 @@ pub struct CommandSearchView {
     zero_state_handle: ViewHandle<CommandSearchZeroStateView>,
     handle: WeakViewHandle<Self>,
     menu_positioning: MenuPositioning,
-    ai_client: Arc<dyn AIClient>,
     state: CommandSearchViewState,
     visible_results_range_sender: Sender<Range<usize>>,
     resizable_state_handle: ResizableStateHandle,
@@ -120,7 +115,7 @@ pub struct CommandSearchView {
 }
 
 impl CommandSearchView {
-    pub fn new(ai_client: Arc<dyn AIClient>, ctx: &mut ViewContext<Self>) -> Self {
+    pub fn new(ctx: &mut ViewContext<Self>) -> Self {
         let search_bar_state =
             ctx.add_model(|_| SearchBarState::new(SearchResultOrdering::BottomUp));
 
@@ -183,7 +178,6 @@ impl CommandSearchView {
             });
 
         Self {
-            ai_client,
             zero_state_handle,
             menu_positioning: Default::default(),
             handle: ctx.handle(),
@@ -205,7 +199,7 @@ impl CommandSearchView {
         &mut self,
         session_id: SessionId,
         session_context: Option<SessionContext>,
-        ai_execution_context: Option<WarpAiExecutionContext>,
+        natural_language_context: Option<NaturalLanguageCommandContext>,
         ctx: &mut ViewContext<Self>,
     ) {
         let window_id = ctx.window_id();
@@ -215,13 +209,16 @@ impl CommandSearchView {
             // Add data sources in lowest->highest priority order.  If results from two
             // data sources produce the same ranking score, the data source added first
             // will show up higher in the list (i.e.: further away from the input).
-            if AISettings::as_ref(ctx).is_any_ai_enabled(ctx) {
+            if AISettings::as_ref(ctx).is_any_ai_enabled() {
                 mixer.add_sync_source(
-                    WarpAIDataSource::new(self.ai_client.clone(), None),
+                    NaturalLanguageDataSource::new(None, None),
                     HashSet::from([QueryFilter::NaturalLanguage]),
                 );
                 mixer.add_async_source(
-                    WarpAIDataSource::new(self.ai_client.clone(), ai_execution_context),
+                    NaturalLanguageDataSource::new(
+                        NaturalLanguageCommandRegistry::as_ref(ctx).provider(),
+                        natural_language_context,
+                    ),
                     HashSet::from([QueryFilter::NaturalLanguage]),
                     AddAsyncSourceOptions {
                         debounce_interval: Some(Duration::from_millis(50)),
@@ -238,14 +235,9 @@ impl CommandSearchView {
                     HashSet::from([QueryFilter::Workflows]),
                 );
 
-                let mut workflows_filters = HashSet::from([QueryFilter::Workflows]);
-                if AISettings::as_ref(ctx).is_any_ai_enabled(ctx) {
-                    workflows_filters.insert(QueryFilter::AgentModeWorkflows);
-                }
-
                 mixer.add_async_source(
                     cloud_workflows_data_source(window_id),
-                    workflows_filters,
+                    HashSet::from([QueryFilter::Workflows]),
                     AddAsyncSourceOptions {
                         debounce_interval: Some(Duration::from_millis(50)),
                         run_in_zero_state: true,
@@ -261,14 +253,6 @@ impl CommandSearchView {
                 mixer.add_sync_source(
                     EnvVarCollectionDataSource::new(),
                     HashSet::from([QueryFilter::EnvironmentVariables]),
-                );
-            }
-
-            if FeatureFlag::AgentMode.is_enabled() && AISettings::as_ref(ctx).is_any_ai_enabled(ctx)
-            {
-                mixer.add_sync_source(
-                    AIQueriesDataSource::new(),
-                    HashSet::from([QueryFilter::PromptHistory]),
                 );
             }
 
@@ -322,10 +306,10 @@ impl CommandSearchView {
         initial_query: String,
         query_filter: Option<QueryFilter>,
         menu_positioning: MenuPositioning,
-        ai_execution_context: Option<WarpAiExecutionContext>,
+        natural_language_context: Option<NaturalLanguageCommandContext>,
         ctx: &mut ViewContext<Self>,
     ) {
-        self.reset_command_search_mixer(session_id, session_context, ai_execution_context, ctx);
+        self.reset_command_search_mixer(session_id, session_context, natural_language_context, ctx);
         let ordering = match menu_positioning {
             MenuPositioning::AboveInputBox => SearchResultOrdering::BottomUp,
             MenuPositioning::BelowInputBox => SearchResultOrdering::TopDown,
@@ -459,14 +443,12 @@ impl CommandSearchView {
         {
             use CommandSearchItemAction::*;
             let was_immediately_executed = match &result_action {
-                ExecuteHistory(_) | RunAIQuery(_) => true,
+                ExecuteHistory(_) => true,
 
                 AcceptHistory(_)
                 | AcceptWorkflow(_)
-                | OpenWarpAI
                 | AcceptEnvVarCollection(_)
-                | TranslateUsingWarpAI
-                | AcceptAIQuery(_) => false,
+                | TranslateNaturalLanguage => false,
             };
 
             let (a11y_content, a11y_help_content) = if was_immediately_executed {

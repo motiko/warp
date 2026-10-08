@@ -1,8 +1,6 @@
-pub mod ai;
 pub mod auth;
 pub mod block;
 pub mod object;
-pub(crate) mod presigned_upload;
 pub mod team;
 pub mod workspace;
 
@@ -12,8 +10,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ::http::header::CONTENT_LENGTH;
-use ai::AIClient;
-use ai_types::AmbientAgentTaskId;
 use anyhow::{Context, Result, anyhow};
 use auth::AuthClient;
 use block::BlockClient;
@@ -43,11 +39,6 @@ use workspace::WorkspaceClient;
 
 use super::experiments::{ServerExperiment, ServerExperiments};
 use crate::ChannelState;
-use crate::ai::get_relevant_files::api::{GetRelevantFiles, GetRelevantFilesResponse};
-use crate::ai::predict::generate_ai_input_suggestions::GenerateAIInputSuggestionsRequest;
-use crate::ai::predict::generate_am_query_suggestions::GenerateAMQuerySuggestionsRequest;
-use crate::ai::predict::predict_am_queries::{PredictAMQueriesRequest, PredictAMQueriesResponse};
-use crate::ai::predict::{generate_ai_input_suggestions, generate_am_query_suggestions};
 use crate::auth::auth_manager::AuthManager;
 use crate::auth::auth_state::AuthState;
 use crate::server::team_scope::RequestTeamScope;
@@ -59,16 +50,6 @@ pub const FETCH_CHANNEL_VERSIONS_TIMEOUT: std::time::Duration = Duration::from_s
 /// more specific error code information, so that the client can discern between different
 /// errors with the same error code.
 /// See errors/http_error_codes.go on the server for possible values.
-const WARP_ERROR_CODE_HEADER: &str = "X-Warp-Error-Code";
-
-/// An error indicating the user is out of credits. The server sends 429s to communicate this
-/// state, but if Cloud Run is overloaded, it can also send 429s that aren't credit-related.
-/// So we use this to distinguish between the two cases.
-const WARP_ERROR_CODE_OUT_OF_CREDITS: &str = "OUT_OF_CREDITS";
-
-/// Error code indicating the user has reached their cloud agent concurrency limit.
-const WARP_ERROR_CODE_AT_CAPACITY: &str = "AT_CLOUD_AGENT_CAPACITY";
-
 /// ResponseType received by Client
 #[derive(thiserror::Error, Debug, Serialize, Deserialize)]
 #[error("{error}")]
@@ -89,14 +70,6 @@ impl Deref for ServerApi {
     }
 }
 
-/// Error when the user is at their cloud agent concurrency limit.
-#[derive(thiserror::Error, Debug, Clone, Deserialize)]
-#[error("{error} (running agents: {running_agents})")]
-pub struct CloudAgentCapacityError {
-    pub error: String,
-    pub running_agents: i32,
-}
-
 #[derive(Deserialize, Debug)]
 struct TimeResponse {
     current_time: DateTime<FixedOffset>,
@@ -115,240 +88,6 @@ impl ServerTime {
         self.time_at_fetch + elapsed
     }
 }
-
-/// Wrapper for deserialization errors. This covers both:
-/// * Using `serde` directly
-/// * Using `reqwest` decoding utilities
-#[derive(thiserror::Error, Debug)]
-pub enum DeserializationError {
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
-    #[error(transparent)]
-    Transport(reqwest::Error),
-}
-
-#[derive(Deserialize, Debug)]
-struct OutOfCreditsResponse {
-    #[serde(default, rename = "userDisplayMessage")]
-    user_display_message: Option<String>,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum AIApiError {
-    #[error("Request failed due to lack of AI quota.")]
-    QuotaLimit {
-        user_display_message: Option<String>,
-    },
-
-    #[error("Warp is currently overloaded. Please try again later.")]
-    ServerOverloaded,
-
-    #[error("Internal error occurred at transport layer.")]
-    Transport(#[source] reqwest::Error),
-
-    #[error("Failed to deserialize API response.")]
-    Deserialization(#[source] DeserializationError),
-
-    #[error("No context found on context search.")]
-    NoContextFound,
-
-    #[error("Failed with status code {0}: {1}")]
-    ErrorStatus(http::StatusCode, String),
-
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
-
-    #[error("Got error when streaming {stream_type}: {source:#}")]
-    Stream {
-        stream_type: &'static str,
-        #[source]
-        source: anyhow::Error,
-    },
-
-    /// Synthesized client-side when a response stream ends without a stream-finished
-    /// event: the server always sends one, but the transport can truncate the response
-    /// between chunks, surfacing as a clean EOF.
-    #[error("Response stream ended unexpectedly before completion.")]
-    UnexpectedEof,
-
-    /// Synthesized client-side when a request that uses the connected Grok
-    /// subscription can't be sent because its expired OAuth token failed to
-    /// refresh. Surfaced as a terminal, user-visible error asking the user to
-    /// reconnect, rather than sending a request that would fail authentication.
-    #[error(
-        "Grok subscription token could not be refreshed. Please try reconnecting your subscription."
-    )]
-    GrokSubscriptionTokenRefreshFailed,
-}
-
-impl From<http_client::ResponseError> for AIApiError {
-    fn from(err: http_client::ResponseError) -> Self {
-        let http_client::ResponseError {
-            source,
-            headers,
-            body,
-        } = err;
-        Self::from_response_error(source, &headers, body)
-    }
-}
-
-impl From<reqwest::Error> for AIApiError {
-    fn from(err: reqwest::Error) -> Self {
-        Self::from_transport_error(err)
-    }
-}
-
-impl From<serde_json::Error> for AIApiError {
-    fn from(err: serde_json::Error) -> Self {
-        AIApiError::Deserialization(err.into())
-    }
-}
-
-impl AIApiError {
-    /// Converts a reqwest error to an AIApiError, using response headers to distinguish
-    /// between different types of 429 errors.
-    fn from_response_error(
-        err: reqwest::Error,
-        headers: &::http::HeaderMap,
-        body: Option<String>,
-    ) -> Self {
-        // For HTTP 429 errors, check the X-Warp-Error-Code header to distinguish
-        // between out-of-credits and server-overload.
-        if err.status() == Some(http::StatusCode::TOO_MANY_REQUESTS) {
-            return Self::error_for_429(headers, body);
-        }
-
-        Self::from_transport_error(err)
-    }
-
-    /// Converts a transport-level reqwest error (no HTTP response) to an AIApiError.
-    fn from_transport_error(err: reqwest::Error) -> Self {
-        // Unfortunately, `reqwest` reports some non-decoding errors as decoding errors (e.g.
-        // unexpected disconnects or timeouts while deserializing a response body). Since we
-        // render deserialization and transport errors differently, we try to detect those cases
-        // here.
-        if err.is_timeout() {
-            return AIApiError::Transport(err);
-        }
-        if err.is_decode() {
-            #[cfg(not(target_family = "wasm"))]
-            {
-                use std::error::Error as _;
-                let mut source = err.source();
-                while let Some(underlying) = source {
-                    if underlying.is::<hyper::Error>() {
-                        return AIApiError::Transport(err);
-                    }
-
-                    source = underlying.source();
-                }
-            }
-
-            return AIApiError::Deserialization(DeserializationError::Transport(err));
-        }
-
-        AIApiError::Transport(err)
-    }
-
-    /// Returns the appropriate error for a 429 response by checking the X-Warp-Error-Code header.
-    fn error_for_429(headers: &::http::HeaderMap, body: Option<String>) -> Self {
-        if headers
-            .get(WARP_ERROR_CODE_HEADER)
-            .and_then(|v| v.to_str().ok())
-            == Some(WARP_ERROR_CODE_OUT_OF_CREDITS)
-        {
-            let user_display_message = body
-                .and_then(|body| serde_json::from_str::<OutOfCreditsResponse>(&body).ok())
-                .and_then(|r| r.user_display_message);
-            AIApiError::QuotaLimit {
-                user_display_message,
-            }
-        } else {
-            AIApiError::ServerOverloaded
-        }
-    }
-
-    /// Format a stream error into a human-readable error message. This will read the response
-    /// body if there is one.
-    pub(crate) async fn from_stream_error(
-        stream_type: &'static str,
-        err: reqwest_eventsource::Error,
-    ) -> Self {
-        match err {
-            reqwest_eventsource::Error::InvalidStatusCode(
-                http::StatusCode::TOO_MANY_REQUESTS,
-                res,
-            ) => {
-                let headers = res.headers().clone();
-                let body = res.text().await.ok();
-                Self::error_for_429(&headers, body)
-            }
-            reqwest_eventsource::Error::InvalidStatusCode(status, res) => Self::ErrorStatus(
-                status,
-                res.text()
-                    .await
-                    .unwrap_or_else(|e| format!("(no response body: {e:#})")),
-            ),
-            reqwest_eventsource::Error::Transport(err) => Self::from_transport_error(err),
-            err => AIApiError::Stream {
-                stream_type,
-                // On WASM, `reqwest_eventsource::Error` doesn't implement `Into<anyhow::Error>` or
-                // `Send` because it may contain a `wasm_bindgen` JS value.
-                #[cfg(target_family = "wasm")]
-                source: anyhow!("{err:#?}"),
-                #[cfg(not(target_family = "wasm"))]
-                source: anyhow!(err),
-            },
-        }
-    }
-
-    /// Whether the error is worth an automatic recovery attempt — a fresh request may
-    /// succeed. Gates both retry (pre-actions) and resume (post-actions).
-    pub fn is_recoverable(&self) -> bool {
-        // Don't recover from client errors, except timeouts and rate limits.
-        fn is_recoverable_status(status: http::StatusCode) -> bool {
-            !status.is_client_error()
-                || status == http::StatusCode::REQUEST_TIMEOUT
-                || status == http::StatusCode::TOO_MANY_REQUESTS
-        }
-
-        match self {
-            AIApiError::ErrorStatus(status, _) => is_recoverable_status(*status),
-            AIApiError::Transport(e) => {
-                if let Some(status) = e.status() {
-                    return is_recoverable_status(status);
-                }
-                true
-            }
-            // A failed Grok token refresh is a credential problem the user must
-            // fix by reconnecting, so retrying or resuming won't help.
-            AIApiError::GrokSubscriptionTokenRefreshFailed => false,
-            // By default, attempt recovery on error.
-            _ => true,
-        }
-    }
-}
-
-impl ErrorExt for AIApiError {
-    fn is_actionable(&self) -> bool {
-        match self {
-            AIApiError::Deserialization(error) => match error {
-                DeserializationError::Json(_) => true,
-                DeserializationError::Transport(error) => error.is_actionable(),
-            },
-            AIApiError::Transport(error) => error.is_actionable(),
-            AIApiError::Other(error) => error.is_actionable(),
-            AIApiError::Stream { source, .. } => source.is_actionable(),
-            AIApiError::ErrorStatus(_, _) => self.is_recoverable(),
-            AIApiError::UnexpectedEof => true,
-            AIApiError::QuotaLimit { .. }
-            | AIApiError::ServerOverloaded
-            | AIApiError::NoContextFound
-            | AIApiError::GrokSubscriptionTokenRefreshFailed => false,
-        }
-    }
-}
-register_error!(AIApiError);
 
 /// An API wrapper struct with methods to requests to warp-server.
 ///
@@ -447,12 +186,6 @@ impl ServerApi {
         )
     }
 
-    /// Sets the ambient agent task ID to be sent with all subsequent requests.
-    pub fn set_ambient_agent_task_id(&self, task_id: Option<AmbientAgentTaskId>) {
-        self.base_client
-            .set_ambient_agent_task_id(task_id.map(|task_id| task_id.to_string()));
-    }
-
     /// Returns ambient agent headers to attach to requests.
     async fn ambient_agent_headers(&self) -> Result<Vec<(String, String)>> {
         self.ambient_headers(AmbientHeaderPolicy::inherit_all())
@@ -541,36 +274,9 @@ impl ServerApi {
     /// fast on a deterministic 4xx instead of defaulting to a transient retry.
     async fn error_from_response(response: http_client::Response) -> anyhow::Error {
         let status = response.status();
-        let is_at_capacity = response
-            .headers()
-            .get(WARP_ERROR_CODE_HEADER)
-            .and_then(|v| v.to_str().ok())
-            == Some(WARP_ERROR_CODE_AT_CAPACITY);
-        let is_out_of_credits = response
-            .headers()
-            .get(WARP_ERROR_CODE_HEADER)
-            .and_then(|v| v.to_str().ok())
-            == Some(WARP_ERROR_CODE_OUT_OF_CREDITS);
-
         // Get the response text first since we may need to try multiple deserializations.
         let response_text = response.text().await.unwrap_or_default();
         let status_error = HttpStatusError::new(status.as_u16(), response_text.clone());
-
-        // Check for AT_CAPACITY error code header.
-        if is_at_capacity
-            && let Ok(capacity_error) =
-                serde_json::from_str::<CloudAgentCapacityError>(&response_text)
-        {
-            return anyhow::Error::new(status_error).context(capacity_error);
-        }
-        if status == StatusCode::TOO_MANY_REQUESTS && is_out_of_credits {
-            let user_display_message = serde_json::from_str::<OutOfCreditsResponse>(&response_text)
-                .ok()
-                .and_then(|r| r.user_display_message);
-            return anyhow::Error::new(status_error).context(AIApiError::QuotaLimit {
-                user_display_message,
-            });
-        }
 
         // Try to deserialize error response as { "error": "message" }
         match serde_json::from_str::<ClientError>(&response_text) {
@@ -683,134 +389,6 @@ impl ServerApi {
     ) -> Result<()> {
         self.telemetry_api
             .flush_and_persist_events(max_event_count, settings_snapshot)
-    }
-
-    /// Hits the /ai/generate_input_suggestions endpoint to get the predicted next action, based on past context.
-    pub async fn generate_ai_input_suggestions(
-        &self,
-        request: &GenerateAIInputSuggestionsRequest,
-        team_scope: RequestTeamScope,
-    ) -> Result<generate_ai_input_suggestions::GenerateAIInputSuggestionsResponseV2, AIApiError>
-    {
-        let auth_token = self.get_or_refresh_access_token().await?;
-
-        let mut request_builder = self.base_client.http_client().post(format!(
-            "{}/ai/generate_input_suggestions",
-            ChannelState::server_root_url()
-        ));
-        if let Some(team_uid) = team_scope.team_uid() {
-            request_builder = request_builder.header(TEAM_UID_HEADER, team_uid.uid());
-        }
-        let response = if let Some(token) = auth_token.as_bearer_token() {
-            request_builder.bearer_auth(token)
-        } else {
-            request_builder
-        }
-        .json(request)
-        .send()
-        .await?
-        .error_for_status_with_body()
-        .await?
-        .json()
-        .await?;
-        Ok(response)
-    }
-
-    pub async fn get_relevant_files(
-        &self,
-        request: &GetRelevantFiles,
-        team_scope: RequestTeamScope,
-    ) -> Result<GetRelevantFilesResponse, AIApiError> {
-        let auth_token = self.get_or_refresh_access_token().await?;
-
-        let mut request_builder = self.base_client.http_client().post(format!(
-            "{}/ai/relevant_files",
-            ChannelState::server_root_url()
-        ));
-        if let Some(token) = auth_token.as_bearer_token() {
-            request_builder = request_builder.bearer_auth(token);
-        }
-        if let Some(team_uid) = team_scope.team_uid() {
-            request_builder = request_builder.header(TEAM_UID_HEADER, team_uid.uid());
-        }
-        let response = request_builder
-            .json(request)
-            .send()
-            .await?
-            .error_for_status_with_body()
-            .await?
-            .json()
-            .await?;
-
-        Ok(response)
-    }
-
-    /// Hits the /ai/generate_am_query_suggestions endpoint to get the predicted next query.
-    pub async fn generate_am_query_suggestions(
-        &self,
-        request: &GenerateAMQuerySuggestionsRequest,
-        team_scope: RequestTeamScope,
-    ) -> Result<generate_am_query_suggestions::GenerateAMQuerySuggestionsResponse, AIApiError> {
-        let auth_token = self.get_or_refresh_access_token().await?;
-
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "agent_mode_evals")] {
-                let url = format!(
-                    "{}/agent-mode-evals/generate_am_query_suggestions",
-                    ChannelState::server_root_url()
-                );
-            } else {
-                let url = format!(
-                    "{}/ai/generate_am_query_suggestions",
-                    ChannelState::server_root_url()
-                );
-            }
-        }
-
-        let mut request_builder = self.base_client.http_client().post(url);
-        if let Some(token) = auth_token.as_bearer_token() {
-            request_builder = request_builder.bearer_auth(token);
-        }
-        if let Some(team_uid) = team_scope.team_uid() {
-            request_builder = request_builder.header(TEAM_UID_HEADER, team_uid.uid());
-        }
-        let response = request_builder
-            .json(request)
-            .send()
-            .await?
-            .error_for_status_with_body()
-            .await?
-            .json()
-            .await?;
-        Ok(response)
-    }
-
-    pub async fn predict_am_queries(
-        &self,
-        request: &PredictAMQueriesRequest,
-        team_scope: RequestTeamScope,
-    ) -> Result<PredictAMQueriesResponse, AIApiError> {
-        let auth_token = self.get_or_refresh_access_token().await?;
-        let mut request_builder = self.base_client.http_client().post(format!(
-            "{}/ai/predict_am_queries",
-            ChannelState::server_root_url()
-        ));
-        if let Some(team_uid) = team_scope.team_uid() {
-            request_builder = request_builder.header(TEAM_UID_HEADER, team_uid.uid());
-        }
-        let response = if let Some(token) = auth_token.as_bearer_token() {
-            request_builder.bearer_auth(token)
-        } else {
-            request_builder
-        }
-        .json(request)
-        .send()
-        .await?
-        .error_for_status_with_body()
-        .await?
-        .json()
-        .await?;
-        Ok(response)
     }
 
     fn set_server_time(&self, server_time: ServerTime) {
@@ -1023,9 +601,6 @@ impl ServerApiProvider {
     }
 
     pub fn get_team_client(&self) -> Arc<dyn TeamClient> {
-        self.server_api.clone()
-    }
-    pub fn get_ai_client(&self) -> Arc<dyn AIClient> {
         self.server_api.clone()
     }
 

@@ -7,7 +7,7 @@ use warpui::App;
 use crate::code::buffer_location::LocalOrRemotePath;
 use crate::code::editor::line::EditorLineLocation;
 use crate::code_review::comments::{
-    AttachedReviewComment, AttachedReviewCommentTarget, CommentOrigin, LineDiffContent,
+    AttachedReviewComment, AttachedReviewCommentTarget, LineDiffContent,
     ReviewCommentBatch,
 };
 

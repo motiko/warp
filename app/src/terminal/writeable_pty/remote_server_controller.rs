@@ -138,14 +138,10 @@ impl<T: EventLoopSender> RemoteServerController<T> {
             | RemoteServerManagerEvent::SessionDeregistered { .. }
             | RemoteServerManagerEvent::HostConnected { .. }
             | RemoteServerManagerEvent::HostDisconnected { .. }
-            | RemoteServerManagerEvent::RemoteAgentContextSnapshot { .. }
             | RemoteServerManagerEvent::NavigatedToDirectory { .. }
             | RemoteServerManagerEvent::RepoMetadataSnapshot { .. }
             | RemoteServerManagerEvent::RepoMetadataUpdated { .. }
             | RemoteServerManagerEvent::RepoMetadataDirectoryLoaded { .. }
-            | RemoteServerManagerEvent::CodebaseIndexStatusesSnapshot { .. }
-            | RemoteServerManagerEvent::CodebaseIndexStatusUpdated { .. }
-            | RemoteServerManagerEvent::CodebaseIndexMutationFailed { .. }
             | RemoteServerManagerEvent::SetupStateChanged { .. }
             | RemoteServerManagerEvent::ClientRequestFailed { .. }
             | RemoteServerManagerEvent::ServerMessageDecodingError { .. }
@@ -158,7 +154,6 @@ impl<T: EventLoopSender> RemoteServerController<T> {
             | RemoteServerManagerEvent::CommitChainResponse { .. }
             | RemoteServerManagerEvent::GitPushResponse { .. }
             | RemoteServerManagerEvent::CreatePrResponse { .. }
-            | RemoteServerManagerEvent::GenerateCommitMessageResponse { .. }
             | RemoteServerManagerEvent::GetCommittedBranchFilesResponse { .. }
             | RemoteServerManagerEvent::GitStatusPushReceived { .. }
             | RemoteServerManagerEvent::GitHubPrInfoPushReceived { .. }

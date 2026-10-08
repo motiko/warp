@@ -28,7 +28,7 @@ test = false
 
 [dependencies]
 addr = "0.15.6"
-ai.workspace = true
+ai_config.workspace = true
 ai_types.workspace = true
 alphanumeric-sort = "1.5.7"
 anyhow.workspace = true
@@ -61,7 +61,6 @@ cloud_object_models.workspace = true
 cloud_objects.workspace = true
 command = { workspace = true }
 command-corrections.workspace = true
-computer_use.workspace = true
 crc.workspace = true
 content_inspector = "0.2.4"
 concat-idents.workspace = true
@@ -102,7 +101,6 @@ infer = "0.19.0"
 jemalloc_pprof = { version = "0.8.1", optional = true }
 lsp-types = "0.97.0"
 indexmap = { version = "2.0.2", features = ["serde"] }
-input_classifier.workspace = true
 instant.workspace = true
 ipc.workspace = true
 iso8601-duration.workspace = true
@@ -120,7 +118,6 @@ warp_logging.workspace = true
 sentry = { workspace = true, optional = true }
 lz4_flex = "0.11"
 markdown_parser.workspace = true
-mcp.workspace = true
 memchr.workspace = true
 memo-map.workspace = true
 mermaid_to_svg.workspace = true
@@ -221,7 +218,6 @@ warp_terminal.workspace = true
 websocket.workspace = true
 workflow_types.workspace = true
 wgpu = { workspace = true, optional = true }
-natural_language_detection.workspace = true
 aho-corasick = "1.1.3"
 strum.workspace = true
 strum_macros.workspace = true
@@ -231,13 +227,10 @@ counter = "0.6.0"
 typed-path.workspace = true
 urlencoding = "2.1.3"
 mime_guess = "2.0"
-warp_multi_agent_api.workspace = true
 remote_server.workspace = true
 repo_metadata.workspace = true
 vim.workspace = true
-rmcp.workspace = true
 warp_ripgrep.workspace = true
-warp_multi_agent_client.workspace = true
 local_control.workspace = true
 hashbrown.workspace = true
 rustc-hash.workspace = true
@@ -388,9 +381,7 @@ windows-result = { workspace = true }
 winreg.workspace = true
 
 [dev-dependencies]
-ai = { workspace = true, features = ["test-util"] }
 async-process.workspace = true
-computer_use = { workspace = true, features = ["test-util"] }
 firebase.workspace = true
 jsonschema = { workspace = true, default-features = false }
 async-executor = "1.5.1"
@@ -462,7 +453,6 @@ crash_reporting = [
     "warp_logging/crash_reporting",
     "warp_errors/crash_reporting",
     "warp_terminal/crash_reporting",
-    "ai/crash_reporting",
 ]
 creating_shared_sessions = []
 cross_repo_context = []
@@ -651,11 +641,6 @@ grep_tool = []
 # For the most part, including GUI code in headless builds is fine; the main use case is
 # for things that pull in external dependencies.
 gui = []
-nld_classifier_v1 = ["input_classifier/nld_classifier_v1"]
-nld_classifier_v2 = ["input_classifier/nld_classifier_v2"]
-nld_classifier_v3 = ["input_classifier/nld_classifier_v3"]
-nld_heuristic_v1 = ["input_classifier/nld_heuristic_v1"]
-nld_heuristic_v2 = ["input_classifier/nld_heuristic_v2"]
 nld_prompt_history_match = []
 msys2_shells = []
 file_backed_execution_profiles = []
@@ -673,7 +658,6 @@ agent_mode_evals = [
     "rust-embed/debug-embed",
     "warpui/log_named_telemetry_events",
     "warp_logging/agent_mode_evals",
-    "warp_multi_agent_client/agent_mode_evals",
     "warp_server_client/agent_mode_evals",
 ]
 allow_ignoring_input_suggestions = []
@@ -686,7 +670,7 @@ inline_slash_commands = ["agent_view"]
 heap_usage_tracking = ["jemalloc_pprof", "crash_reporting"]
 image_as_context = []
 in_band_generators_ssh = []
-jemalloc = ["dep:tikv-jemallocator", "ai/jemalloc"]
+jemalloc = ["dep:tikv-jemallocator"]
 jemalloc_with_profiling = ["jemalloc", "tikv-jemallocator/profiling"]
 jemalloc_auto_heap_profiling = ["jemalloc_with_profiling"]
 jemalloc_pprof = ["jemalloc_with_profiling", "dep:jemalloc_pprof"]
@@ -706,7 +690,6 @@ local_computer_use = []
 # conditionally include dependencies that should only exist in such
 # environments.
 local_fs = [
-    "ai/local_fs",
     "lsp/local_fs",
     "persistence/local_fs",
     "repo_metadata/local_fs",
@@ -759,7 +742,6 @@ test-util = [
     "http_client/test-util",
     "warp_core/test-util",
     "warp_terminal/test-util",
-    "ai/test-util",
     "warp_server_client/test-util",
 ]
 terminal_lifecycle_recovery = []

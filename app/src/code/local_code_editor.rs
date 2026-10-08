@@ -27,29 +27,23 @@ use remote_server::manager::RemoteServerManager;
 use repo_metadata::repositories::DetectedRepositories;
 use string_offset::CharOffset;
 use vec1::Vec1;
-use vim::vim::{MotionType, VimMode};
 use warp_core::r#async::debounce;
-use warp_core::features::FeatureFlag;
 use warp_core::ui::appearance::Appearance;
 use warp_core::ui::icons::Icon;
 use warp_editor::content::buffer::InitialBufferState;
 use warp_editor::content::text::IndentUnit;
-use warp_editor::diff::DiffType;
-use warp_editor::render::model::{Decoration, LineCount};
+use warp_editor::render::model::{Decoration};
 use warp_util::content_version::ContentVersion;
 use warp_util::file::{FileId, FileLoadError, FileSaveError};
 #[cfg(feature = "local_fs")]
 use warp_util::local_or_remote_path::LocalOrRemotePath;
-use warp_util::path::to_relative_path;
 use warp_util::sync::Condition;
 use warpui::elements::{
-    Border, ChildAnchor, ChildView, ClippedScrollStateHandle, ConstrainedBox, Container,
-    CornerRadius, CrossAxisAlignment, DropShadow, Flex, Hoverable, MainAxisAlignment, MainAxisSize,
+    ChildAnchor, ChildView, ClippedScrollStateHandle, ConstrainedBox, Container,
+    CornerRadius, CrossAxisAlignment, Flex, Hoverable, MainAxisAlignment, MainAxisSize,
     MouseStateHandle, OffsetPositioning, ParentAnchor, ParentElement, ParentOffsetBounds, Radius,
     Rect, Shrinkable, Stack, Text,
 };
-use warpui::keymap::FixedBinding;
-use warpui::keymap::macros::*;
 use warpui::platform::SaveFilePickerConfiguration;
 use warpui::text::point::Point;
 use warpui::ui_components::button::ButtonVariant;
@@ -68,9 +62,7 @@ use crate::code::{SaveOutcome, ShowFindReferencesCardProvider};
 use crate::code_review::comments::CommentId;
 use crate::menu::{Event, Menu, MenuItem, MenuItemFields};
 use crate::projects::persisted_workspace::{PersistedWorkspace, PersistedWorkspaceEvent};
-use crate::settings::{AISettings, CodeSettings};
-use crate::terminal::TerminalView;
-use crate::workspace::WorkspaceAction;
+use crate::settings::CodeSettings;
 
 const DROP_SHADOW_COLOR: ColorU = ColorU {
     r: 0,
@@ -88,7 +80,6 @@ const AUTO_SAVE_DEBOUNCE_PERIOD: Duration = Duration::from_millis(1000);
 use warp_core::send_telemetry_from_ctx;
 
 use super::ImmediateSaveError;
-use super::diff_viewer::DiffViewer;
 use super::editor::scroll::{ScrollPosition, ScrollTrigger};
 use super::editor::view::{CodeEditorEvent, CodeEditorView};
 use super::find_references_view::{FindReferencesView, FindReferencesViewEvent};
@@ -97,14 +88,6 @@ use super::lsp_telemetry::LspTelemetryEvent;
 
 type SaveCallback =
     Box<dyn FnOnce(SaveOutcome, &mut ViewContext<LocalCodeEditorView>) + Send + Sync + 'static>;
-
-pub fn init(app: &mut AppContext) {
-    app.register_fixed_bindings([FixedBinding::new(
-        "cmdorctrl-l",
-        LocalCodeEditorAction::InsertSelectedTextToInput,
-        id!("LocalCodeEditorView") & !id!("IMEOpen"),
-    )]);
-}
 
 pub enum LocalCodeEditorEvent {
     FileLoaded,
@@ -119,19 +102,12 @@ pub enum LocalCodeEditorEvent {
     FailedToSave {
         error: Arc<FileSaveError>,
     },
-    DiffAccepted,
-    DiffRejected,
     /// Emitted when a user presses Escape in Vim Normal mode inside the embedded editor.
     VimMinimizeRequested,
     /// Emitted when a user edits the file.
     UserEdited,
     /// Emitted when the diff status changes (e.g., line counts update).
     DiffStatusUpdated,
-    SelectionAddedAsContext {
-        relative_file_path: String,
-        /// 1-indexed line range of the selection: `[start, end]` both inclusive.
-        line_range: Range<LineCount>,
-    },
     DiscardUnsavedChanges {
         path: PathBuf,
     },
@@ -161,9 +137,6 @@ pub enum LocalCodeEditorEvent {
     OpenLspLogs {
         log_path: PathBuf,
     },
-    RunTabConfigSkill {
-        path: PathBuf,
-    },
     DelayedRenderingFlushed,
 }
 
@@ -176,18 +149,9 @@ struct LoadedFileMetadata {
 
 use warp_errors::report_error;
 
-pub use super::diff_viewer::DisplayMode;
-
-type TerminalTargetFn = dyn Fn(WindowId, &AppContext) -> Option<ViewHandle<TerminalView>>;
-
-struct SelectionAsContextTooltip {
-    mouse_state: MouseStateHandle,
-    terminal_target_fn: Box<TerminalTargetFn>,
-}
 
 #[derive(Debug, Clone)]
 pub enum LocalCodeEditorAction {
-    InsertSelectedTextToInput,
     SaveFile,
     DiscardUnsavedChanges,
     NavigateToTarget(FileLocation),
@@ -271,15 +235,9 @@ pub(super) const HOVER_TOOLTIP_MAX_HEIGHT: f32 = 100.;
 pub struct LocalCodeEditorView {
     pub(super) editor: ViewHandle<CodeEditorView>,
     metadata: Option<LoadedFileMetadata>,
-    enable_diff_nav_by_default: bool,
     is_new_file: bool,
-    diff_type: Option<DiffType>,
-    selection_as_context_tooltip: Option<SelectionAsContextTooltip>,
-    /// A marker for when the backing file has first been loaded. This is used to prevent applying
-    /// a diff before it can be properly calculated.
+    /// A marker for when the backing file has first been loaded.
     file_loaded: Condition,
-    /// Whether content was changed from its base.
-    was_edited: bool,
     /// Content version of the base file state.
     base_content_version: Option<ContentVersion>,
     /// Set to `true` when a `RemoteBufferConflict` event fires for this
@@ -320,9 +278,6 @@ pub struct LocalCodeEditorView {
 impl LocalCodeEditorView {
     pub fn new(
         editor: ViewHandle<CodeEditorView>,
-        diff_type: Option<DiffType>,
-        enable_diff_nav_by_default: bool,
-        display_mode: Option<DisplayMode>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         let context_menu = ctx.add_typed_action_view(|_| {
@@ -335,29 +290,19 @@ impl LocalCodeEditorView {
         });
 
         ctx.subscribe_to_view(&editor, |me, _, event, ctx| match event {
-            CodeEditorEvent::UnifiedDiffComputed => {
-                ctx.emit(LocalCodeEditorEvent::DiffAccepted);
-            }
             CodeEditorEvent::ContentChanged { origin, .. } => {
-                me.update_diff_hunk_gutter_buttons(ctx);
-
                 // Clear cached diagnostics/decorations on any content change. This is to avoid showing stale diagnostics while we are waiting for new diagnostics.
                 if !me.processed_diagnostics.is_empty() || !me.diagnostic_decorations.is_empty() {
                     me.clear_diagnostics(ctx);
                 }
 
                 if origin.from_user() {
-                    me.was_edited = true;
                     ctx.emit(LocalCodeEditorEvent::UserEdited);
 
                     // Queue a debounced auto-save while the user types. The
                     // debounced path saves without running the LSP formatter,
                     // matching VS Code's `files.autoSave: afterDelay` behavior.
-                    // A `Some` `diff_type` means this editor is showing a
-                    // pending accept/reject diff (e.g. an agent "edit-file"
-                    // proposal), which must never auto-save. Editable
-                    // code-review diffs use `diff_type = None` and stay eligible.
-                    if me.diff_type.is_none() && *CodeSettings::as_ref(ctx).auto_save {
+                    if *CodeSettings::as_ref(ctx).auto_save {
                         let _ = me.auto_save_debounce_tx.try_send(());
                     }
                 }
@@ -486,8 +431,6 @@ impl LocalCodeEditorView {
             _ => {}
         });
 
-        let is_new_file = matches!(diff_type, Some(DiffType::Create { .. }));
-
         // Set up debounce for hover requests
         let (hover_debounce_tx, hover_debounce_rx) = async_channel::unbounded();
         ctx.spawn_stream_local(
@@ -511,15 +454,11 @@ impl LocalCodeEditorView {
             Self::handle_window_focus_change,
         );
 
-        let model = Self {
+        Self {
             editor,
-            diff_type,
-            is_new_file,
+            is_new_file: false,
             metadata: None,
-            enable_diff_nav_by_default,
             file_loaded: Condition::new(),
-            selection_as_context_tooltip: None,
-            was_edited: false,
             base_content_version: None,
             has_remote_conflict: false,
             conflict_banner_mouse_states: Default::default(),
@@ -536,12 +475,7 @@ impl LocalCodeEditorView {
             processed_diagnostics: Vec::new(),
             diagnostic_decorations: Vec::new(),
             find_references_view: None,
-        };
-
-        if let Some(display_mode) = display_mode {
-            model.set_display_mode(display_mode, ctx);
         }
-        model
     }
 
     /// Calls LSP goto_definition and spawns a callback with the result.
@@ -1142,39 +1076,14 @@ impl LocalCodeEditorView {
     fn perform_save(&mut self, file_id: FileId, ctx: &mut ViewContext<Self>) {
         self.base_content_version = Some(self.editor.as_ref(ctx).version(ctx));
 
-        let result = match self.diff() {
-            Some(DiffType::Update {
-                rename: Some(new_path),
-                ..
-            }) => self.editor.update(ctx, |editor, ctx| {
-                let content = editor.text(ctx);
-                let buffer_version = editor.version(ctx);
+        let result = self.editor.update(ctx, |editor, ctx| {
+            let content = editor.text(ctx);
+            let buffer_version = editor.version(ctx);
 
-                GlobalBufferModel::handle(ctx).update(ctx, move |model, ctx| {
-                    model.rename_and_save(
-                        file_id,
-                        new_path.clone(),
-                        content.into_string(),
-                        buffer_version,
-                        ctx,
-                    )
-                })
-            }),
-            Some(DiffType::Delete { .. }) => self.editor.update(ctx, |editor, ctx| {
-                let buffer_version = editor.version(ctx);
-                GlobalBufferModel::handle(ctx).update(ctx, move |model, ctx| {
-                    model.delete(file_id, buffer_version, ctx)
-                })
-            }),
-            _ => self.editor.update(ctx, |editor, ctx| {
-                let content = editor.text(ctx);
-                let buffer_version = editor.version(ctx);
-
-                GlobalBufferModel::handle(ctx).update(ctx, move |model, ctx| {
-                    model.save(file_id, content.into_string(), buffer_version, ctx)
-                })
-            }),
-        };
+            GlobalBufferModel::handle(ctx).update(ctx, move |model, ctx| {
+                model.save(file_id, content.into_string(), buffer_version, ctx)
+            })
+        });
 
         if let Err(err) = result {
             // A synchronous save failure means no async `FileSaved` will arrive,
@@ -1195,13 +1104,6 @@ impl LocalCodeEditorView {
     /// disconnected remotes are intentionally skipped.
     fn auto_save_after_delay(&mut self, ctx: &mut ViewContext<Self>) {
         if !*CodeSettings::as_ref(ctx).auto_save {
-            return;
-        }
-
-        // Never auto-save a pending accept/reject diff (e.g. an agent
-        // "edit-file" proposal). Editable code-review diffs use `diff_type =
-        // None` and remain eligible.
-        if self.diff_type.is_some() {
             return;
         }
 
@@ -1228,13 +1130,7 @@ impl LocalCodeEditorView {
     /// files) and `RemoteDisconnected` are expected no-ops; real save failures
     /// still surface via `FailedToSave` events.
     fn auto_save_on_focus_change(&mut self, ctx: &mut ViewContext<Self>) {
-        // Never auto-save a pending accept/reject diff (see
-        // `auto_save_after_delay`); editable code-review diffs use `diff_type =
-        // None` and remain eligible.
-        if !*CodeSettings::as_ref(ctx).auto_save
-            || self.diff_type.is_some()
-            || !self.has_unsaved_changes(ctx)
-        {
+        if !*CodeSettings::as_ref(ctx).auto_save || !self.has_unsaved_changes(ctx) {
             return;
         }
 
@@ -1315,8 +1211,6 @@ impl LocalCodeEditorView {
     pub fn new_with_global_buffer<T>(
         location: BufferFileLocation,
         editor_constructor: T,
-        enable_diff_nav_by_default: bool,
-        display_mode: Option<DisplayMode>,
         ctx: &mut ViewContext<Self>,
     ) -> Self
     where
@@ -1346,8 +1240,7 @@ impl LocalCodeEditorView {
             }
         }
 
-        let mut local_editor =
-            Self::new(editor, None, enable_diff_nav_by_default, display_mode, ctx);
+        let mut local_editor = Self::new(editor, ctx);
 
         local_editor.metadata = Some(LoadedFileMetadata {
             id: file_id,
@@ -1375,7 +1268,6 @@ impl LocalCodeEditorView {
     }
 
     fn on_file_loaded(&mut self, ctx: &mut ViewContext<Self>) {
-        self.apply_diffs_if_any(ctx);
         self.file_loaded.set();
 
         // Apply any pending scroll position that was set before the file finished loading.
@@ -1385,16 +1277,6 @@ impl LocalCodeEditorView {
                 editor.set_pending_scroll(ScrollTrigger::new(position, version));
             });
         }
-    }
-
-    /// Updates the enablement state of the visible "add as context" gutter button based on the file state.
-    /// If the button is hidden to begin with, this is a no-op.
-    pub fn update_diff_hunk_gutter_buttons(&self, ctx: &mut ViewContext<Self>) {
-        let has_unsaved_changes = self.has_unsaved_changes(ctx);
-        let enabled = !has_unsaved_changes;
-        self.editor.update(ctx, |code_editor, ctx| {
-            code_editor.set_add_diff_hunk_as_context_button(enabled, ctx);
-        });
     }
 
     pub fn has_unsaved_changes(&self, ctx: &AppContext) -> bool {
@@ -1408,18 +1290,6 @@ impl LocalCodeEditorView {
         self.base_content_version
             .map(|base_version| !self.editor.as_ref(ctx).version_match(&base_version, ctx))
             .unwrap_or(false)
-    }
-
-    /// Enables the selection-as-context tooltip. For now, we only want this to be rendered within editors in code panes.
-    pub(crate) fn with_selection_as_context(
-        mut self,
-        terminal_target_fn: Box<TerminalTargetFn>,
-    ) -> Self {
-        self.selection_as_context_tooltip = Some(SelectionAsContextTooltip {
-            mouse_state: Default::default(),
-            terminal_target_fn,
-        });
-        self
     }
 
     /// Sets the find references card provider on the underlying editor.
@@ -1440,9 +1310,6 @@ impl LocalCodeEditorView {
             let footer =
                 ctx.add_typed_action_view(|ctx| CodeFooterView::new(path.to_path_buf(), ctx));
             ctx.subscribe_to_view(&footer, |_, _, event, ctx| match event {
-                CodeFooterViewEvent::RunTabConfigSkill { path } => {
-                    ctx.emit(LocalCodeEditorEvent::RunTabConfigSkill { path: path.clone() });
-                }
                 CodeFooterViewEvent::EnableLSP { path, .. } => {
                     Self::enable_lsp_for_path(path, ctx);
                 }
@@ -1714,8 +1581,6 @@ impl LocalCodeEditorView {
                     // Not relevant for local code editors.
                 }
             }
-
-            me.update_diff_hunk_gutter_buttons(ctx);
         });
     }
 
@@ -1845,35 +1710,6 @@ impl LocalCodeEditorView {
         });
     }
 
-    /// If there is a pending diff available, apply it on the buffer. This should only be called _after_ the buffer
-    /// has been loaded.
-    fn apply_diffs_if_any(&mut self, ctx: &mut ViewContext<Self>) -> Option<usize> {
-        let diff = self.diff_type.clone()?;
-        let deltas = match diff {
-            DiffType::Create { delta } => vec![delta],
-            DiffType::Update { mut deltas, .. } => {
-                deltas.sort_by_key(|delta| delta.replacement_line_range.start);
-                deltas
-            }
-            DiffType::Delete { delta } => vec![delta],
-        };
-
-        // Early return if the pending diff itself is empty.
-        let first_line_start = deltas
-            .first()
-            .map(|diff| diff.replacement_line_range.start)?;
-
-        self.editor.update(ctx, |editor, ctx| {
-            editor.apply_diffs(deltas, ctx);
-
-            if self.enable_diff_nav_by_default {
-                editor.toggle_diff_nav(None, ctx);
-            }
-        });
-
-        Some(first_line_start)
-    }
-
     pub fn file_id(&self) -> Option<FileId> {
         self.metadata.as_ref().map(|m| m.id)
     }
@@ -1922,182 +1758,10 @@ impl LocalCodeEditorView {
         self.editor.as_ref(ctx).scroll_fraction(ctx)
     }
 
-    /// Accept the diff that is currently in the editor. For local files, this can only be called after the file contents
-    /// have been loaded into the editor.
-    /// If it is a local file, the diff content will be retrieved and the pending diff will be marked as completed.
-    /// If it is not a local file, the pending diff will be marked as completed with an empty diff.
-    pub fn accept_diff(&mut self, ctx: &mut ViewContext<Self>) {
-        match self.file_path() {
-            Some(file) => {
-                // Begin calculating the diff that will be saved.  When the result comes back, the diff will be marked completed.
-                self.editor.update(ctx, |view, ctx| {
-                    view.retrieve_unified_diff(file.display().to_string(), ctx)
-                });
-            }
-            None => {
-                ctx.emit(LocalCodeEditorEvent::DiffAccepted);
-            }
-        };
-    }
-
     pub fn close_find_bar(&mut self, should_focus_editor: bool, ctx: &mut ViewContext<Self>) {
         self.editor.update(ctx, |editor, ctx| {
             editor.close_find_bar(should_focus_editor, ctx);
         });
-    }
-
-    /// If a single terminal view exists in the active window, returns the active file path's relative to to the terminal's session.
-    fn file_path_relative_to_terminal_view(&self, app: &AppContext) -> Option<String> {
-        if let Some(terminal_target_fn) = self
-            .selection_as_context_tooltip
-            .as_ref()
-            .map(|tooltip| &tooltip.terminal_target_fn)
-        {
-            app.windows().active_window().and_then(|window_id| {
-                terminal_target_fn(window_id, app).and_then(|terminal_view| {
-                    terminal_view
-                        .as_ref(app)
-                        .active_session_path_if_local(app)
-                        .and_then(|cwd| {
-                            let is_wsl = terminal_view
-                                .as_ref(app)
-                                .active_session_wsl_distro(app)
-                                .is_some();
-                            self.file_path()
-                                .and_then(|file_path| to_relative_path(is_wsl, file_path, &cwd))
-                        })
-                })
-            })
-        } else {
-            None
-        }
-    }
-
-    fn render_selection_tooltip(&self, app: &AppContext) -> Option<Box<dyn Element>> {
-        // If there's a single selection and an active terminal view, we want to give the user an option to add the selection as context.
-        self.selection_as_context_tooltip
-            .as_ref()
-            .and_then(|selection_as_context_tooltip| {
-                if self.editor.as_ref(app).selected_lines(app).is_some()
-                    && self.file_path_relative_to_terminal_view(app).is_some()
-                {
-                    let appearance = Appearance::as_ref(app);
-                    let theme = appearance.theme();
-                    let modifier_keys = if cfg!(target_os = "macos") {
-                        "⌘L"
-                    } else {
-                        "Ctrl-L"
-                    };
-
-                    let mut row = Flex::row()
-                        .with_cross_axis_alignment(CrossAxisAlignment::Center)
-                        .with_main_axis_alignment(MainAxisAlignment::Center)
-                        .with_main_axis_size(MainAxisSize::Min);
-                    row.add_child(
-                        Shrinkable::new(
-                            1.,
-                            Text::new_inline(
-                                "Add as context",
-                                appearance.ui_font_family(),
-                                appearance.ui_font_size(),
-                            )
-                            .with_color(theme.active_ui_text_color().into())
-                            .finish(),
-                        )
-                        .finish(),
-                    );
-                    row.add_child(
-                        Container::new(
-                            Text::new_inline(
-                                modifier_keys,
-                                appearance.ui_font_family(),
-                                appearance.ui_font_size() * 0.75,
-                            )
-                            .with_color(theme.disabled_ui_text_color().into())
-                            .finish(),
-                        )
-                        .with_margin_left(8.)
-                        .finish(),
-                    );
-
-                    Some(
-                        Hoverable::new(selection_as_context_tooltip.mouse_state.clone(), |state| {
-                            let background_color = if state.is_hovered() {
-                                theme.surface_2()
-                            } else {
-                                theme.surface_1()
-                            };
-                            let internal_container = Container::new(row.finish())
-                                .with_padding_left(12.)
-                                .with_padding_right(12.)
-                                .with_padding_top(4.)
-                                .with_padding_bottom(4.)
-                                .finish();
-                            Container::new(internal_container)
-                                .with_background(background_color)
-                                .with_padding_top(4.)
-                                .with_padding_bottom(4.)
-                                .with_corner_radius(CornerRadius::with_all(Radius::Pixels(4.)))
-                                .with_border(Border::all(1.5).with_border_fill(theme.surface_2()))
-                                .with_drop_shadow(DropShadow::new_with_standard_offset_and_spread(
-                                    DROP_SHADOW_COLOR,
-                                ))
-                                .finish()
-                        })
-                        .on_click(move |ctx, _app, _pos| {
-                            ctx.dispatch_typed_action(
-                                LocalCodeEditorAction::InsertSelectedTextToInput,
-                            );
-                        })
-                        .finish(),
-                    )
-                } else {
-                    None
-                }
-            })
-    }
-
-    fn insert_selected_text_to_input(&mut self, ctx: &mut ViewContext<Self>) {
-        let Some(relative_file_path) = self.file_path_relative_to_terminal_view(ctx) else {
-            return;
-        };
-
-        let mut line_range: Option<Range<LineCount>> = None;
-        self.editor.update(ctx, |editor, ctx| {
-            // If we have a vim visual selection, update the editor model to use that as a selection range
-            let has_vim_visual = matches!(editor.vim_mode(ctx), Some(VimMode::Visual(_)));
-            if has_vim_visual {
-                editor.model.update(ctx, |model, ctx| {
-                    model.vim_visual_selection_range(MotionType::Linewise, false, ctx);
-                });
-            }
-
-            if let Some((start, end)) = editor.selected_lines(ctx) {
-                // selected_lines() returns 1-indexed row numbers.
-                line_range = Some(LineCount::from(start as usize)..LineCount::from(end as usize));
-            }
-
-            // Enter normal mode
-            if has_vim_visual {
-                editor.enter_vim_normal_mode(ctx);
-            }
-        });
-
-        let Some(line_range) = line_range else {
-            return;
-        };
-
-        ctx.emit(LocalCodeEditorEvent::SelectionAddedAsContext {
-            relative_file_path,
-            line_range,
-        });
-        self.editor.update(ctx, |editor, ctx| {
-            editor.clear_selection(ctx);
-        });
-    }
-
-    pub fn diff(&self) -> Option<&DiffType> {
-        self.diff_type.as_ref()
     }
 
     /// Handles context menu events (like menu closing)
@@ -2215,69 +1879,6 @@ impl LocalCodeEditorView {
     }
 }
 
-impl DiffViewer for LocalCodeEditorView {
-    fn editor(&self) -> &ViewHandle<CodeEditorView> {
-        &self.editor
-    }
-
-    fn diff(&self) -> Option<&DiffType> {
-        self.diff_type.as_ref()
-    }
-
-    fn was_edited(&self) -> bool {
-        self.was_edited
-    }
-
-    fn reject_diff(&mut self, ctx: &mut ViewContext<Self>) {
-        ctx.emit(LocalCodeEditorEvent::DiffRejected);
-    }
-
-    fn restore_diff_base(&mut self, ctx: &mut ViewContext<Self>) -> Result<(), String> {
-        if self.is_new_file {
-            if let Some(file_id) = self.file_id() {
-                GlobalBufferModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.remove(file_id, ctx);
-                });
-            }
-            if let Some(path) = self.file_path().map(|p| p.to_path_buf()) {
-                if let Err(e) = std::fs::remove_file(&path) {
-                    report_error!(
-                        anyhow::Error::new(e).context("Failed to delete file after save")
-                    );
-                } else {
-                    // This will close tabs with the file open
-                    ctx.dispatch_typed_action(&WorkspaceAction::FileDeleted { path });
-                }
-            }
-
-            return Ok(());
-        }
-
-        let base_content = self
-            .editor
-            .as_ref(ctx)
-            .model
-            .as_ref(ctx)
-            .diff()
-            .as_ref(ctx)
-            .base()
-            .ok_or_else(|| "Missing base content".to_string())?
-            .to_string();
-
-        let file_id = self
-            .file_id()
-            .ok_or_else(|| "Missing file_id".to_string())?;
-
-        let buffer_version = self.editor.as_ref(ctx).version(ctx);
-
-        GlobalBufferModel::handle(ctx)
-            .update(ctx, |model, ctx| {
-                model.save(file_id, base_content, buffer_version, ctx)
-            })
-            .map_err(|e| format!("Failed to save file: {e:?}"))
-    }
-}
-
 impl Entity for LocalCodeEditorView {
     type Event = LocalCodeEditorEvent;
 }
@@ -2357,21 +1958,6 @@ impl View for LocalCodeEditorView {
             .with_child(base_with_handler);
 
         let editor = self.editor().as_ref(app);
-        if self.selection_as_context_tooltip.is_some() {
-            // When a single terminal exists in the window and the user has made a selection (but isn't currently selecting),
-            // we render a tooltip that allows them to add the selected text to the terminal context.
-            let is_ai_enabled = AISettings::as_ref(app).is_any_ai_enabled(app);
-            if is_ai_enabled
-                && FeatureFlag::SelectionAsContext.is_enabled()
-                && !editor.is_selecting()
-            {
-                let tooltip = self.render_selection_tooltip(app);
-                if let Some(tooltip) = tooltip {
-                    stack.add_positioned_child(tooltip, editor.selection_position_anchor(app))
-                }
-            }
-        }
-
         // Render context menu if open
         if self.context_menu_state.is_open {
             stack.add_positioned_child(
@@ -2441,9 +2027,6 @@ impl TypedActionView for LocalCodeEditorView {
 
     fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
         match action {
-            LocalCodeEditorAction::InsertSelectedTextToInput => {
-                self.insert_selected_text_to_input(ctx);
-            }
             LocalCodeEditorAction::SaveFile => {
                 if let Err(ImmediateSaveError::FailedToSave(err)) = self.save_local(ctx) {
                     report_error!(&err);

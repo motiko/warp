@@ -26,8 +26,7 @@ use warpui::{
     ViewContext, ViewHandle, WindowId, id,
 };
 
-use crate::ai::agent::api::ServerConversationToken;
-use crate::ai::blocklist::SerializedBlockListItem;
+use crate::terminal::model::block::SerializedBlock;
 use crate::app_state::{AppState, PaneUuid, WindowSnapshot};
 use crate::appearance::Appearance;
 use crate::auth::auth_manager::{AuthManager, AuthManagerEvent};
@@ -37,7 +36,6 @@ use crate::changelog_model::ChangelogRequestType;
 use crate::features::FeatureFlag;
 use crate::interval_timer::IntervalTimer;
 use crate::launch_configs::launch_config;
-use crate::linear::LinearIssueWork;
 use crate::pane_group::{NewTerminalOptions, PanesLayout};
 use crate::persistence::ModelEvent;
 use crate::server::ids::ServerId;
@@ -232,15 +230,6 @@ pub fn init(app: &mut AppContext) {
     }
 
     app.add_global_action(
-        "root_view:open_conversation_viewer",
-        open_conversation_viewer,
-    );
-    app.add_action(
-        "root_view:open_cloud_conversation_in_existing_window",
-        RootView::open_cloud_conversation_in_existing_window,
-    );
-
-    app.add_global_action(
         "root_view:open_settings_page_in_new_window",
         open_settings_page_in_new_window,
     );
@@ -258,14 +247,6 @@ pub fn init(app: &mut AppContext) {
         RootView::open_settings_in_existing_window,
     );
 
-    app.add_global_action(
-        "root_view:open_linear_issue_work_in_new_window",
-        open_linear_issue_work_in_new_window,
-    );
-    app.add_action(
-        "root_view:open_linear_issue_work_in_existing_window",
-        RootView::open_linear_issue_work_in_existing_window,
-    );
 
     app.add_action("root_view:add_file_pane", RootView::add_file_pane);
     app.add_global_action(
@@ -715,19 +696,6 @@ fn open_shared_session_as_viewer(session_id: &SessionId, ctx: &mut AppContext) {
     );
 }
 
-/// Opens a new window to view a persisted view-only cloud conversation.
-/// The conversation data is loaded via GraphQL API.
-fn open_conversation_viewer(conversation_id: &ServerConversationToken, ctx: &mut AppContext) {
-    // Trigger the workspace loading mechanism by dispatching the LoadConversationData event
-    // This will open a new window with a loading state, fetch data via GraphQL, and display it
-    open_new_with_workspace_source(
-        NewWorkspaceSource::FromCloudConversationId {
-            conversation_id: conversation_id.clone(),
-        },
-        ctx,
-    );
-}
-
 fn open_settings_page_in_new_window(section: &SettingsSection, ctx: &mut AppContext) {
     let root_handle = open_new_window_get_handles(None, ctx).1;
     root_handle.update(ctx, |root_view, ctx| {
@@ -763,18 +731,6 @@ fn open_settings_in_new_window(args: &OpenSettingsArgs, ctx: &mut AppContext) {
         let workspace_view_handle = &root_view.workspace;
         let window_id = ctx.window_id();
         ctx.dispatch_typed_action_for_view(window_id, workspace_view_handle.id(), &action);
-    });
-}
-
-/// Opens a new window and enters agent view with the Linear issue work prompt.
-fn open_linear_issue_work_in_new_window(args: &LinearIssueWork, ctx: &mut AppContext) {
-    let (_, root_handle) = open_new_window_get_handles(None, ctx);
-    let args = args.clone();
-    root_handle.update(ctx, |root_view, ctx| {
-        let workspace_view_handle = &root_view.workspace;
-        workspace_view_handle.update(ctx, |workspace, ctx| {
-            workspace.open_linear_issue_work(&args, ctx);
-        });
     });
 }
 
@@ -1148,7 +1104,7 @@ pub enum NewWorkspaceSource {
     },
     Restored {
         window_snapshot: Box<WindowSnapshot>,
-        block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlockListItem>>>,
+        block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
     },
     Session {
         options: Box<NewTerminalOptions>,
@@ -1157,15 +1113,8 @@ pub enum NewWorkspaceSource {
     SharedSessionAsViewer {
         session_id: SessionId,
     },
-    FromCloudConversationId {
-        conversation_id: ServerConversationToken,
-    },
     NotebookFromFilePath {
         file_path: Option<PathBuf>,
-    },
-    AgentSession {
-        options: Box<NewTerminalOptions>,
-        initial_query: Option<String>,
     },
     /// Opens a new window pre-scoped to a specific team, chosen via the title-bar team switcher.
     TeamSwitched {
@@ -1233,9 +1182,8 @@ impl NewWorkspaceSource {
             Self::FromTemplate { .. }
             | Self::Session { .. }
             | Self::SharedSessionAsViewer { .. }
-            | Self::FromCloudConversationId { .. }
             | Self::NotebookFromFilePath { .. }
-            | Self::AgentSession { .. } => None,
+            => None,
             Self::TeamSwitched { team_uid } => return Some(*team_uid),
             Self::Restored {
                 window_snapshot, ..
@@ -1250,14 +1198,13 @@ impl NewWorkspaceSource {
         UserWorkspaces::as_ref(ctx).inherited_or_default_team_uid(source_window_id)
     }
 
-    /// Whether this source points at specific content (e.g. a shared session or a cloud
-    /// conversation) that a new window should reach directly, rather than being deferred
+    /// Whether this source points at specific content (e.g. a shared session) that a new window
+    /// should reach directly, rather than being deferred
     /// behind product onboarding.
     pub(crate) fn is_content_deep_link(&self) -> bool {
         matches!(
             self,
             NewWorkspaceSource::SharedSessionAsViewer { .. }
-                | NewWorkspaceSource::FromCloudConversationId { .. }
         )
     }
 }
@@ -1526,24 +1473,6 @@ impl RootView {
         true
     }
 
-    /// Opens a cloud conversation in an existing window.
-    /// If the user owns the conversation, restores or navigates to it directly.
-    /// Otherwise, opens a read-only transcript viewer.
-    pub fn open_cloud_conversation_in_existing_window(
-        &mut self,
-        conversation_id: &ServerConversationToken,
-        ctx: &mut ViewContext<Self>,
-    ) -> bool {
-        let handle = &self.workspace;
-        handle.update(ctx, |workspace, ctx| {
-            workspace.open_cloud_conversation_from_server_token(conversation_id.clone(), ctx);
-        });
-        let window_id = ctx.window_id();
-        ctx.windows().show_window_and_focus_app(window_id);
-        ctx.notify();
-        true
-    }
-
     pub fn add_file_pane(&mut self, path: &PathBuf, ctx: &mut ViewContext<Self>) -> bool {
         let handle = &self.workspace;
         handle.update(ctx, |workspace, ctx| {
@@ -1602,23 +1531,6 @@ impl RootView {
         let handle = &self.workspace;
         let action = workspace_action_for_open_settings(args);
         ctx.dispatch_typed_action_for_view(window_id, handle.id(), &action);
-        ctx.windows().show_window_and_focus_app(window_id);
-
-        true
-    }
-
-    /// Opens a new tab with agent view for a Linear issue work deeplink.
-    pub fn open_linear_issue_work_in_existing_window(
-        &mut self,
-        args: &LinearIssueWork,
-        ctx: &mut ViewContext<Self>,
-    ) -> bool {
-        let window_id = ctx.window_id();
-        let handle = &self.workspace;
-        let args = args.clone();
-        handle.update(ctx, |workspace, ctx| {
-            workspace.open_linear_issue_work(&args, ctx);
-        });
         ctx.windows().show_window_and_focus_app(window_id);
 
         true

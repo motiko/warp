@@ -31,11 +31,7 @@ impl CloudModelType for CloudNotebookModel {
     type IdType = NotebookId;
 
     fn model_type_name(&self) -> &'static str {
-        if self.ai_document_id.is_some() {
-            "Plan"
-        } else {
-            "Notebook"
-        }
+        "Notebook"
     }
 
     fn object_type(&self) -> ObjectType {
@@ -112,8 +108,8 @@ impl CloudModelType for CloudNotebookModel {
     fn serialized(&self) -> SerializedModel {
         let serialized = SerializedNotebook {
             data: self.data.clone(),
-            ai_document_id: self.ai_document_id.as_ref().map(|id| id.to_string()),
-            conversation_id: self.conversation_id.clone(),
+            ai_document_id: None,
+            conversation_id: None,
         };
         let json = serde_json::to_string(&serialized).expect("Failed to serialize notebook");
         SerializedModel::new(json)
@@ -159,7 +155,6 @@ impl CloudModelType for CloudNotebookModel {
         Some(Box::new(WarpDriveNotebook::new(
             self.cloud_object_type_and_id(id),
             notebook.clone(),
-            notebook.model().ai_document_id.is_some(),
         )))
     }
 }

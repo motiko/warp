@@ -32,6 +32,10 @@ message HostScopedRequest {
   reserved 4, 7;
   // 14 was upload_handoff_snapshot (cloud handoff, removed).
   reserved 14;
+  // Removed AI codebase indexing and AI commit message generation requests.
+  reserved 9, 10, 11, 13, 18;
+  reserved "index_codebase", "drop_codebase_index", "get_fragment_metadata_from_hash",
+    "resync_codebase", "git_generate_commit_message";
   oneof message {
     WriteFile write_file = 1;
     DeleteFile delete_file = 2;
@@ -39,15 +43,10 @@ message HostScopedRequest {
     SaveBuffer save_buffer = 5;
     ResolveConflict resolve_conflict = 6;
     DiscardFilesRequest discard_files = 8;
-    IndexCodebase index_codebase = 9;
-    DropCodebaseIndex drop_codebase_index = 10;
-    GetFragmentMetadataFromHash get_fragment_metadata_from_hash = 11;
     GetBranches get_branches = 12;
-    ResyncCodebase resync_codebase = 13;
     GitCommitChainRequest git_commit_chain = 15;
     GitPushRequest git_push = 16;
     GitCreatePrRequest git_create_pr = 17;
-    GitGenerateCommitMessageRequest git_generate_commit_message = 18;
     GitGetCommittedBranchFilesRequest git_get_committed_branch_files = 19;
     RipgrepSearchRequest ripgrep_search = 21;
   }
@@ -92,6 +91,11 @@ message ServerMessage {
   string request_id = 1;
   // 26 was upload_handoff_snapshot_response (cloud handoff, removed).
   reserved 26;
+  // Removed AI codebase indexing, AI commit message generation and Agent Mode context pushes.
+  reserved 12, 13, 24, 31, 33;
+  reserved "codebase_index_statuses_snapshot", "codebase_index_status_updated",
+    "get_fragment_metadata_from_hash_response", "git_generate_commit_message_response",
+    "remote_agent_context_snapshot";
   oneof message {
     InitializeResponse initialize_response = 2;
     ErrorResponse error = 3;
@@ -103,8 +107,6 @@ message ServerMessage {
     DeleteFileResponse delete_file_response = 9;
     RunCommandResponse run_command_response = 10;
     ReadFileContextResponse read_file_context_response = 11;
-    CodebaseIndexStatusesSnapshot codebase_index_statuses_snapshot = 12;
-    CodebaseIndexStatusUpdated codebase_index_status_updated = 13;
     OpenBufferResponse open_buffer_response = 14;
     BufferUpdatedPush buffer_updated = 15;
     SaveBufferResponse save_buffer_response = 16;
@@ -115,18 +117,15 @@ message ServerMessage {
     DiffStateFileDelta diff_state_file_delta = 21;
     DiscardFilesResponse discard_files_response = 22;
     BufferConflictDetected buffer_conflict_detected = 23;
-    GetFragmentMetadataFromHashResponse get_fragment_metadata_from_hash_response = 24;
     GetBranchesResponse get_branches_response = 25;
     GitCommitChainResponse git_commit_chain_response = 27;
     GitPushResponse git_push_response = 28;
     GitCreatePrResponse git_create_pr_response = 29;
-    GitGenerateCommitMessageResponse git_generate_commit_message_response = 31;
     GitGetCommittedBranchFilesResponse git_get_committed_branch_files_response = 32;
     GitStatusPush git_status_push = 34;
     GitHubPrInfoPush github_pr_info_push = 35;
     GitHubRepositoryInfoPush github_repository_info_push = 36;
     RipgrepSearchResponse ripgrep_search_response = 37;
-    RemoteAgentContextSnapshot remote_agent_context_snapshot = 33;
   }
 }
 
@@ -142,8 +141,9 @@ message Initialize {
   string user_email = 3;
   // Whether the user has enabled crash reporting in their privacy settings.
   bool crash_reporting_enabled = 4;
-  // Client-resolved codebase index limits for parity with local indexing.
-  optional CodebaseIndexLimits codebase_index_limits = 5;
+  // 5 was codebase_index_limits (AI codebase indexing, removed).
+  reserved 5;
+  reserved "codebase_index_limits";
 }
 
 // Sent by the client when its bearer credential rotates after initialization.
@@ -159,14 +159,9 @@ message Authenticate {
 // This is a notification (fire-and-forget) — the server does not send a response.
 message UpdatePreferences {
   bool crash_reporting_enabled = 1;
-  optional CodebaseIndexLimits codebase_index_limits = 2;
-}
-
-message CodebaseIndexLimits {
-  // Empty means unlimited.
-  optional uint64 max_indices_allowed = 1;
-  uint64 max_files_per_repo = 2;
-  uint64 embedding_generation_batch_size = 3;
+  // 2 was codebase_index_limits (AI codebase indexing, removed).
+  reserved 2;
+  reserved "codebase_index_limits";
 }
 
 // Sent by the client to cancel an in-progress request.
@@ -248,47 +243,6 @@ message ErrorResponse {
   string message = 2;
 }
 
-// ── Remote Agent Mode context ─────────────────────────────────────
-
-// Metadata specific to a skill bundled with Warp.
-message BundledSkillMetadata {
-  // Directory-based skill ID, unique within the bundled catalog.
-  string id = 1;
-  // When set, the skill is only active while the named MCP integration
-  // is running on the client (e.g. "figma"). Evaluated client-side.
-  optional string requires_mcp = 2;
-}
-
-// Marker metadata for a file-based skill from the daemon host's home directory.
-message HomeSkillMetadata {}
-
-// One already-read remote skill published by the daemon.
-message RemoteSkillProto {
-  // Absolute path to the file on this host.
-  string path = 1;
-  string content = 2;
-  oneof source {
-    BundledSkillMetadata bundled = 3;
-    HomeSkillMetadata home = 4;
-  }
-}
-
-// One already-read remote context file published by the daemon.
-message RemoteContextFileProto {
-  // Absolute path to the file on this host.
-  string path = 1;
-  string content = 2;
-}
-
-// Revisioned full replacement of the daemon host's Agent Mode context. Source
-// discovery and reading happen daemon-side before this snapshot is published.
-message RemoteAgentContextSnapshot {
-  uint64 revision = 1;
-  string home_dir = 2;
-  repeated RemoteSkillProto skills = 3;
-  repeated RemoteContextFileProto global_rules = 4;
-}
-
 // ── Shared repo metadata sub-messages ─────────────────────────────
 // Mirror the Rust types in repo_metadata/src/file_tree_update.rs.
 
@@ -319,18 +273,6 @@ message FileNodeMetadata {
 message RepoMetadataEntryUpdate {
   string parent_path_to_replace = 1;
   repeated RepoNodeMetadata subtree_metadata = 2;
-}
-
-message StandingQueryContent {
-  string path = 1;
-  bool is_directory = 2;
-}
-
-message StandingQueryResultsDelta {
-  repeated StandingQueryContent upserted_project_skills = 1;
-  repeated StandingQueryContent removed_project_skills = 2;
-  repeated StandingQueryContent upserted_project_rules = 3;
-  repeated StandingQueryContent removed_project_rules = 4;
 }
 
 // ── NavigatedToDirectory ──────────────────────────────────────────
@@ -503,101 +445,6 @@ message RipgrepSearchSubmatch {
   uint64 byte_end = 2;
 }
 
-// ── Remote codebase indexing status ───────────────────────────────
-
-message IndexCodebase {
-  string repo_path = 1;
-  string auth_token = 2;
-}
-message ResyncCodebase {
-  string repo_path = 1;
-  string auth_token = 2;
-  CodebaseResyncMode mode = 3;
-}
-enum CodebaseResyncMode {
-  CODEBASE_RESYNC_MODE_FULL = 0;
-  CODEBASE_RESYNC_MODE_INCREMENTAL = 1;
-}
-
-message DropCodebaseIndex {
-  string repo_path = 1;
-  string auth_token = 2;
-}
-message GetFragmentMetadataFromHash {
-  string repo_path = 1;
-  string root_hash = 2;
-  repeated string content_hashes = 3;
-}
-
-message FragmentMetadata {
-  string content_hash = 1;
-  string path = 2;
-  uint32 start_line = 3;
-  uint32 end_line = 4;
-  uint64 byte_start = 5;
-  uint64 byte_end = 6;
-}
-
-message MissingFragmentMetadata {
-  string content_hash = 1;
-  FileOperationError error = 2;
-}
-enum FragmentMetadataLookupErrorCode {
-  FRAGMENT_METADATA_LOOKUP_ERROR_CODE_UNSPECIFIED = 0;
-  REMOTE_CODEBASE_INDEXING_NOT_ENABLED = 1;
-  INVALID_REPO_PATH = 2;
-  INVALID_ROOT_HASH = 3;
-  INDEX_NOT_FOUND = 4;
-  INDEX_NOT_SYNCED = 5;
-  ROOT_HASH_MISMATCH = 6;
-}
-
-message FragmentMetadataLookupError {
-  FragmentMetadataLookupErrorCode code = 1;
-  string message = 2;
-  optional string current_root_hash = 3;
-}
-message GetFragmentMetadataFromHashSuccess {
-  repeated FragmentMetadata fragments = 1;
-  repeated MissingFragmentMetadata missing_hashes = 2;
-}
-
-message GetFragmentMetadataFromHashResponse {
-  oneof result {
-    GetFragmentMetadataFromHashSuccess success = 1;
-    FragmentMetadataLookupError error = 2;
-  }
-}
-
-enum CodebaseIndexStatusState {
-  CODEBASE_INDEX_STATUS_STATE_UNSPECIFIED = 0;
-  CODEBASE_INDEX_STATUS_STATE_NOT_ENABLED = 1;
-  CODEBASE_INDEX_STATUS_STATE_UNAVAILABLE = 2;
-  CODEBASE_INDEX_STATUS_STATE_DISABLED = 3;
-  CODEBASE_INDEX_STATUS_STATE_QUEUED = 4;
-  CODEBASE_INDEX_STATUS_STATE_INDEXING = 5;
-  CODEBASE_INDEX_STATUS_STATE_READY = 6;
-  CODEBASE_INDEX_STATUS_STATE_STALE = 7;
-  CODEBASE_INDEX_STATUS_STATE_FAILED = 8;
-}
-message CodebaseIndexStatus {
-  string repo_path = 1;
-  CodebaseIndexStatusState state = 2;
-  optional uint64 last_updated_epoch_millis = 3;
-  optional uint64 progress_completed = 4;
-  optional uint64 progress_total = 5;
-  optional string failure_message = 6;
-  optional string root_hash = 7;
-}
-
-message CodebaseIndexStatusesSnapshot {
-  repeated CodebaseIndexStatus statuses = 1;
-}
-
-message CodebaseIndexStatusUpdated {
-  CodebaseIndexStatus status = 1;
-}
-
 // ── Server → client push messages ─────────────────────────────────
 
 // Full or lazy-loaded repo metadata snapshot. Pushed by the server after
@@ -606,7 +453,9 @@ message RepoMetadataSnapshot {
   string repo_path = 1;
   repeated RepoMetadataEntryUpdate entries = 2;
   bool sync_complete = 3;
-  StandingQueryResultsDelta standing_results = 4;
+  // 4 was standing_results (AI project skills and rules, removed).
+  reserved 4;
+  reserved "standing_results";
 }
 
 // Incremental repo metadata update. Mirrors RepoMetadataUpdate in Rust.
@@ -614,7 +463,9 @@ message RepoMetadataUpdatePush {
   string repo_path = 1;
   repeated string remove_entries = 2;
   repeated RepoMetadataEntryUpdate update_entries = 3;
-  StandingQueryResultsDelta standing_results_delta = 4;
+  // 4 was standing_results_delta (AI project skills and rules, removed).
+  reserved 4;
+  reserved "standing_results_delta";
 }
 
 // ── Buffer syncing ────────────────────────────────────────────────

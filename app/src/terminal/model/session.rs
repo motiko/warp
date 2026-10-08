@@ -206,14 +206,10 @@ impl Sessions {
                 | RemoteServerManagerEvent::SessionConnectionFailed { .. }
                 | RemoteServerManagerEvent::HostConnected { .. }
                 | RemoteServerManagerEvent::HostDisconnected { .. }
-                | RemoteServerManagerEvent::RemoteAgentContextSnapshot { .. }
                 | RemoteServerManagerEvent::NavigatedToDirectory { .. }
                 | RemoteServerManagerEvent::RepoMetadataSnapshot { .. }
                 | RemoteServerManagerEvent::RepoMetadataUpdated { .. }
                 | RemoteServerManagerEvent::RepoMetadataDirectoryLoaded { .. }
-                | RemoteServerManagerEvent::CodebaseIndexStatusesSnapshot { .. }
-                | RemoteServerManagerEvent::CodebaseIndexStatusUpdated { .. }
-                | RemoteServerManagerEvent::CodebaseIndexMutationFailed { .. }
                 | RemoteServerManagerEvent::BinaryCheckComplete { .. }
                 | RemoteServerManagerEvent::BinaryInstallComplete { .. }
                 | RemoteServerManagerEvent::ClientRequestFailed { .. }
@@ -225,7 +221,6 @@ impl Sessions {
                 | RemoteServerManagerEvent::CommitChainResponse { .. }
                 | RemoteServerManagerEvent::GitPushResponse { .. }
                 | RemoteServerManagerEvent::CreatePrResponse { .. }
-                | RemoteServerManagerEvent::GenerateCommitMessageResponse { .. }
                 | RemoteServerManagerEvent::GetCommittedBranchFilesResponse { .. }
                 | RemoteServerManagerEvent::GitStatusPushReceived { .. }
                 | RemoteServerManagerEvent::GitHubPrInfoPushReceived { .. }

@@ -22,15 +22,15 @@ fn command_names_and_kinds_are_unique() {
 
 #[test]
 fn command_registry_keeps_icon_metadata() {
-    assert_eq!(COST.kind, SlashCommandKind::Cost);
-    assert_eq!(COST.icon_path, "bundled/svg/bar-chart-04.svg");
+    assert_eq!(OPEN_CODE_REVIEW.kind, SlashCommandKind::OpenCodeReview);
+    assert_eq!(OPEN_CODE_REVIEW.icon_path, "bundled/svg/diff.svg");
 
     let registry = Registry::new();
     assert_eq!(
         registry
-            .get_command_with_name(COST.name)
+            .get_command_with_name(OPEN_CODE_REVIEW.name)
             .map(|command| command.icon_path),
-        Some("bundled/svg/bar-chart-04.svg")
+        Some("bundled/svg/diff.svg")
     );
 }
 
@@ -59,28 +59,6 @@ fn rename_tab_command_requires_argument() {
 }
 
 #[test]
-fn rename_conversation_command_is_active_conversation_scoped_and_requires_argument() {
-    let command = COMMAND_REGISTRY
-        .get_command_with_name(RENAME_CONVERSATION.name)
-        .expect("expected /rename-conversation to be registered");
-    let argument = command
-        .argument
-        .as_ref()
-        .expect("expected /rename-conversation to require an argument");
-
-    assert_eq!(command.name, "/rename-conversation");
-    assert_eq!(command.icon_path, "bundled/svg/pencil-line.svg");
-    assert!(!command.auto_enter_ai_mode);
-    assert_eq!(
-        command.availability,
-        Availability::AGENT_VIEW | Availability::ACTIVE_CONVERSATION | Availability::AI_ENABLED,
-    );
-    assert!(!argument.is_optional);
-    assert!(!argument.should_execute_on_selection);
-    assert_eq!(argument.hint_text, Some("<new title>"));
-}
-
-#[test]
 fn set_tab_color_command_requires_argument() {
     let command = COMMAND_REGISTRY
         .get_command_with_name(SET_TAB_COLOR.name)
@@ -101,62 +79,4 @@ fn set_tab_color_command_requires_argument() {
         assert!(hint.contains(&lower), "hint should mention `{lower}`");
     }
     assert!(hint.contains("none"), "hint should mention `none`");
-}
-
-#[test]
-fn strip_command_prefix_matches_plan() {
-    let result = strip_command_prefix("/plan deploy services", "/plan");
-    assert_eq!(result, Some("deploy services".to_string()));
-}
-
-#[test]
-fn strip_command_prefix_no_match() {
-    let result = strip_command_prefix("just a normal query", "/plan");
-    assert_eq!(result, None);
-}
-
-#[test]
-fn strip_command_prefix_empty() {
-    let result = strip_command_prefix("", "/plan");
-    assert_eq!(result, None);
-}
-
-#[test]
-fn strip_command_prefix_no_trailing_space() {
-    // "/plan" alone (no trailing space) should NOT be stripped
-    let result = strip_command_prefix("/plan", "/plan");
-    assert_eq!(result, None);
-}
-
-#[test]
-fn strip_command_prefix_trailing_space_only() {
-    // "/plan " with nothing after should strip to empty string
-    let result = strip_command_prefix("/plan ", "/plan");
-    assert_eq!(result, Some(String::new()));
-}
-
-#[test]
-fn strip_command_prefix_substring_not_matched() {
-    // "/planning" should not match "/plan"
-    let result = strip_command_prefix("/planning something", "/plan");
-    assert_eq!(result, None);
-}
-
-#[test]
-fn copy_debugging_id_command_has_correct_registry_metadata() {
-    let command = all_commands()
-        .into_iter()
-        .find(|command| command.kind == SlashCommandKind::CopyDebuggingId)
-        .expect("expected /copy-debugging-id to be registered");
-
-    assert_eq!(command.name, "/copy-debugging-id");
-    assert_eq!(command.kind, SlashCommandKind::CopyDebuggingId);
-    assert_eq!(command.icon_path, "bundled/svg/copy.svg");
-    assert!(!command.auto_enter_ai_mode);
-    assert_eq!(command.availability, Availability::ACTIVE_CONVERSATION);
-    assert!(command.argument.is_none());
-    // Available when there is an active conversation.
-    assert!(command.is_active(Availability::ACTIVE_CONVERSATION));
-    // Hidden when there is no active conversation.
-    assert!(!command.is_active(Availability::ALWAYS));
 }

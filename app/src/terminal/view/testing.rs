@@ -9,7 +9,7 @@ cfg_if::cfg_if! {
         use parking_lot::FairMutex;
         use warpui::{ViewContext};
 
-        use crate::{ai::blocklist::SerializedBlockListItem, pane_group::TerminalViewResources};
+        use crate::{ai::blocklist::SerializedBlock, pane_group::TerminalViewResources};
         use crate::terminal::model::session::Sessions;
         use crate::terminal::model_events::ModelEventDispatcher;
         use crate::terminal::view::WARP_PROMPT_HEIGHT_LINES;
@@ -25,7 +25,7 @@ use super::TerminalView;
 impl TerminalView {
     #[cfg(test)]
     pub fn new_for_test(
-        restored_blocks: Option<&[SerializedBlockListItem]>,
+        restored_blocks: Option<&[SerializedBlock]>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         use pathfinder_geometry::vector::vec2f;

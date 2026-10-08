@@ -13,7 +13,6 @@ use settings::Setting as _;
 use warp_core::context_flag::ContextFlag;
 use warp_core::ui::Icon as WarpIcon;
 use warp_core::ui::color::blend::Blend;
-use warp_core::ui::color::coloru_with_opacity;
 use warp_core::ui::theme::color::internal_colors;
 use warp_core::ui::theme::{AnsiColorIdentifier, Fill as WarpThemeFill, WarpTheme};
 use warpui::elements::{
@@ -35,8 +34,6 @@ use warpui::ui_components::text_input::TextInput;
 use warpui::{AppContext, EntityId, SingletonEntity, ViewHandle, WindowId};
 
 use super::{render_group_member_icon_collage, select_unique_pane_kinds};
-use crate::ai::agent::conversation::{ConversationStatus, StatusColorStyle};
-use crate::ai::conversation_status_ui::render_status_element;
 use crate::appearance::Appearance;
 use crate::code::editor::{add_color, remove_color};
 use crate::code::icon_from_file_path;
@@ -47,7 +44,7 @@ use crate::drive::cloud_object_styling::warp_drive_icon_color;
 use crate::editor::EditorView;
 use crate::pane_group::pane::IPaneType;
 use crate::pane_group::{
-    CodePane, NotebookPane, PaneGroup, PaneId, TabBarHoverIndex, TerminalPane, WorkflowPane,
+    CodePane, PaneGroup, PaneId, TabBarHoverIndex, TerminalPane,
 };
 use crate::safe_triangle::SafeTriangle;
 use crate::tab::{
@@ -58,7 +55,6 @@ use crate::terminal::TerminalView;
 use crate::terminal::session_settings::SessionSettings;
 use crate::terminal::view::TerminalViewState;
 use crate::themes::theme::Fill as ThemeFill;
-use crate::ui_components::agent_icon::terminal_view_agent_icon_variant;
 use crate::ui_components::buttons::combo_inner_button;
 use crate::ui_components::icon_with_status::{IconWithStatusVariant, render_icon_with_status};
 use crate::ui_components::icons::Icon as UiIcon;
@@ -118,12 +114,10 @@ const ICON_WITH_STATUS_GAP: f32 = 8.;
 pub(super) const VERTICAL_TABS_DETAIL_SIDECAR_POSITION_ID: &str = "vertical_tabs:detail_sidecar";
 
 /// Total size of the icon-with-status component rendered for each vertical-tabs row.
-/// Sub-components (circle, badge, cloud) are derived inside `render_icon_with_status`.
+/// The circle and glyph are sized inside `render_icon_with_status`.
 const VERTICAL_TABS_ICON_SIZE: f32 = 24.;
 
-/// Icon size for the per-line conversation status pill in Summary mode. Pairs with
-/// `STATUS_ELEMENT_PADDING` (2px) for an overall ~14px element next to a 12pt title.
-const VERTICAL_TABS_SUMMARY_STATUS_ICON_SIZE: f32 = 10.;
+const TERMINAL_KIND_LABEL: &str = "Terminal";
 
 fn vtab_pane_row_position_id(pane_group_id: EntityId, pane_id: PaneId) -> String {
     format!("vertical_tabs:pane_row:{pane_group_id:?}:{pane_id}")
@@ -244,7 +238,7 @@ fn pane_ids_for_detail_target(
                 .pane_by_id(pane_id)
                 .map(|_| {
                     supports_vertical_tabs_detail_sidecar(
-                        &pane_group.resolve_pane_type(pane_id, app),
+                        &pane_group.resolve_pane_type(pane_id),
                     )
                 })
                 .unwrap_or(false)
@@ -262,13 +256,7 @@ fn render_pane_icon_with_status(
     variant: IconWithStatusVariant,
     theme: &WarpTheme,
 ) -> Box<dyn Element> {
-    render_icon_with_status(
-        variant,
-        VERTICAL_TABS_ICON_SIZE,
-        0.,
-        theme,
-        theme.background(),
-    )
+    render_icon_with_status(variant, VERTICAL_TABS_ICON_SIZE, theme)
 }
 
 #[derive(Clone, Default)]
@@ -852,22 +840,14 @@ struct PaneRowState {
     badge_mouse_states: PaneRowBadgeMouseStates,
 }
 
-enum TerminalPrimaryLineData {
-    StatusText {
-        text: String,
-    },
-    Text {
-        text: String,
-        font: TerminalPrimaryLineFont,
-    },
+struct TerminalPrimaryLineData {
+    text: String,
+    font: TerminalPrimaryLineFont,
 }
 
 impl TerminalPrimaryLineData {
     fn text(&self) -> &str {
-        match self {
-            TerminalPrimaryLineData::StatusText { text, .. }
-            | TerminalPrimaryLineData::Text { text, .. } => text,
-        }
+        &self.text
     }
 }
 
@@ -887,17 +867,12 @@ enum VerticalTabsResolvedMode {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum SummaryPaneKind {
     Terminal,
-    OzAgent,
     Code { title: String },
-    CodeDiff,
     File,
-    Notebook { is_plan: bool },
-    Workflow { is_ai_prompt: bool },
+    Notebook,
+    Workflow,
     Settings,
     EnvVarCollection,
-    AIFact,
-    AIDocument,
-    ExecutionProfileEditor,
     Other,
 }
 
@@ -921,17 +896,9 @@ struct VerticalTabsSummaryBranchEntry {
     pull_request_url: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-struct VerticalTabsSummaryPrimaryLabel {
-    text: String,
-    /// Some when the contributing pane is a conversation with a known status. Drives the
-    /// per-line status pill prefix in Summary mode.
-    status: Option<ConversationStatus>,
-}
-
 #[derive(Clone, Debug, Default, PartialEq)]
 struct VerticalTabsSummaryData {
-    primary_labels: Vec<VerticalTabsSummaryPrimaryLabel>,
+    primary_labels: Vec<String>,
     working_directories: Vec<String>,
     branch_entries: Vec<VerticalTabsSummaryBranchEntry>,
 }
@@ -1002,53 +969,9 @@ fn push_normalized_unique_summary_text(
     values.push(normalized);
 }
 
-/// Push a primary label, preserving the first-seen display text and conversation status
-/// when the same normalized label is contributed by multiple panes.
-fn push_normalized_unique_summary_label(
-    values: &mut Vec<VerticalTabsSummaryPrimaryLabel>,
-    seen: &mut HashMap<String, ()>,
-    text: &str,
-    status: Option<ConversationStatus>,
-) {
-    let Some(normalized) = normalize_summary_text(text) else {
-        return;
-    };
-    if seen.contains_key(&normalized) {
-        return;
-    }
-    seen.insert(normalized.clone(), ());
-    values.push(VerticalTabsSummaryPrimaryLabel {
-        text: normalized,
-        status,
-    });
-}
-
-/// Stable sort that moves labels with a known `ConversationStatus` ahead of labels without
-/// one, while preserving the relative first-seen order within each group. Used in Summary
-/// mode so the visible 3-line title region (and the `+ N more` overflow) prioritizes
-/// conversation lines over plain terminal / non-conversation lines.
-fn sort_summary_primary_labels_status_first(values: &mut [VerticalTabsSummaryPrimaryLabel]) {
-    values.sort_by_key(|label| label.status.is_none());
-}
-
 fn normalize_summary_text(text: &str) -> Option<String> {
     let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
     (!normalized.is_empty()).then_some(normalized)
-}
-
-/// Returns the conversation status for a terminal pane, used to render the per-line status
-/// pill prefix in Summary mode. Mirrors the status source used by `render_detail_status_pill`
-/// in the detail sidecar. Returns `None` for plain terminals or conversations without status.
-fn summary_conversation_status_for_terminal(
-    terminal_view: &TerminalView,
-    app: &AppContext,
-) -> Option<ConversationStatus> {
-    let has_conversation = terminal_view
-        .selected_conversation_display_title(app)
-        .is_some();
-    has_conversation
-        .then(|| terminal_view.selected_conversation_status_for_display(app))
-        .flatten()
 }
 
 fn coalesce_summary_branch_entries(
@@ -1089,12 +1012,7 @@ fn summary_search_text_fragments(
     if let Some(title_override) = title_override.and_then(normalize_summary_text) {
         fragments.push(title_override);
     }
-    fragments.extend(
-        summary
-            .primary_labels
-            .iter()
-            .map(|label| label.text.clone()),
-    );
+    fragments.extend(summary.primary_labels.iter().cloned());
     fragments.extend(summary.working_directories.iter().cloned());
     for entry in &summary.branch_entries {
         fragments.push(entry.branch_name.clone());
@@ -1423,38 +1341,12 @@ fn render_control_bar(
     .finish()
 }
 
-fn render_detail_kind_badge_icon(
-    props: &PaneProps<'_>,
-    appearance: &Appearance,
-    app: &AppContext,
-) -> Box<dyn Element> {
+fn render_detail_kind_badge_icon(props: &PaneProps<'_>, appearance: &Appearance) -> Box<dyn Element> {
     let theme = appearance.theme();
     let sub_text = theme.sub_text_color(theme.background());
     let disabled_text = detail_sidecar_text_colors(theme).disabled;
     match &props.typed {
-        TypedPane::Terminal(terminal_pane) => {
-            let terminal_view = terminal_pane.terminal_view(app);
-            let terminal_view = terminal_view.as_ref(app);
-            let icon = if terminal_view
-                .selected_conversation_display_title(app)
-                .is_some()
-            {
-                // Local agent conversation: use the Warp agent logo glyph to
-                // match the icon-with-status rendering for the tab row.
-                WarpIcon::Agent
-            } else {
-                WarpIcon::Terminal
-            };
-            let color = match icon {
-                // Theme-adaptive fill: no black chip behind this glyph in the
-                // sidecar context, so use the main text color to stay visible
-                // on both dark and light themes.
-                WarpIcon::Agent => theme.main_text_color(theme.background()),
-                WarpIcon::Terminal => disabled_text,
-                _ => sub_text,
-            };
-            icon.to_warpui_icon(color).finish()
-        }
+        TypedPane::Terminal(_) => WarpIcon::Terminal.to_warpui_icon(disabled_text).finish(),
         TypedPane::Code(_) => icon_from_file_path(&props.title, appearance)
             .unwrap_or_else(|| WarpIcon::Code2.to_warpui_icon(sub_text).finish()),
         typed => {
@@ -2394,10 +2286,9 @@ fn render_tab_group_internal(
             container.finish()
         };
 
-        // Show the action buttons when the group OR the buttons themselves
-        // are hovered, following the pattern from AgentManagementView.
-        // This prevents flickering when the mouse moves from the group
-        // to the overlay buttons (which may sit outside the group bounds).
+        // Show the action buttons when the group OR the buttons themselves are hovered. This
+        // prevents flickering when the mouse moves from the group to the overlay buttons (which
+        // may sit outside the group bounds).
         let should_show_action_buttons = !drag_state.is_any_pane_dragging
             && (group_state.is_hovered() || action_buttons_mouse_over || is_menu_open_for_tab);
 
@@ -3290,7 +3181,6 @@ fn resolve_icon_with_status_variant(
     typed: &TypedPane<'_>,
     title: &str,
     appearance: &Appearance,
-    app: &AppContext,
 ) -> IconWithStatusVariant {
     let theme = appearance.theme();
     let main_text = theme.main_text_color(theme.background());
@@ -3301,20 +3191,11 @@ fn resolve_icon_with_status_variant(
     };
 
     match typed {
-        TypedPane::Terminal(terminal_pane) => {
-            let terminal_view = terminal_pane.terminal_view(app);
-            let terminal_view = terminal_view.as_ref(app);
-            match terminal_view_agent_icon_variant(terminal_view, app) {
-                Some(variant) => variant,
-                _ => {
-                    // Plain terminal: use foreground color per design spec
-                    IconWithStatusVariant::Neutral {
-                        icon: WarpIcon::Terminal,
-                        icon_color: main_text,
-                    }
-                }
-            }
-        }
+        // Plain terminal: use foreground color per design spec
+        TypedPane::Terminal(_) => IconWithStatusVariant::Neutral {
+            icon: WarpIcon::Terminal,
+            icon_color: main_text,
+        },
         TypedPane::Code(_) => match icon_from_file_path(title, appearance) {
             Some(icon_element) => IconWithStatusVariant::NeutralElement { icon_element },
             _ => IconWithStatusVariant::Neutral {
@@ -3328,19 +3209,11 @@ fn resolve_icon_with_status_variant(
             icon_color: main_text,
         },
         // Warp Drive object types use their established index colors
-        TypedPane::Notebook { is_plan } => IconWithStatusVariant::Neutral {
+        TypedPane::Notebook => IconWithStatusVariant::Neutral {
             icon: typed.icon(),
-            icon_color: drive_color(DriveObjectType::Notebook {
-                is_ai_document: *is_plan,
-            }),
+            icon_color: drive_color(DriveObjectType::Notebook),
         },
-        TypedPane::Workflow { is_ai_prompt: true } => IconWithStatusVariant::Neutral {
-            icon: typed.icon(),
-            icon_color: drive_color(DriveObjectType::AgentModeWorkflow),
-        },
-        TypedPane::Workflow {
-            is_ai_prompt: false,
-        } => IconWithStatusVariant::Neutral {
+        TypedPane::Workflow => IconWithStatusVariant::Neutral {
             icon: typed.icon(),
             icon_color: drive_color(DriveObjectType::Workflow),
         },
@@ -3348,13 +3221,9 @@ fn resolve_icon_with_status_variant(
             icon: typed.icon(),
             icon_color: drive_color(DriveObjectType::EnvVarCollection),
         },
-        TypedPane::AIFact => IconWithStatusVariant::Neutral {
-            icon: typed.icon(),
-            icon_color: drive_color(DriveObjectType::AIFact),
-        },
         // Other pane types use sub-text color
-        other => IconWithStatusVariant::Neutral {
-            icon: other.icon(),
+        TypedPane::File | TypedPane::Other => IconWithStatusVariant::Neutral {
+            icon: typed.icon(),
             icon_color: sub_text,
         },
     }
@@ -3473,7 +3342,7 @@ fn render_pane_row(props: PaneProps<'_>, app: &AppContext) -> Box<dyn Element> {
     let font_family = appearance.ui_font_family();
 
     let icon = render_pane_icon_with_status(
-        resolve_icon_with_status_variant(&props.typed, &props.title, appearance, app),
+        resolve_icon_with_status_variant(&props.typed, &props.title, appearance),
         theme,
     );
 
@@ -3571,45 +3440,26 @@ fn render_pane_row(props: PaneProps<'_>, app: &AppContext) -> Box<dyn Element> {
 enum TypedPane<'a> {
     Terminal(&'a TerminalPane),
     Code(&'a CodePane),
-    CodeDiff,
     File,
-    Notebook { is_plan: bool },
-    Workflow { is_ai_prompt: bool },
+    Notebook,
+    Workflow,
     Settings,
     EnvVarCollection,
-    AIFact,
-    AIDocument,
-    ExecutionProfileEditor,
     Other,
 }
 
 impl TypedPane<'_> {
-    fn summary_pane_kind(&self, title: &str, app: &AppContext) -> SummaryPaneKind {
+    fn summary_pane_kind(&self, title: &str) -> SummaryPaneKind {
         match self {
-            TypedPane::Terminal(terminal_pane) => {
-                let terminal_view = terminal_pane.terminal_view(app);
-                let terminal_view = terminal_view.as_ref(app);
-                // Route through the shared helper so summary mode agrees with
-                // `resolve_icon_with_status_variant` on what the tab represents.
-                match terminal_view_agent_icon_variant(terminal_view, app) {
-                    Some(IconWithStatusVariant::OzAgent { .. }) => SummaryPaneKind::OzAgent,
-                    Some(_) | None => SummaryPaneKind::Terminal,
-                }
-            }
+            TypedPane::Terminal(_) => SummaryPaneKind::Terminal,
             TypedPane::Code(_) => SummaryPaneKind::Code {
                 title: title.to_string(),
             },
-            TypedPane::CodeDiff => SummaryPaneKind::CodeDiff,
             TypedPane::File => SummaryPaneKind::File,
-            TypedPane::Notebook { is_plan } => SummaryPaneKind::Notebook { is_plan: *is_plan },
-            TypedPane::Workflow { is_ai_prompt } => SummaryPaneKind::Workflow {
-                is_ai_prompt: *is_ai_prompt,
-            },
+            TypedPane::Notebook => SummaryPaneKind::Notebook,
+            TypedPane::Workflow => SummaryPaneKind::Workflow,
             TypedPane::Settings => SummaryPaneKind::Settings,
             TypedPane::EnvVarCollection => SummaryPaneKind::EnvVarCollection,
-            TypedPane::AIFact => SummaryPaneKind::AIFact,
-            TypedPane::AIDocument => SummaryPaneKind::AIDocument,
-            TypedPane::ExecutionProfileEditor => SummaryPaneKind::ExecutionProfileEditor,
             TypedPane::Other => SummaryPaneKind::Other,
         }
     }
@@ -3624,17 +3474,13 @@ impl TypedPane<'_> {
     }
     fn kind_label(&self) -> &'static str {
         match self {
-            TypedPane::Terminal(_) => "Terminal",
+            TypedPane::Terminal(_) => TERMINAL_KIND_LABEL,
             TypedPane::Code(_) => "Code",
-            TypedPane::CodeDiff => "Code Diff",
             TypedPane::File => "File",
-            TypedPane::Notebook { .. } => "Notebook",
-            TypedPane::Workflow { .. } => "Workflow",
+            TypedPane::Notebook => "Notebook",
+            TypedPane::Workflow => "Workflow",
             TypedPane::Settings => "Settings",
             TypedPane::EnvVarCollection => "Environment Variables",
-            TypedPane::AIFact => "Rules",
-            TypedPane::AIDocument => "Plan",
-            TypedPane::ExecutionProfileEditor => "Execution Profile",
             TypedPane::Other => "Other",
         }
     }
@@ -3647,15 +3493,11 @@ impl TypedPane<'_> {
                 .contains_unsaved_changes(app)
                 .then(|| "Unsaved".to_string()),
             TypedPane::Terminal(_)
-            | TypedPane::CodeDiff
             | TypedPane::File
-            | TypedPane::Notebook { .. }
-            | TypedPane::Workflow { .. }
+            | TypedPane::Notebook
+            | TypedPane::Workflow
             | TypedPane::Settings
             | TypedPane::EnvVarCollection
-            | TypedPane::AIFact
-            | TypedPane::AIDocument
-            | TypedPane::ExecutionProfileEditor
             | TypedPane::Other => None,
         }
     }
@@ -3664,19 +3506,11 @@ impl TypedPane<'_> {
         match self {
             TypedPane::Terminal(_) => WarpIcon::Terminal,
             TypedPane::Code(_) => WarpIcon::Code2,
-            TypedPane::CodeDiff => WarpIcon::Diff,
             TypedPane::File => WarpIcon::File,
-            TypedPane::Notebook { is_plan: true } => WarpIcon::Compass,
-            TypedPane::Notebook { is_plan: false } => WarpIcon::Notebook,
-            TypedPane::Workflow { is_ai_prompt: true } => WarpIcon::Prompt,
-            TypedPane::Workflow {
-                is_ai_prompt: false,
-            } => WarpIcon::Workflow,
+            TypedPane::Notebook => WarpIcon::Notebook,
+            TypedPane::Workflow => WarpIcon::Workflow,
             TypedPane::Settings => WarpIcon::Gear,
             TypedPane::EnvVarCollection => WarpIcon::EnvVarCollection,
-            TypedPane::AIFact => WarpIcon::BookOpen,
-            TypedPane::AIDocument => WarpIcon::Compass,
-            TypedPane::ExecutionProfileEditor => WarpIcon::Lightning,
             TypedPane::Other => WarpIcon::File,
         }
     }
@@ -3730,7 +3564,7 @@ fn build_vertical_tabs_summary_data(
         };
         let pane_configuration = pane.pane_configuration();
         let pane_configuration = pane_configuration.as_ref(app);
-        let typed = pane_group.resolve_pane_type(*pane_id, app);
+        let typed = pane_group.resolve_pane_type(*pane_id);
         let (pane_title, pane_subtitle) = pane_display_title_and_subtitle(
             &typed,
             pane_configuration.title().trim(),
@@ -3747,23 +3581,17 @@ fn build_vertical_tabs_summary_data(
                     .clone()
                     .filter(|wd| !wd.trim().is_empty())
                     .unwrap_or_else(|| title_text.clone());
-                let agent_text = terminal_agent_text(terminal_view, app);
-                let conversation_display_title =
-                    preferred_agent_tab_title(&agent_text, agent_tab_text_preference(app));
 
                 let primary_label = terminal_primary_line_data(
                     terminal_view.is_long_running_and_user_controlled(),
-                    conversation_display_title,
                     title_text.as_str(),
                     working_directory_text.as_str(),
                     terminal_view.last_completed_command_text(),
                 );
-                let status = summary_conversation_status_for_terminal(terminal_view, app);
-                push_normalized_unique_summary_label(
+                push_normalized_unique_summary_text(
                     &mut primary_labels,
                     &mut primary_seen,
                     primary_label.text(),
-                    status,
                 );
 
                 if let Some(working_directory) = working_directory {
@@ -3796,11 +3624,10 @@ fn build_vertical_tabs_summary_data(
                 }
             }
             TypedPane::Code(_) => {
-                push_normalized_unique_summary_label(
+                push_normalized_unique_summary_text(
                     &mut primary_labels,
                     &mut primary_seen,
                     &pane_title,
-                    None,
                 );
                 push_normalized_unique_summary_text(
                     &mut working_directories,
@@ -3808,27 +3635,20 @@ fn build_vertical_tabs_summary_data(
                     &pane_subtitle,
                 );
             }
-            TypedPane::CodeDiff
-            | TypedPane::File
-            | TypedPane::Notebook { .. }
-            | TypedPane::Workflow { .. }
+            TypedPane::File
+            | TypedPane::Notebook
+            | TypedPane::Workflow
             | TypedPane::Settings
             | TypedPane::EnvVarCollection
-            | TypedPane::AIFact
-            | TypedPane::AIDocument
-            | TypedPane::ExecutionProfileEditor
             | TypedPane::Other => {
-                push_normalized_unique_summary_label(
+                push_normalized_unique_summary_text(
                     &mut primary_labels,
                     &mut primary_seen,
                     &pane_title,
-                    None,
                 );
             }
         }
     }
-
-    sort_summary_primary_labels_status_first(&mut primary_labels);
 
     VerticalTabsSummaryData {
         primary_labels,
@@ -3873,7 +3693,7 @@ impl<'a> PaneProps<'a> {
         let display_pane = pane_group.pane_by_id(display_pane_id)?;
         let pane_configuration = display_pane.pane_configuration();
         let pane_configuration = pane_configuration.as_ref(app);
-        let typed = pane_group.resolve_pane_type(display_pane_id, app);
+        let typed = pane_group.resolve_pane_type(display_pane_id);
         let (display_title, display_subtitle) = pane_display_title_and_subtitle(
             &typed,
             pane_configuration.title().trim(),
@@ -3950,15 +3770,11 @@ impl<'a> PaneProps<'a> {
                 app,
             ),
             TypedPane::Code(_)
-            | TypedPane::CodeDiff
             | TypedPane::File
-            | TypedPane::Notebook { .. }
-            | TypedPane::Workflow { .. }
+            | TypedPane::Notebook
+            | TypedPane::Workflow
             | TypedPane::Settings
             | TypedPane::EnvVarCollection
-            | TypedPane::AIFact
-            | TypedPane::AIDocument
-            | TypedPane::ExecutionProfileEditor
             | TypedPane::Other => {
                 non_terminal_search_text_fragments(self.generated_or_tab_title(), &self.subtitle)
             }
@@ -4138,16 +3954,12 @@ fn terminal_pane_search_text_fragments(
     let title_text = terminal_view.terminal_title_from_shell();
     let working_directory = resolved_terminal_working_directory(terminal_view, app)
         .unwrap_or_else(|| title_text.clone());
-    let agent_text = terminal_agent_text(terminal_view, app);
-    let conversation_display_title =
-        preferred_agent_tab_title(&agent_text, agent_tab_text_preference(app));
 
     let primary_text = display_title_override
         .map(str::to_owned)
         .unwrap_or_else(|| {
             terminal_primary_line_data(
                 terminal_view.is_long_running_and_user_controlled(),
-                conversation_display_title,
                 title_text.as_str(),
                 working_directory.as_str(),
                 terminal_view.last_completed_command_text(),
@@ -4164,7 +3976,7 @@ fn terminal_pane_search_text_fragments(
         primary_text,
         working_directory,
         terminal_view.current_git_branch(app),
-        terminal_kind_badge_label(agent_text.is_oz_agent),
+        TERMINAL_KIND_LABEL.to_string(),
         pull_request_label,
         terminal_view.current_diff_line_changes(app),
     )
@@ -4193,7 +4005,6 @@ fn terminal_search_text_fragments(
 
 fn terminal_primary_line_data(
     is_long_running: bool,
-    conversation_display_title: Option<String>,
     terminal_title: &str,
     working_directory: &str,
     last_completed_command: Option<String>,
@@ -4202,89 +4013,29 @@ fn terminal_primary_line_data(
     let trimmed_working_directory = working_directory.trim();
 
     if is_long_running && !trimmed_title.is_empty() && trimmed_title != trimmed_working_directory {
-        return TerminalPrimaryLineData::Text {
+        return TerminalPrimaryLineData {
             text: trimmed_title.to_string(),
             font: TerminalPrimaryLineFont::Monospace,
         };
     }
 
-    if let Some(conversation_title) = conversation_display_title {
-        return TerminalPrimaryLineData::StatusText {
-            text: conversation_title,
-        };
-    }
     if !trimmed_title.is_empty() && trimmed_title != trimmed_working_directory {
-        return TerminalPrimaryLineData::Text {
+        return TerminalPrimaryLineData {
             text: trimmed_title.to_string(),
             font: TerminalPrimaryLineFont::Monospace,
         };
     }
 
     if let Some(last_completed_command) = last_completed_command {
-        return TerminalPrimaryLineData::Text {
+        return TerminalPrimaryLineData {
             text: last_completed_command,
             font: TerminalPrimaryLineFont::Monospace,
         };
     }
 
-    TerminalPrimaryLineData::Text {
+    TerminalPrimaryLineData {
         text: "New session".to_string(),
         font: TerminalPrimaryLineFont::Ui,
-    }
-}
-
-fn terminal_kind_badge_label(is_oz_agent: bool) -> String {
-    if is_oz_agent {
-        "Warp Agent".to_string()
-    } else {
-        "Terminal".to_string()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AgentTabTextPreference {
-    ConversationTitle,
-    LatestUserPrompt,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct TerminalAgentText {
-    conversation_display_title: Option<String>,
-    conversation_latest_user_prompt: Option<String>,
-    is_oz_agent: bool,
-}
-
-fn agent_tab_text_preference(app: &AppContext) -> AgentTabTextPreference {
-    if *TabSettings::as_ref(app).use_latest_user_prompt_as_conversation_title_in_tab_names {
-        AgentTabTextPreference::LatestUserPrompt
-    } else {
-        AgentTabTextPreference::ConversationTitle
-    }
-}
-
-fn preferred_agent_tab_title(
-    agent_text: &TerminalAgentText,
-    preference: AgentTabTextPreference,
-) -> Option<String> {
-    match preference {
-        AgentTabTextPreference::ConversationTitle => agent_text
-            .conversation_display_title
-            .clone()
-            .or_else(|| agent_text.conversation_latest_user_prompt.clone()),
-        AgentTabTextPreference::LatestUserPrompt => agent_text
-            .conversation_latest_user_prompt
-            .clone()
-            .or_else(|| agent_text.conversation_display_title.clone()),
-    }
-}
-
-fn terminal_agent_text(terminal_view: &TerminalView, app: &AppContext) -> TerminalAgentText {
-    let conversation_display_title = terminal_view.selected_conversation_display_title(app);
-    TerminalAgentText {
-        is_oz_agent: conversation_display_title.is_some(),
-        conversation_display_title,
-        conversation_latest_user_prompt: terminal_view
-            .selected_conversation_latest_user_prompt_for_tab_name(app),
     }
 }
 
@@ -4313,7 +4064,7 @@ fn vtab_diff_stats_text(line_changes: &GitLineChanges) -> String {
 }
 
 impl PaneGroup {
-    fn resolve_pane_type(&self, pane_id: PaneId, app: &AppContext) -> TypedPane<'_> {
+    fn resolve_pane_type(&self, pane_id: PaneId) -> TypedPane<'_> {
         match pane_id.pane_type() {
             IPaneType::Terminal => TypedPane::Terminal(
                 self.downcast_pane_by_id::<TerminalPane>(pane_id)
@@ -4323,32 +4074,12 @@ impl PaneGroup {
                 self.downcast_pane_by_id::<CodePane>(pane_id)
                     .expect("IPaneType::Code must correspond to a CodePane"),
             ),
-            IPaneType::CodeDiff => TypedPane::CodeDiff,
             IPaneType::File => TypedPane::File,
-            IPaneType::Notebook => {
-                let is_plan = self
-                    .downcast_pane_by_id::<NotebookPane>(pane_id)
-                    .map(|np| np.notebook_view(app).as_ref(app).is_plan(app))
-                    .unwrap_or(false);
-                TypedPane::Notebook { is_plan }
-            }
-            IPaneType::Workflow => {
-                let is_ai_prompt = self
-                    .downcast_pane_by_id::<WorkflowPane>(pane_id)
-                    .map(|wp| {
-                        let wv = wp.get_view(app);
-                        wv.as_ref(app).is_agent_mode_workflow()
-                    })
-                    .unwrap_or(false);
-                TypedPane::Workflow { is_ai_prompt }
-            }
+            IPaneType::Notebook => TypedPane::Notebook,
+            IPaneType::Workflow => TypedPane::Workflow,
             IPaneType::Settings => TypedPane::Settings,
             IPaneType::EnvVarCollection => TypedPane::EnvVarCollection,
-            IPaneType::AIFact => TypedPane::AIFact,
-            IPaneType::AIDocument => TypedPane::AIDocument,
-            IPaneType::ExecutionProfileEditor => TypedPane::ExecutionProfileEditor,
-            IPaneType::CustomRouterEditor
-            | IPaneType::GetStarted
+            IPaneType::GetStarted
             | IPaneType::NetworkLog
             | IPaneType::DeferredPlaceholder => TypedPane::Other,
             #[cfg(test)]
@@ -4359,11 +4090,8 @@ impl PaneGroup {
 
 /// Returns the [`SummaryPaneKind`] representing how the given pane should
 /// be rendered visually, matching the treatment used by vertical tabs
-/// Summary mode. For Terminal panes, distinguishes Oz conversations from plain terminals by
-/// routing through `terminal_view_agent_icon_variant`; for other pane types it falls back
-/// to `TypedPane::summary_pane_kind`. Returns `None` when `pane_id` does
-/// not resolve to a pane in `pane_group` so callers can skip stale ids
-/// via `filter_map`; note this is distinct from a known pane that
+/// Summary mode. Returns `None` when `pane_id` does not resolve to a pane in `pane_group` so
+/// callers can skip stale ids via `filter_map`; note this is distinct from a known pane that
 /// classifies as `SummaryPaneKind::Other`.
 pub(super) fn pane_summary_kind(
     pane_group: &PaneGroup,
@@ -4374,8 +4102,8 @@ pub(super) fn pane_summary_kind(
     let pane_configuration = pane.pane_configuration();
     let pane_configuration = pane_configuration.as_ref(app);
     let title = pane_configuration.title().trim();
-    let typed = pane_group.resolve_pane_type(pane_id, app);
-    Some(typed.summary_pane_kind(title, app))
+    let typed = pane_group.resolve_pane_type(pane_id);
+    Some(typed.summary_pane_kind(title))
 }
 
 /// Returns the best available working-directory string for a terminal pane.
@@ -4410,9 +4138,9 @@ fn render_terminal_row_content(
     //
     // | Setting          | Line 1 (title)       | Line 2 (description)   | Line 3 left          |
     // |------------------|----------------------|------------------------|----------------------|
-    // | Command          | command/conversation | working directory       | git branch           |
-    // | WorkingDirectory | working directory    | command/conversation    | git branch           |
-    // | Branch           | git branch           | command/conversation    | working directory    |
+    // | Command          | command              | working directory      | git branch           |
+    // | WorkingDirectory | working directory    | command                | git branch           |
+    // | Branch           | git branch           | command                | working directory    |
     let (first_line, second_line, metadata_left) = match primary_info {
         VerticalTabsPrimaryInfo::Command => (
             render_pane_title_slot(
@@ -4710,7 +4438,7 @@ fn render_summary_tab_item(
         .map(|icons| render_summary_pane_kind_icons(icons, VERTICAL_TABS_ICON_SIZE, appearance))
         .unwrap_or_else(|| {
             render_pane_icon_with_status(
-                resolve_icon_with_status_variant(&props.typed, &props.title, appearance, app),
+                resolve_icon_with_status_variant(&props.typed, &props.title, appearance),
                 theme,
             )
         });
@@ -4744,20 +4472,14 @@ fn render_summary_tab_item(
                     appearance,
                 ));
             } else {
-                let visible_labels: Vec<&VerticalTabsSummaryPrimaryLabel> = summary
+                for (idx, label) in summary
                     .primary_labels
                     .iter()
                     .take(MAX_VISIBLE_PRIMARY_LABELS)
-                    .collect();
-                let reserve_prefix_slot = visible_labels.iter().any(|label| label.status.is_some());
-
-                for (idx, label) in visible_labels.iter().enumerate() {
-                    let line = render_summary_primary_label_line(
-                        label,
-                        reserve_prefix_slot,
-                        main_text_color,
-                        appearance,
-                    );
+                    .enumerate()
+                {
+                    let line =
+                        render_text_line(label, main_text_color, ClipConfig::end(), appearance);
                     title_region.add_child(if idx == 0 {
                         line
                     } else {
@@ -4886,46 +4608,6 @@ fn render_summary_tab_item(
     render_pane_row_element(props, Padding::uniform(8.), true, content, theme)
 }
 
-fn render_summary_primary_label_line(
-    label: &VerticalTabsSummaryPrimaryLabel,
-    reserve_prefix_slot: bool,
-    text_color: WarpThemeFill,
-    appearance: &Appearance,
-) -> Box<dyn Element> {
-    // Reserve a slot wide enough for the status pill so non-conversation lines align with
-    // conversation lines in the same region. STATUS_ELEMENT_PADDING is the 2px padding inside
-    // the pill from `render_status_element`.
-    const STATUS_ELEMENT_PADDING: f32 = 2.;
-    let prefix_slot_size = VERTICAL_TABS_SUMMARY_STATUS_ICON_SIZE + STATUS_ELEMENT_PADDING * 2.;
-    let text = render_text_line(&label.text, text_color, ClipConfig::end(), appearance);
-
-    let prefix: Option<Box<dyn Element>> = match (label.status.as_ref(), reserve_prefix_slot) {
-        (Some(status), _) => Some(render_status_element(
-            status,
-            VERTICAL_TABS_SUMMARY_STATUS_ICON_SIZE,
-            appearance,
-        )),
-        (None, true) => Some(
-            ConstrainedBox::new(Empty::new().finish())
-                .with_width(prefix_slot_size)
-                .with_height(prefix_slot_size)
-                .finish(),
-        ),
-        (None, false) => None,
-    };
-
-    let Some(prefix) = prefix else {
-        return text;
-    };
-    Flex::row()
-        .with_main_axis_size(MainAxisSize::Max)
-        .with_cross_axis_alignment(CrossAxisAlignment::Center)
-        .with_spacing(4.)
-        .with_child(prefix)
-        .with_child(Shrinkable::new(1., text).finish())
-        .finish()
-}
-
 fn render_summary_overflow_line(
     hidden_count: usize,
     text_color: WarpThemeFill,
@@ -4967,8 +4649,7 @@ pub(super) fn render_summary_pane_kind_icons(
                 .with_corner_radius(CornerRadius::with_all(Radius::Percentage(50.)))
                 .finish();
 
-            // Same 45° placement as `render_with_optional_status_badge`: secondary's
-            // center sits on the primary circle's edge.
+            // 45° placement: secondary's center sits on the primary circle's edge.
             let primary_radius = primary_total / 2.;
             let secondary_outer = secondary_total + ring_padding * 2.;
             let secondary_radius = secondary_outer / 2.;
@@ -4999,8 +4680,8 @@ pub(super) fn render_summary_pane_kind_icons(
     }
 }
 
-// Inline rendering for non-agent summary kinds — for an icon (e.g. Terminal, Code,
-// Notebook) sized to fill its `total_size` bounding box.
+// Inline rendering for summary kinds — for an icon (e.g. Terminal, Code, Notebook) sized to
+// fill its `total_size` bounding box.
 const SUMMARY_INLINE_ICON_RATIO: f32 = 2. / 3.;
 const SUMMARY_INLINE_PADDING_RATIO: f32 = (1. - SUMMARY_INLINE_ICON_RATIO) / 2.;
 
@@ -5010,21 +4691,9 @@ pub(super) fn render_summary_pane_kind_icon_circle(
     appearance: &Appearance,
 ) -> Box<dyn Element> {
     let theme = appearance.theme();
-    // Route Warp agent kinds through `render_icon_with_status` so their circle stays
-    // consistent with the pane row.
-    if matches!(kind, SummaryPaneKind::OzAgent) {
-        return render_icon_with_status(
-            IconWithStatusVariant::OzAgent { status: None },
-            total_size,
-            0.,
-            theme,
-            theme.background(),
-        );
-    }
     let icon_size = total_size * SUMMARY_INLINE_ICON_RATIO;
     let padding = total_size * SUMMARY_INLINE_PADDING_RATIO;
     let (icon_element, background): (Box<dyn Element>, ElementFill) = match kind {
-        SummaryPaneKind::OzAgent => unreachable!("rendered through render_icon_with_status"),
         SummaryPaneKind::Code { title } => (
             icon_from_file_path(&title, appearance).unwrap_or_else(|| {
                 WarpIcon::Code2
@@ -5034,15 +4703,11 @@ pub(super) fn render_summary_pane_kind_icon_circle(
             internal_colors::fg_overlay_2(theme).into(),
         ),
         SummaryPaneKind::Terminal
-        | SummaryPaneKind::CodeDiff
         | SummaryPaneKind::File
-        | SummaryPaneKind::Notebook { .. }
-        | SummaryPaneKind::Workflow { .. }
+        | SummaryPaneKind::Notebook
+        | SummaryPaneKind::Workflow
         | SummaryPaneKind::Settings
         | SummaryPaneKind::EnvVarCollection
-        | SummaryPaneKind::AIFact
-        | SummaryPaneKind::AIDocument
-        | SummaryPaneKind::ExecutionProfileEditor
         | SummaryPaneKind::Other => {
             let (icon, icon_color) = summary_pane_kind_icon(kind, appearance);
             (
@@ -5078,45 +4743,18 @@ fn summary_pane_kind_icon(
 
     match kind {
         SummaryPaneKind::Terminal => (WarpIcon::Terminal, main_text),
-        // Local agent: Agent-brand glyph with theme main-text color, consistent
-        // with the tab row and summary circle.
-        // Note: this arm is currently unreachable — OzAgent is matched by the dedicated arm in
-        // render_summary_pane_kind_icon_circle before summary_pane_kind_icon is called.
-        // Kept for completeness in case callers change.
-        SummaryPaneKind::OzAgent => (WarpIcon::Agent, main_text),
         SummaryPaneKind::Code { .. } => (WarpIcon::Code2, sub_text),
-        SummaryPaneKind::CodeDiff => (WarpIcon::Diff, sub_text),
         SummaryPaneKind::File => (WarpIcon::File, sub_text),
-        SummaryPaneKind::Notebook { is_plan } => (
-            if is_plan {
-                WarpIcon::Compass
-            } else {
-                WarpIcon::Notebook
-            },
-            drive_color(DriveObjectType::Notebook {
-                is_ai_document: is_plan,
-            }),
+        SummaryPaneKind::Notebook => (
+            WarpIcon::Notebook,
+            drive_color(DriveObjectType::Notebook),
         ),
-        SummaryPaneKind::Workflow { is_ai_prompt } => (
-            if is_ai_prompt {
-                WarpIcon::Prompt
-            } else {
-                WarpIcon::Workflow
-            },
-            if is_ai_prompt {
-                drive_color(DriveObjectType::AgentModeWorkflow)
-            } else {
-                drive_color(DriveObjectType::Workflow)
-            },
-        ),
+        SummaryPaneKind::Workflow => (WarpIcon::Workflow, drive_color(DriveObjectType::Workflow)),
         SummaryPaneKind::Settings => (WarpIcon::Gear, main_text),
         SummaryPaneKind::EnvVarCollection => (
             WarpIcon::EnvVarCollection,
             drive_color(DriveObjectType::EnvVarCollection),
         ),
-        SummaryPaneKind::AIFact => (WarpIcon::BookOpen, drive_color(DriveObjectType::AIFact)),
-        SummaryPaneKind::AIDocument => (WarpIcon::Compass, sub_text),
-        SummaryPaneKind::ExecutionProfileEditor => (WarpIcon::Lightning, sub_text),
         SummaryPaneKind::Other => (WarpIcon::File, sub_text),
     }
 }
@@ -5201,14 +4839,10 @@ fn render_terminal_primary_line_for_view(
     let title_text = terminal_view.terminal_title_from_shell();
     let working_directory = resolved_terminal_working_directory(terminal_view, app)
         .unwrap_or_else(|| title_text.clone());
-    let agent_text = terminal_agent_text(terminal_view, app);
-    let conversation_display_title =
-        preferred_agent_tab_title(&agent_text, agent_tab_text_preference(app));
 
     render_terminal_primary_line(
         terminal_primary_line_data(
             terminal_view.is_long_running_and_user_controlled(),
-            conversation_display_title,
             title_text.as_str(),
             working_directory.as_str(),
             terminal_view.last_completed_command_text(),
@@ -5219,9 +4853,7 @@ fn render_terminal_primary_line_for_view(
     )
 }
 
-/// Primary line for terminal pane rows. Precedence:
-/// 1. Warp Agent conversation title + status
-/// 2. Terminal title
+/// Primary line for terminal pane rows.
 fn render_terminal_primary_line(
     primary_line: TerminalPrimaryLineData,
     terminal_view: &TerminalView,
@@ -5254,25 +4886,16 @@ fn render_terminal_primary_line(
             .with_child(Shrinkable::new(1., title_element).finish())
             .finish()
     };
-    match primary_line {
-        TerminalPrimaryLineData::StatusText { text, .. } => {
-            Text::new_inline(text, appearance.ui_font_family(), 12.)
-                .with_clip(ClipConfig::ellipsis())
-                .with_color(text_color.into())
-                .finish()
-        }
-        TerminalPrimaryLineData::Text { text, font } => {
-            let font_family = match font {
-                TerminalPrimaryLineFont::Ui => appearance.ui_font_family(),
-                TerminalPrimaryLineFont::Monospace => appearance.monospace_font_family(),
-            };
-            let title_el = Text::new_inline(text, font_family, 12.)
-                .with_clip(ClipConfig::ellipsis())
-                .with_color(text_color.into())
-                .finish();
-            wrap_with_error_indicator(title_el)
-        }
-    }
+    let TerminalPrimaryLineData { text, font } = primary_line;
+    let font_family = match font {
+        TerminalPrimaryLineFont::Ui => appearance.ui_font_family(),
+        TerminalPrimaryLineFont::Monospace => appearance.monospace_font_family(),
+    };
+    let title_el = Text::new_inline(text, font_family, 12.)
+        .with_clip(ClipConfig::ellipsis())
+        .with_color(text_color.into())
+        .finish();
+    wrap_with_error_indicator(title_el)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -5680,16 +5303,10 @@ fn subtitle_options_for_primary(
         ],
         VerticalTabsPrimaryInfo::WorkingDirectory => [
             (VerticalTabsCompactSubtitle::Branch, "Branch"),
-            (
-                VerticalTabsCompactSubtitle::Command,
-                "Command / Conversation",
-            ),
+            (VerticalTabsCompactSubtitle::Command, "Command"),
         ],
         VerticalTabsPrimaryInfo::Branch => [
-            (
-                VerticalTabsCompactSubtitle::Command,
-                "Command / Conversation",
-            ),
+            (VerticalTabsCompactSubtitle::Command, "Command"),
             (
                 VerticalTabsCompactSubtitle::WorkingDirectory,
                 "Working Directory",
@@ -5921,7 +5538,7 @@ pub(super) fn render_settings_popup(
     .finish();
 
     let command_option = render_primary_info_option(
-        "Command / Conversation",
+        "Command",
         matches!(current_primary_info, VerticalTabsPrimaryInfo::Command),
         state.command_option_mouse_state.clone(),
         VerticalTabsPrimaryInfo::Command,
@@ -6619,36 +6236,6 @@ fn render_detail_badge(
     badge.finish()
 }
 
-fn render_detail_status_pill(
-    status: &ConversationStatus,
-    appearance: &Appearance,
-) -> Box<dyn Element> {
-    let theme = appearance.theme();
-    let (icon, color) = status.status_icon_and_color(theme, StatusColorStyle::Standard);
-    Container::new(
-        Flex::row()
-            .with_main_axis_size(MainAxisSize::Min)
-            .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_spacing(4.)
-            .with_child(
-                ConstrainedBox::new(icon.to_warpui_icon(WarpThemeFill::Solid(color)).finish())
-                    .with_width(12.)
-                    .with_height(12.)
-                    .finish(),
-            )
-            .with_child(
-                Text::new_inline(status.to_string(), appearance.ui_font_family(), 10.)
-                    .with_color(WarpThemeFill::Solid(color).into())
-                    .finish(),
-            )
-            .finish(),
-    )
-    .with_padding(Padding::uniform(2.).with_left(4.).with_right(4.))
-    .with_background(ThemeFill::Solid(coloru_with_opacity(color, 10)))
-    .with_corner_radius(CornerRadius::with_all(Radius::Pixels(2.)))
-    .finish()
-}
-
 fn render_detail_wrapping_text(
     text: impl Into<String>,
     font_size: f32,
@@ -6670,12 +6257,9 @@ fn render_terminal_detail_primary_line(
     color: WarpThemeFill,
     appearance: &Appearance,
 ) -> Box<dyn Element> {
-    let font_family = match primary_line {
-        TerminalPrimaryLineData::StatusText { .. } => appearance.ui_font_family(),
-        TerminalPrimaryLineData::Text { font, .. } => match font {
-            TerminalPrimaryLineFont::Ui => appearance.ui_font_family(),
-            TerminalPrimaryLineFont::Monospace => appearance.monospace_font_family(),
-        },
+    let font_family = match primary_line.font {
+        TerminalPrimaryLineFont::Ui => appearance.ui_font_family(),
+        TerminalPrimaryLineFont::Monospace => appearance.monospace_font_family(),
     };
 
     Text::new(primary_line.text().to_string(), font_family, 12.)
@@ -6740,20 +6324,10 @@ fn render_terminal_detail_section(
     let text_colors = detail_sidecar_text_colors(theme);
     let working_directory = resolved_terminal_working_directory(terminal_view, app);
     let git_branch = terminal_view.current_git_branch(app);
-    let agent_text = terminal_agent_text(terminal_view, app);
-    let conversation_display_title =
-        preferred_agent_tab_title(&agent_text, agent_tab_text_preference(app));
-    let kind_label = terminal_kind_badge_label(agent_text.is_oz_agent);
-    let status = if agent_text.is_oz_agent {
-        terminal_view.selected_conversation_status_for_display(app)
-    } else {
-        None
-    };
 
     let title_text = terminal_view.terminal_title_from_shell();
     let primary_line = terminal_primary_line_data(
         terminal_view.is_long_running_and_user_controlled(),
-        conversation_display_title,
         title_text.as_str(),
         working_directory.as_deref().unwrap_or(title_text.as_str()),
         terminal_view.last_completed_command_text(),
@@ -6763,9 +6337,6 @@ fn render_terminal_detail_section(
         .with_cross_axis_alignment(CrossAxisAlignment::Start)
         .with_spacing(DETAIL_SIDECAR_SECTION_GAP);
 
-    if let Some(status) = status.as_ref() {
-        section.add_child(render_detail_status_pill(status, appearance));
-    }
     if let Some(working_directory) = working_directory.filter(|wd| !wd.trim().is_empty()) {
         section.add_child(render_detail_wrapping_text(
             working_directory,
@@ -6794,8 +6365,8 @@ fn render_terminal_detail_section(
         .with_main_axis_alignment(MainAxisAlignment::SpaceBetween)
         .with_cross_axis_alignment(CrossAxisAlignment::Center);
     metadata_row.add_child(render_detail_badge(
-        kind_label,
-        Some(render_detail_kind_badge_icon(props, appearance, app)),
+        TERMINAL_KIND_LABEL,
+        Some(render_detail_kind_badge_icon(props, appearance)),
         None,
         text_colors.disabled,
         appearance,
@@ -6888,7 +6459,7 @@ fn render_code_detail_section(
             .with_cross_axis_alignment(CrossAxisAlignment::Center);
         metadata_row.add_child(render_detail_badge(
             language_name,
-            Some(render_detail_kind_badge_icon(props, appearance, app)),
+            Some(render_detail_kind_badge_icon(props, appearance)),
             None,
             text_colors.disabled,
             appearance,
@@ -6930,7 +6501,7 @@ fn render_warp_drive_object_detail_section(
     ));
     section.add_child(render_detail_badge(
         props.typed.kind_label(),
-        Some(render_detail_kind_badge_icon(props, appearance, app)),
+        Some(render_detail_kind_badge_icon(props, appearance)),
         None,
         text_colors.disabled,
         appearance,
@@ -6948,24 +6519,13 @@ fn code_detail_kind_label(file_name: &str) -> Option<String> {
 
 fn typed_pane_warp_drive_object_type(typed: &TypedPane<'_>) -> Option<DriveObjectType> {
     match typed {
-        TypedPane::Notebook { is_plan } => Some(DriveObjectType::Notebook {
-            is_ai_document: *is_plan,
-        }),
-        TypedPane::Workflow { is_ai_prompt: true } => Some(DriveObjectType::AgentModeWorkflow),
-        TypedPane::Workflow {
-            is_ai_prompt: false,
-        } => Some(DriveObjectType::Workflow),
+        TypedPane::Notebook => Some(DriveObjectType::Notebook),
+        TypedPane::Workflow => Some(DriveObjectType::Workflow),
         TypedPane::EnvVarCollection => Some(DriveObjectType::EnvVarCollection),
-        TypedPane::AIFact => Some(DriveObjectType::AIFact),
-        TypedPane::AIDocument => Some(DriveObjectType::Notebook {
-            is_ai_document: true,
-        }),
         TypedPane::Terminal(_)
         | TypedPane::Code(_)
-        | TypedPane::CodeDiff
         | TypedPane::File
         | TypedPane::Settings
-        | TypedPane::ExecutionProfileEditor
         | TypedPane::Other => None,
     }
 }
@@ -6983,16 +6543,10 @@ fn render_detail_section(
             app,
         ),
         TypedPane::Code(_) => render_code_detail_section(props, appearance, app),
-        TypedPane::Notebook { .. }
-        | TypedPane::Workflow { .. }
-        | TypedPane::EnvVarCollection
-        | TypedPane::AIFact
-        | TypedPane::AIDocument => render_warp_drive_object_detail_section(props, appearance, app),
-        TypedPane::CodeDiff
-        | TypedPane::File
-        | TypedPane::Settings
-        | TypedPane::ExecutionProfileEditor
-        | TypedPane::Other => Empty::new().finish(),
+        TypedPane::Notebook | TypedPane::Workflow | TypedPane::EnvVarCollection => {
+            render_warp_drive_object_detail_section(props, appearance, app)
+        }
+        TypedPane::File | TypedPane::Settings | TypedPane::Other => Empty::new().finish(),
     }
 }
 pub(super) struct DetailSidecarOverlay {
@@ -7175,7 +6729,7 @@ fn render_compact_pane_row(props: PaneProps<'_>, app: &AppContext) -> Box<dyn El
     let has_indicator = props.typed.badge(app).is_some();
 
     let icon = render_pane_icon_with_status(
-        resolve_icon_with_status_variant(&props.typed, &props.title, appearance, app),
+        resolve_icon_with_status_variant(&props.typed, &props.title, appearance),
         theme,
     );
 
@@ -7257,12 +6811,8 @@ fn render_compact_pane_row(props: PaneProps<'_>, app: &AppContext) -> Box<dyn El
                         .finish()
                 }),
                 VerticalTabsCompactSubtitle::Command => {
-                    let agent_text = terminal_agent_text(terminal_view, app);
-                    let conv_title =
-                        preferred_agent_tab_title(&agent_text, agent_tab_text_preference(app));
                     let line_data = terminal_primary_line_data(
                         terminal_view.is_long_running_and_user_controlled(),
-                        conv_title,
                         terminal_title.as_str(),
                         working_directory_text.as_str(),
                         terminal_view.last_completed_command_text(),

@@ -1,4 +1,4 @@
-use ai::api_keys::{CustomEndpointModel, CustomEndpointSchema};
+use ai_config::api_keys::{CustomEndpointModel, CustomEndpointSchema};
 use pathfinder_geometry::vector::vec2f;
 use warpui::platform::WindowStyle;
 use warpui::scene::Scene;

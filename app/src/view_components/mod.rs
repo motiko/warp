@@ -11,6 +11,7 @@ pub mod dropdown;
 mod feature_popup;
 mod filterable_dropdown;
 pub mod find;
+pub mod keyboard_navigable_buttons;
 mod markdown_toggle_view;
 mod submittable_text_input;
 mod warning_box;

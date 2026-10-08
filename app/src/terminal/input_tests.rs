@@ -78,7 +78,6 @@ use crate::terminal::event::{
 };
 use crate::terminal::general_settings::UserDefaultShellUnsupportedBannerState;
 use crate::terminal::input::slash_commands::SlashCommandsEvent;
-use crate::terminal::keys::TerminalKeybindings;
 use crate::terminal::local_shell::LocalShellState;
 use crate::terminal::local_tty::shell::ShellStarter;
 use crate::terminal::model::ansi::{Handler, PromptMetadata};
@@ -287,7 +286,6 @@ pub fn initialize_app(app: &mut App) {
     app.add_singleton_model(|_| History::default());
     app.add_singleton_model(LocalWorkflows::new);
     app.add_singleton_model(|_| KeybindingChangedNotifier::new());
-    app.add_singleton_model(TerminalKeybindings::new);
     app.add_singleton_model(|_| ActiveSession::default());
     app.add_singleton_model(|ctx| {
         AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client())
@@ -4358,9 +4356,6 @@ fn test_tab_completion_hides_autosuggestion() {
             input.user_insert("open-file ", ctx);
             input.set_autosuggestion(
                 "sesame",
-                AutosuggestionType::Command {
-                    was_intelligent_autosuggestion: false,
-                },
                 ctx,
             )
         });
@@ -4421,9 +4416,6 @@ fn test_completions_while_typing_doesnt_hide_autosuggestion() {
             input.user_insert("open-file ", ctx);
             input.set_autosuggestion(
                 "sesame",
-                AutosuggestionType::Command {
-                    was_intelligent_autosuggestion: false,
-                },
                 ctx,
             )
         });

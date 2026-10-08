@@ -1,4 +1,4 @@
-use ::ai::api_keys::{CustomEndpoint, CustomEndpointSchema, validate_custom_endpoint_url};
+use ai_config::api_keys::{CustomEndpoint, CustomEndpointSchema, validate_custom_endpoint_url};
 use warp_editor::editor::NavigationKey;
 use warpui::elements::{
     Border, ChildView, ClippedScrollStateHandle, ClippedScrollable, ConstrainedBox, Container,

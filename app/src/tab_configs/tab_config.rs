@@ -98,15 +98,17 @@ pub struct TabConfigParam {
 #[serde(rename_all = "snake_case")]
 pub enum TabConfigPaneType {
     /// A standard terminal shell session.
+    ///
+    /// Accepts the legacy `agent` value so configs written before Agent Mode was removed still
+    /// load, as plain terminals.
+    #[serde(alias = "agent")]
     Terminal,
-    /// A terminal that immediately enters Agent Mode.
-    Agent,
 }
 
 /// A single node in the flat `[[panes]]` array.  Distinguished as a split vs.
 /// leaf by the presence of `split` + `children`.
 ///
-/// Leaf panes must specify `type` to indicate whether they open as a terminal or agent pane.
+/// Leaf panes must specify `type`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TabConfigPaneNode {
@@ -125,7 +127,6 @@ pub struct TabConfigPaneNode {
     pub directory: Option<String>,
     pub commands: Option<Vec<String>>,
     /// Optional shell to use for this pane (e.g. `"pwsh"`, `"zsh"`, `"bash"`, `"fish"`).
-    /// Only applies to `terminal` and `agent` pane types.
     /// If omitted or the shell is not found, the user's default shell is used.
     pub shell: Option<String>,
 }
@@ -361,7 +362,6 @@ fn resolve_pane_node(
 
         let pane_mode = match pane_type {
             TabConfigPaneType::Terminal => PaneMode::Terminal,
-            TabConfigPaneType::Agent => PaneMode::Agent,
         };
 
         let cwd = node

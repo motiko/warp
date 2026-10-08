@@ -138,6 +138,25 @@ commands = ["echo cleanup"]
 }
 
 #[test]
+fn test_legacy_agent_pane_type_loads_as_terminal() {
+    let config: TabConfig = toml::from_str(
+        r#"
+name = "Legacy Agent Tab"
+
+[[panes]]
+id = "main"
+type = "agent"
+"#,
+    )
+    .expect("legacy agent pane type should parse");
+
+    assert_eq!(config.panes[0].pane_type, Some(TabConfigPaneType::Terminal));
+
+    let serialized = toml::to_string_pretty(&config).expect("Should serialize");
+    assert!(serialized.contains(r#"type = "terminal""#));
+}
+
+#[test]
 fn test_default_param_values() {
     let config: TabConfig = toml::from_str(WORKTREE_TOML).unwrap();
     let defaults = config.default_param_values();

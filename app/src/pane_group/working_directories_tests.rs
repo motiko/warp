@@ -129,8 +129,8 @@ fn refresh_working_directories_preserves_non_repo_paths_and_dedupes() {
 }
 
 // Regression test for GH-10598: the code review panel's manually selected
-// repository must be remembered per pane group so it survives leaving and
-// returning to an Agent session.
+// repository must be remembered per pane group so it survives switching away from and back to
+// that pane group.
 #[test]
 fn selected_review_repo_is_remembered_per_pane_group() {
     App::test((), |mut app| async move {

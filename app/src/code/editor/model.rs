@@ -9,7 +9,6 @@ use std::{cmp, mem};
 
 use itertools::Itertools;
 use languages::{Language, language_by_filename, language_by_local_filename, language_by_name};
-use line_ending::LineEnding;
 use num_traits::SaturatingSub;
 use rangemap::{RangeMap, RangeSet};
 use string_offset::CharOffset;
@@ -69,7 +68,7 @@ use super::diff::{
 use super::line::EditorLineLocation;
 use crate::appearance::Appearance;
 use crate::code::editor::line_iterator::LineIterator;
-use crate::code_review::comments::{CommentId, CommentOrigin, LineDiffContent};
+use crate::code_review::comments::{CommentId, LineDiffContent};
 use crate::editor::InteractionState;
 use crate::rich_text::editor::model::word_unit;
 use crate::themes::theme::AnsiColorIdentifier;
@@ -200,7 +199,6 @@ pub enum CodeEditorModelEvent {
         origin: EditOrigin,
     },
     SelectionChanged,
-    UnifiedDiffComputed,
     ViewportUpdated(BufferVersion),
     InteractionStateChanged,
     DelayedRenderingFlushed,
@@ -1425,9 +1423,6 @@ impl CodeEditorModel {
 
                 ctx.emit(CodeEditorModelEvent::DiffUpdated);
             }
-            DiffModelEvent::UnifiedDiffComputed => {
-                ctx.emit(CodeEditorModelEvent::UnifiedDiffComputed);
-            }
         }
     }
 
@@ -2089,18 +2084,6 @@ impl CodeEditorModel {
         bracket_pairs
             .iter()
             .any(|(start, end)| *start == opening_char && *end == ending_char)
-    }
-
-    pub fn retrieve_unified_diff(&self, file_name: String, ctx: &mut ModelContext<Self>) {
-        // Use the buffer's text with normalized line endings, for consistency with how we calculate diffs.
-        let content = self
-            .content()
-            .as_ref(ctx)
-            .text_with_line_ending_mode(LineEnding::LF);
-
-        self.diff.update(ctx, move |diff, ctx| {
-            diff.retrieve_unified_diff(content, file_name, ctx)
-        });
     }
 
     pub fn interaction_state(&self) -> InteractionState {
@@ -4074,7 +4057,6 @@ impl CodeEditorModel {
         id: &CommentId,
         line: &EditorLineLocation,
         comment_text: &str,
-        origin: &CommentOrigin,
         ctx: &mut ModelContext<Self>,
     ) {
         self.comments.update(ctx, |comments, ctx| {
@@ -4083,7 +4065,6 @@ impl CodeEditorModel {
                 id: *id,
                 line: line.to_owned(),
                 comment_text: comment_text.to_owned(),
-                origin: origin.to_owned(),
             });
         });
     }

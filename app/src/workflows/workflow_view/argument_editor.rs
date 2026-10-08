@@ -485,19 +485,17 @@ impl WorkflowView {
                                 editor.set_interaction_state(InteractionState::Selectable, ctx);
                             });
 
-                            if !self.is_for_agent_mode {
-                                // debounce the syntax highlighting change to avoid flicker per
-                                // keystroke and only do the highlighting when the editing has ended.
-                                // The flicker would occur because we replace the buffer above with
-                                // insert_with_styles for capturing arguments changes and then perform
-                                // the syntax highlighting here.
-                                self.view_only_content_editor_highlight_model.update(
-                                    ctx,
-                                    |model, _ctx| {
-                                        model.debounce_highlight();
-                                    },
-                                );
-                            }
+                            // debounce the syntax highlighting change to avoid flicker per
+                            // keystroke and only do the highlighting when the editing has ended.
+                            // The flicker would occur because we replace the buffer above with
+                            // insert_with_styles for capturing arguments changes and then perform
+                            // the syntax highlighting here.
+                            self.view_only_content_editor_highlight_model.update(
+                                ctx,
+                                |model, _ctx| {
+                                    model.debounce_highlight();
+                                },
+                            );
                         }
                     }
                 });
@@ -546,7 +544,6 @@ impl WorkflowView {
                 mode,
                 ArgumentEditorMode::WorkflowDefinition | ArgumentEditorMode::Alias
             )
-            && !self.is_for_agent_mode
         {
             arguments_section.add_child(self.render_env_vars_selector(appearance, app));
         }

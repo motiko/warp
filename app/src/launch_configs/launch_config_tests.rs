@@ -29,7 +29,6 @@ fn single_tab_snapshot(root: PaneNodeSnapshot) -> AppState {
             bounds: None,
             quake_mode: false,
             universal_search_width: None,
-            warp_ai_width: None,
             voltron_width: None,
             warp_drive_index_width: None,
             left_panel_open: false,
@@ -41,7 +40,6 @@ fn single_tab_snapshot(root: PaneNodeSnapshot) -> AppState {
         }],
         active_window_index: Some(0),
         block_lists: Default::default(),
-        running_mcp_servers: Default::default(),
     }
 }
 
@@ -54,7 +52,6 @@ fn multi_tab_snapshot(active_tab_index: usize, tabs: Vec<TabSnapshot>) -> AppSta
             bounds: None,
             quake_mode: false,
             universal_search_width: None,
-            warp_ai_width: None,
             voltron_width: None,
             warp_drive_index_width: None,
             left_panel_open: false,
@@ -66,7 +63,6 @@ fn multi_tab_snapshot(active_tab_index: usize, tabs: Vec<TabSnapshot>) -> AppSta
         }],
         active_window_index: Some(0),
         block_lists: Default::default(),
-        running_mcp_servers: Default::default(),
     }
 }
 
@@ -100,11 +96,6 @@ fn test_config_from_snapshot_flattens_single_pane() {
                         is_active: true,
                         is_read_only: false,
                         shell_launch_data: None,
-                        input_config: None,
-                        llm_model_override: None,
-                        active_profile_id: None,
-                        conversation_ids_to_restore: vec![],
-                        active_conversation_id: None,
                     }),
                 }),
             ),
@@ -140,11 +131,6 @@ fn test_config_from_snapshot_filters_panes() {
                         is_active: true,
                         is_read_only: false,
                         shell_launch_data: None,
-                        input_config: None,
-                        llm_model_override: None,
-                        active_profile_id: None,
-                        conversation_ids_to_restore: vec![],
-                        active_conversation_id: None,
                     }),
                 }),
             ),
@@ -170,11 +156,6 @@ fn test_config_from_snapshot_filters_panes() {
                         is_active: true,
                         is_read_only: false,
                         shell_launch_data: None,
-                        input_config: None,
-                        llm_model_override: None,
-                        active_profile_id: None,
-                        conversation_ids_to_restore: vec![],
-                        active_conversation_id: None,
                     }),
                 }),
             ),
@@ -258,6 +239,26 @@ windows:
             shell: None,
         }
     );
+}
+
+#[test]
+fn test_legacy_agent_pane_mode_loads_as_terminal() {
+    let config: LaunchConfig = serde_yaml::from_str(
+        r#"
+name: Legacy Agent Pane
+windows:
+  - tabs:
+      - layout:
+          cwd: /tmp
+          pane_mode: agent
+"#,
+    )
+    .expect("launch config with legacy agent pane mode should parse");
+
+    let PaneTemplateType::PaneTemplate { pane_mode, .. } = &config.windows[0].tabs[0].layout else {
+        panic!("Expected PaneTemplate variant");
+    };
+    assert_eq!(*pane_mode, PaneMode::Terminal);
 }
 
 #[test]
@@ -376,11 +377,6 @@ fn test_config_with_active_tab_index() {
                                 is_active: true,
                                 is_read_only: false,
                                 shell_launch_data: None,
-                                input_config: None,
-                                llm_model_override: None,
-                                active_profile_id: None,
-                                conversation_ids_to_restore: vec![],
-                                active_conversation_id: None,
                             }),
                         }),
                     )],
@@ -443,11 +439,6 @@ fn test_config_with_active_tab_index_and_filtered_tabs() {
                                 is_active: true,
                                 is_read_only: false,
                                 shell_launch_data: None,
-                                input_config: None,
-                                llm_model_override: None,
-                                active_profile_id: None,
-                                conversation_ids_to_restore: vec![],
-                                active_conversation_id: None,
                             }),
                         }),
                     )],
@@ -486,11 +477,6 @@ fn test_config_with_active_tab_being_filtered() {
                                 is_active: true,
                                 is_read_only: false,
                                 shell_launch_data: None,
-                                input_config: None,
-                                llm_model_override: None,
-                                active_profile_id: None,
-                                conversation_ids_to_restore: vec![],
-                                active_conversation_id: None,
                             }),
                         }),
                     )],
@@ -548,11 +534,6 @@ fn terminal_tab(cwd: &str, group_id: Option<TabGroupId>) -> TabSnapshot {
                 is_active: true,
                 is_read_only: false,
                 shell_launch_data: None,
-                input_config: None,
-                llm_model_override: None,
-                active_profile_id: None,
-                conversation_ids_to_restore: vec![],
-                active_conversation_id: None,
             }),
         }),
         left_panel: None,

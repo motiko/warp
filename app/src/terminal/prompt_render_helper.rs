@@ -20,7 +20,6 @@ use super::session_settings::SessionSettings;
 use super::settings::TerminalSettings;
 use super::shell::ShellType;
 use super::{SizeInfo, TerminalModel, prompt, should_right_click_paste};
-use crate::ai::blocklist::BlocklistAIInputModel;
 use crate::appearance::Appearance;
 use crate::context_chips::display::PromptDisplay;
 use crate::context_chips::spacing;
@@ -87,33 +86,17 @@ pub fn should_render_prompt_on_same_line(
         return false;
     }
 
-    let should_render_ps1 = should_render_ps1_prompt(terminal_model, app);
-
-    if FeatureFlag::AgentView.is_enabled() {
-        should_render_ps1
-    } else {
-        let session_settings = SessionSettings::as_ref(app);
-        should_render_ps1
-            || session_settings
-                .saved_prompt
-                .value()
-                .same_line_prompt_enabled()
-    }
+    should_render_ps1_prompt(terminal_model, app)
 }
 
-/// Returns `true` if the shell or AI prompt should be rendered using the editors
+/// Returns `true` if the shell prompt should be rendered using the editors
 /// `EditorDecoratorElements` API.
-///
-/// The AI prompt is unconditionally rendered above the input.
 pub fn should_render_prompt_using_editor_decorator_elements(
     is_universal_developer_input: bool,
-    ai_input_model: &ModelHandle<BlocklistAIInputModel>,
     model: &TerminalModel,
     app: &AppContext,
 ) -> bool {
     should_render_prompt_on_same_line(is_universal_developer_input, model, app)
-        && (!ai_input_model.as_ref(app).is_ai_input_enabled()
-            || FeatureFlag::AgentView.is_enabled())
 }
 
 pub(in crate::terminal) struct PromptAndPadding {
@@ -173,8 +156,6 @@ pub struct PromptRenderHelper {
     prompt_view: ViewHandle<PromptDisplay>,
     prompt_selection_state_handle: SelectionHandle,
     input_render_state_model_handle: ModelHandle<InputRenderStateModel>,
-
-    ai_input_model: ModelHandle<BlocklistAIInputModel>,
 }
 
 #[derive(Clone, Copy)]
@@ -199,7 +180,6 @@ impl PromptRenderHelper {
         prompt_selection_state_handle: SelectionHandle,
         parent_view_id: EntityId,
         input_render_state_model_handle: ModelHandle<InputRenderStateModel>,
-        ai_input_model: ModelHandle<BlocklistAIInputModel>,
     ) -> Self {
         Self {
             sessions,
@@ -207,7 +187,6 @@ impl PromptRenderHelper {
             prompt_selection_state_handle,
             prompt_parent_view_id: parent_view_id,
             input_render_state_model_handle,
-            ai_input_model,
         }
     }
 
@@ -410,7 +389,6 @@ impl PromptRenderHelper {
             should_render_prompt_on_same_line(is_universal_input, model, app);
         let padding_right = if should_render_prompt_using_editor_decorator_elements(
             is_universal_input,
-            &self.ai_input_model,
             model,
             app,
         ) {
@@ -593,7 +571,6 @@ impl PromptRenderHelper {
         let should_render_prompt_using_editor_decorator_elements =
             should_render_prompt_using_editor_decorator_elements(
                 is_universal_input,
-                &self.ai_input_model,
                 terminal_model,
                 app,
             );

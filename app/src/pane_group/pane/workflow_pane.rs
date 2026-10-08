@@ -51,7 +51,6 @@ impl WorkflowPane {
                     .personal_drive(ctx)
                     .context("personal drive unavailable")?,
                 initial_folder_id: None,
-                is_for_agent_mode: false,
             },
         };
 

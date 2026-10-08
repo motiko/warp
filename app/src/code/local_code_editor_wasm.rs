@@ -42,12 +42,6 @@ pub enum LocalCodeEditorEvent {
     #[allow(dead_code)]
     DiffStatusUpdated,
     #[allow(dead_code)]
-    SelectionAddedAsContext {
-        relative_file_path: String,
-        line_range: Range<LineCount>,
-        selected_text: String,
-    },
-    #[allow(dead_code)]
     DiscardUnsavedChanges { path: PathBuf },
     #[allow(dead_code)]
     CommentSaved { comment: EditorReviewComment },
@@ -76,10 +70,6 @@ impl LocalCodeEditorView {
         _ctx: &mut ViewContext<Self>,
     ) -> Self {
         Self { editor }
-    }
-
-    pub fn with_selection_as_context(self, _terminal_target_fn: Box<TerminalTargetFn>) -> Self {
-        self
     }
 
     pub fn reset_with_state(&mut self, _state: InitialBufferState, _ctx: &mut ViewContext<Self>) {}
@@ -127,8 +117,6 @@ impl View for LocalCodeEditorView {
 impl TypedActionView for LocalCodeEditorView {
     type Action = ();
 }
-
-type TerminalTargetFn = dyn Fn(WindowId, &AppContext) -> Option<ViewHandle<TerminalView>>;
 
 pub fn render_unsaved_circle_with_tooltip(
     _mouse_state: MouseStateHandle,

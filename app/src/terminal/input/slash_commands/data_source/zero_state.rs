@@ -4,7 +4,7 @@ use crate::search::SyncDataSource;
 use crate::search::data_source::{Query, QueryResult};
 use crate::search::mixer::DataSourceRunErrorWrapper;
 use crate::terminal::input::slash_commands::{
-    AcceptSlashCommandOrSavedPrompt, GuiSlashCommandDataSource, SlashCommandDataSource,
+    AcceptSlashCommand, GuiSlashCommandDataSource, SlashCommandDataSource,
 };
 
 pub struct GuiZeroStateDataSource {
@@ -24,7 +24,7 @@ impl Entity for GuiZeroStateDataSource {
 }
 
 impl SyncDataSource for GuiZeroStateDataSource {
-    type Action = AcceptSlashCommandOrSavedPrompt;
+    type Action = AcceptSlashCommand;
 
     fn run_query(
         &self,

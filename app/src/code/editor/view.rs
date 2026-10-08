@@ -58,7 +58,7 @@ use crate::code::editor::comment_editor::{CommentEditor, CommentEditorEvent};
 use crate::code::editor::comments::PendingComment;
 use crate::code::editor::diff::DiffStatus;
 use crate::code::editor::element::{
-    AddAsContextButton, CommentButton, EditorWrapper, EditorWrapperStateHandle, GutterHoverTarget,
+    CommentButton, EditorWrapper, EditorWrapperStateHandle, GutterHoverTarget,
     GutterRange, InnerEditor, LineNumberConfig, RevertHunkButton,
 };
 use crate::code::editor::find::view::{CodeEditorFind as Find, Event as FindViewEvent};
@@ -73,7 +73,7 @@ use crate::code::{
     NoopCommentEditorProvider, NoopFindReferencesCardProvider, ShowCommentEditorProvider,
     ShowFindReferencesCardProvider,
 };
-use crate::code_review::comments::{CommentId, CommentOrigin};
+use crate::code_review::comments::CommentId;
 use crate::editor::InteractionState;
 use crate::features::FeatureFlag;
 use crate::rich_text::editor::rich_text_styles;
@@ -100,8 +100,6 @@ pub enum CodeEditorEvent {
     ContentChanged {
         origin: EditOrigin,
     },
-    /// Emitted when a unified diff computation completes.
-    UnifiedDiffComputed,
     SelectionChanged,
     SelectionStart,
     SelectionEnd,
@@ -113,11 +111,6 @@ pub enum CodeEditorEvent {
     EscapePressed,
     /// Emitted when diff decorations are updated (line highlights, removed lines, etc.)
     DiffUpdated,
-    /// Emitted when the plus icon is clicked to add diff hunk context
-    DiffHunkContextAdded {
-        #[allow(dead_code)]
-        line_range: Range<LineCount>,
-    },
     /// Emitted when a diff hunk is reverted
     DiffReverted,
     /// Emitted when the inline comment editor is opened.
@@ -174,8 +167,6 @@ struct CodeEditorViewDisplayOptions {
     horizontal_scrollbar_appearance: ScrollableAppearance,
     vertical_scrollbar_appearance: ScrollableAppearance,
     show_nav_bar: bool,
-    /// The add as context button, or `None` if it is not currently visible.
-    diff_hunk_as_context: Option<AddAsContextButton>,
     /// The revert diff button, or `None` if it is not currently visible.
     revert_diff_hunk: Option<RevertHunkButton>,
     /// The add comment button, or `None` if it is not currently visible.
@@ -396,7 +387,6 @@ impl CodeEditorView {
                 show_line_numbers: true,
                 starting_line_number: None,
                 show_nav_bar: true,
-                diff_hunk_as_context: Default::default(),
                 revert_diff_hunk: Default::default(),
                 comment_button: Default::default(),
                 // By default expand diff indicators on hover.
@@ -447,22 +437,6 @@ impl CodeEditorView {
 
     pub fn window_id(&self) -> WindowId {
         self.window_id
-    }
-
-    pub fn set_add_diff_hunk_as_context_button(
-        &mut self,
-        enabled: bool,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.display_options.diff_hunk_as_context = Some(AddAsContextButton::new(enabled));
-        ctx.notify();
-    }
-
-    /// Enables the add context button (plus icon) in diff hunks. Only enable this for code review views.
-    pub fn with_add_context_button(mut self) -> Self {
-        self.display_options.diff_hunk_as_context =
-            Some(AddAsContextButton::new(true /* enabled */));
-        self
     }
 
     /// Enables the "revert" button on diff hunks. Only enable this for code review views.
@@ -620,7 +594,6 @@ impl CodeEditorView {
             false,
             self.model.as_ref(ctx).diff_navigation_state().clone(),
             None,
-            Default::default(),
             Default::default(),
             Default::default(),
             vec![],
@@ -1304,9 +1277,6 @@ impl CodeEditorView {
                 }
                 ctx.emit(CodeEditorEvent::ContentChanged { origin: *origin });
             }
-            CodeEditorModelEvent::UnifiedDiffComputed => {
-                ctx.emit(CodeEditorEvent::UnifiedDiffComputed);
-            }
             CodeEditorModelEvent::ViewportUpdated(version) => {
                 if let Some(trigger) = self
                     .pending_scroll
@@ -1570,12 +1540,6 @@ impl CodeEditorView {
     pub fn truncate(&self, len: usize, ctx: &mut ViewContext<Self>) {
         self.model.update(ctx, |model, ctx| {
             model.truncate(len, ctx);
-        });
-    }
-
-    pub fn retrieve_unified_diff(&self, file_name: String, ctx: &mut ViewContext<Self>) {
-        self.model.update(ctx, |model, ctx| {
-            model.retrieve_unified_diff(file_name, ctx);
         });
     }
 
@@ -2155,7 +2119,6 @@ impl CodeEditorView {
         id: &CommentId,
         location: &EditorLineLocation,
         comment_text: &str,
-        origin: &CommentOrigin,
         ctx: &mut ViewContext<Self>,
     ) {
         let comment_exists = self
@@ -2177,13 +2140,12 @@ impl CodeEditorView {
                     id,
                     Some(location.clone()),
                     comment_text,
-                    origin,
                     ctx,
                 );
             });
 
         self.model.update(ctx, |editor_model, ctx| {
-            editor_model.reopen_comment_line(id, location, comment_text, origin, ctx);
+            editor_model.reopen_comment_line(id, location, comment_text, ctx);
         });
         ctx.emit(CodeEditorEvent::CommentEditorOpened);
 
@@ -2290,7 +2252,6 @@ impl View for CodeEditorView {
             } else {
                 None
             },
-            self.display_options.diff_hunk_as_context,
             self.display_options.revert_diff_hunk,
             self.display_options.comment_button,
             self.comment_locations.clone(),

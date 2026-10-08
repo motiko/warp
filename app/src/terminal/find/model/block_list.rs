@@ -1,18 +1,15 @@
 //! This module implements terminal find functionality for the blocklist.
-use std::collections::HashMap;
 use std::iter;
 use std::ops::RangeInclusive;
 
 use itertools::Itertools;
 use warpui::units::Lines;
-use warpui::{AppContext, EntityId};
 
 use super::FindOptions;
-use super::rich_content::{FindableRichContentHandle, RichContentMatchId};
 use crate::terminal::GridType;
 use crate::terminal::model::block::Block;
 use crate::terminal::model::blocks::{
-    BlockHeight, BlockHeightItem, BlockHeightSummary, BlockList, RichContentItem, TotalIndex,
+    BlockHeight, BlockHeightItem, BlockHeightSummary, BlockList,
 };
 use crate::terminal::model::find::{FindConfig, RegexDFAs};
 use crate::terminal::model::index::Point;
@@ -27,9 +24,7 @@ use crate::view_components::find::FindDirection;
 pub(super) fn run_find_on_block_list(
     mut options: FindOptions,
     block_list: &BlockList,
-    findable_rich_content_views: &HashMap<EntityId, Box<dyn FindableRichContentHandle>>,
     block_sort_direction: BlockSortDirection,
-    ctx: &mut AppContext,
 ) -> BlockListFindRun {
     let Some(dfas) = options.query.as_ref().and_then(|query| {
         RegexDFAs::new_with_config(
@@ -41,10 +36,6 @@ pub(super) fn run_find_on_block_list(
         )
         .ok()
     }) else {
-        // Clear rich content matches.
-        for rich_content_view in findable_rich_content_views.values() {
-            rich_content_view.clear_matches(ctx);
-        }
         return BlockListFindRun {
             options,
             block_sort_direction,
@@ -67,12 +58,11 @@ pub(super) fn run_find_on_block_list(
         // In both cases we want the most recent block updated last, which means the sort direction
         // here should always be MostRecentLast
         for block_index in blocks_to_include_in_results {
-            let transcript_scope = block_list.transcript_scope();
             if let Some(block) = block_list
                 .block_at(*block_index)
-                .filter(|block| !block.is_empty(transcript_scope))
+                .filter(|block| !block.is_empty())
             {
-                if block.height(transcript_scope) == Lines::zero() {
+                if block.height() == Lines::zero() {
                     // This should not happen in practice, because `blocks_to_include_in_results`
                     // is set by selecting blocks, which are presumably visible.
                     continue;
@@ -87,15 +77,7 @@ pub(super) fn run_find_on_block_list(
         }
     } else {
         // Otherwise, loop through all the blocks in the terminal's blocklist, executing find on each block.
-        run_find_on_sumtree(
-            &options,
-            &dfas,
-            block_list,
-            findable_rich_content_views,
-            block_sort_direction,
-            &mut matches,
-            ctx,
-        );
+        run_find_on_sumtree(&dfas, block_list, block_sort_direction, &mut matches);
     }
 
     let raw_focused_match_index = (!matches.is_empty()).then_some(0);
@@ -111,13 +93,10 @@ pub(super) fn run_find_on_block_list(
 /// Runs a find operation over blocks yielded by the given `blocks_iter`, appending `BlockListMatches`
 /// to the `matches` output parameter in the same order as blocks in the `blocks_iter`.
 fn run_find_on_sumtree(
-    options: &FindOptions,
     dfas: &RegexDFAs,
     block_list: &BlockList,
-    rich_content_views: &HashMap<EntityId, Box<dyn FindableRichContentHandle>>,
     block_sort_direction: BlockSortDirection,
     matches: &mut Vec<BlockListMatch>,
-    ctx: &mut AppContext,
 ) {
     let mut cursor = block_list
         .block_heights()
@@ -135,26 +114,6 @@ fn run_find_on_sumtree(
                         block_index.into(),
                         block_sort_direction,
                     ));
-                }
-            }
-            BlockHeightItem::RichContent(RichContentItem {
-                view_id,
-                last_laid_out_height,
-                ..
-            }) if last_laid_out_height.into_lines() > Lines::zero() => {
-                if let Some(findable_view) = rich_content_views.get(view_id) {
-                    let mut rich_content_matches = findable_view.run_find(options, ctx);
-                    if matches!(block_sort_direction, BlockSortDirection::MostRecentLast) {
-                        rich_content_matches.reverse();
-                    }
-
-                    matches.extend(rich_content_matches.into_iter().map(|match_id| {
-                        BlockListMatch::RichContent {
-                            match_id,
-                            view_id: *view_id,
-                            index: cursor.start().total_count.into(),
-                        }
-                    }));
                 }
             }
             _ => (),
@@ -239,39 +198,25 @@ pub struct BlockGridMatch {
 
 /// Represents a single find match in the blocklist.
 ///
-/// Match values are snapshots of the find run that produced them. The grid
-/// `range` on `CommandBlock` and the `index` on `RichContent` are captured at
-/// scan time and can be invalidated by subsequent block list mutations (new
-/// blocks, removals, rich content rescans, etc.). Callers should consume
-/// cloned values inline; long-lived storage outside a `BlockListFindRun` is
-/// not supported.
-///
-/// TODO(vkodithala): The `RichContent` variant mirrors `AsyncFocusedAiMatch` in the async
-/// path. Both derive `Clone` even though their contents are short-lived;
-/// explore removing `Clone` from both in a future PR to enforce the snapshot
-/// contract in the type system.
+/// Match values are snapshots of the find run that produced them. The grid `range` is captured at
+/// scan time and can be invalidated by subsequent block list mutations (new blocks, removals,
+/// etc.). Callers should consume cloned values inline; long-lived storage outside a
+/// `BlockListFindRun` is not supported.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlockListMatch {
     CommandBlock(BlockGridMatch),
-    RichContent {
-        match_id: RichContentMatchId,
-        view_id: EntityId,
-        index: TotalIndex,
-    },
 }
 
 impl BlockListMatch {
     pub fn is_filtered(&self) -> bool {
         match self {
             BlockListMatch::CommandBlock(BlockGridMatch { is_filtered, .. }) => *is_filtered,
-            _ => false,
         }
     }
 
-    fn grid_type(&self) -> Option<GridType> {
+    fn grid_type(&self) -> GridType {
         match self {
-            BlockListMatch::CommandBlock(BlockGridMatch { grid_type, .. }) => Some(*grid_type),
-            _ => None,
+            BlockListMatch::CommandBlock(BlockGridMatch { grid_type, .. }) => *grid_type,
         }
     }
 
@@ -281,7 +226,6 @@ impl BlockListMatch {
                 block_index: match_block_index,
                 ..
             }) => block_index == *match_block_index,
-            _ => false,
         }
     }
 
@@ -292,7 +236,6 @@ impl BlockListMatch {
                 grid_type: match_grid_type,
                 ..
             }) => block_index == *match_block_index && grid_type == *match_grid_type,
-            _ => false,
         }
     }
 
@@ -314,19 +257,6 @@ impl BlockListMatch {
                     ..
                 }),
             ) => g1 == g2 && r1 == r2 && b1 == b2,
-            (
-                BlockListMatch::RichContent {
-                    match_id: id1,
-                    view_id: v1,
-                    index: i1,
-                },
-                BlockListMatch::RichContent {
-                    match_id: id2,
-                    view_id: v2,
-                    index: i2,
-                },
-            ) => id1 == id2 && v1 == v2 && i1 == i2,
-            _ => false,
         }
     }
 }
@@ -420,14 +350,7 @@ impl BlockListFindRun {
                     .filter_map(|m| match m {
                         BlockListMatch::CommandBlock(BlockGridMatch {
                             range, is_filtered, ..
-                        }) => {
-                            if !is_filtered {
-                                Some(range)
-                            } else {
-                                None
-                            }
-                        }
-                        _ => None,
+                        }) => (!is_filtered).then_some(range),
                     })
                     .rev(),
             ),
@@ -435,14 +358,7 @@ impl BlockListFindRun {
                 Box::new(match_slice.iter().filter_map(|m| match m {
                     BlockListMatch::CommandBlock(BlockGridMatch {
                         range, is_filtered, ..
-                    }) => {
-                        if !is_filtered {
-                            Some(range)
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
+                    }) => (!is_filtered).then_some(range),
                 }))
             }
         }
@@ -601,7 +517,7 @@ impl BlockListFindRun {
         update_matches_for_filtered_block(
             self.matches.iter_mut().filter(|find_match| {
                 find_match.matches_block(block_index)
-                    && matches!(find_match.grid_type(), Some(GridType::Output))
+                    && find_match.grid_type() == GridType::Output
             }),
             block,
             block_sort_direction,
@@ -641,9 +557,8 @@ fn update_matches_for_filtered_block<'a>(
 ) {
     let Some(displayed_rows) = block.displayed_output_row_ranges() else {
         matches.for_each(|find_match| {
-            if let BlockListMatch::CommandBlock(BlockGridMatch { is_filtered, .. }) = find_match {
-                *is_filtered = false;
-            }
+            let BlockListMatch::CommandBlock(BlockGridMatch { is_filtered, .. }) = find_match;
+            *is_filtered = false;
         });
         return;
     };
@@ -684,12 +599,9 @@ fn update_matches_for_filtered_block<'a>(
                         };
                     }
                     (Some(find_match), None) => {
-                        if let BlockListMatch::CommandBlock(BlockGridMatch {
-                            is_filtered, ..
-                        }) = find_match
-                        {
-                            *is_filtered = true;
-                        }
+                        let BlockListMatch::CommandBlock(BlockGridMatch { is_filtered, .. }) =
+                            find_match;
+                        *is_filtered = true;
                         current_find_match = matches.next();
                     }
                     (None, _) => break,
@@ -729,12 +641,9 @@ fn update_matches_for_filtered_block<'a>(
                         };
                     }
                     (Some(find_match), None) => {
-                        if let BlockListMatch::CommandBlock(BlockGridMatch {
-                            is_filtered, ..
-                        }) = find_match
-                        {
-                            *is_filtered = true;
-                        }
+                        let BlockListMatch::CommandBlock(BlockGridMatch { is_filtered, .. }) =
+                            find_match;
+                        *is_filtered = true;
                         current_find_match = matches.next();
                     }
                     (None, _) => break,

@@ -54,14 +54,10 @@ impl ArgumentsState {
     /// If the edited result is instead `ls {{argument_10}} {{argument_2}} {{argument_3}}`, the number of
     /// words did not change, and so we use a by_word_index search (which will argument_10 to argument_1, etc.).
     pub fn for_command_workflow(prev_state: &ArgumentsState, input_string: String) -> Self {
-        Self::new(prev_state, input_string, false)
+        Self::new(prev_state, input_string)
     }
 
-    pub fn for_saved_prompt(prev_state: &ArgumentsState, input_string: String) -> Self {
-        Self::new(prev_state, input_string, true)
-    }
-
-    fn new(prev_state: &ArgumentsState, input_string: String, is_for_saved_prompt: bool) -> Self {
+    fn new(prev_state: &ArgumentsState, input_string: String) -> Self {
         let mut arg_name_word_index_pairs: Vec<(String, usize)> = Vec::new();
         let mut arg_names = HashSet::new();
 
@@ -91,12 +87,7 @@ impl ArgumentsState {
                         .push((argument_result.chars_range(), argument_name));
                 }
                 ParsedArgumentResult::Invalid => {
-                    // We don't care about 'invalid' arguments for saved prompts, since the argument
-                    // might be intentional/valid. For example, a user's saved prompt might contain
-                    // {{.foo}} which isn't intended to be an _argument_.
-                    if !is_for_saved_prompt {
-                        invalid_arguments_char_ranges.push(argument_result.chars_range());
-                    }
+                    invalid_arguments_char_ranges.push(argument_result.chars_range());
                 }
             }
         }

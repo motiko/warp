@@ -236,7 +236,7 @@ fn create_editor_with_content(app: &mut App, content: &str) -> ViewHandle<LocalC
             editor.reset(InitialBufferState::plain_text(&content), ctx);
         });
 
-        LocalCodeEditorView::new(code_editor_view, None, false, None, ctx)
+        LocalCodeEditorView::new(code_editor_view, ctx)
     });
 
     local_editor

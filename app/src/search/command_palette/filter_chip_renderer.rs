@@ -115,32 +115,17 @@ impl FilterChipRenderer for QueryFilter {
             | QueryFilter::Skills
             | QueryFilter::BaseModels
             | QueryFilter::FullTerminalUseModels
-            | QueryFilter::CurrentDirectoryConversations => appearance
-                .theme()
-                .main_text_color(appearance.theme().surface_2())
-                .into_solid(),
-            QueryFilter::Conversations => appearance
+            | QueryFilter::CurrentDirectoryConversations
+            | QueryFilter::Conversations
+            | QueryFilter::Plans
+            | QueryFilter::AgentModeWorkflows => appearance
                 .theme()
                 .main_text_color(appearance.theme().surface_2())
                 .into_solid(),
             QueryFilter::Workflows => warp_drive_icon_color(appearance, DriveObjectType::Workflow),
-            QueryFilter::Notebooks => warp_drive_icon_color(
-                appearance,
-                DriveObjectType::Notebook {
-                    is_ai_document: false,
-                },
-            ),
-            QueryFilter::Plans => warp_drive_icon_color(
-                appearance,
-                DriveObjectType::Notebook {
-                    is_ai_document: true,
-                },
-            ),
+            QueryFilter::Notebooks => warp_drive_icon_color(appearance, DriveObjectType::Notebook),
             QueryFilter::EnvironmentVariables => {
                 warp_drive_icon_color(appearance, DriveObjectType::EnvVarCollection)
-            }
-            QueryFilter::AgentModeWorkflows => {
-                warp_drive_icon_color(appearance, DriveObjectType::AgentModeWorkflow)
             }
         }
     }

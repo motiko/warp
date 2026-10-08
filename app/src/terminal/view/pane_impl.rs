@@ -15,12 +15,7 @@ use warpui::{
 
 use super::shared_session::adapter::Kind as SharedSessionKind;
 use super::{Event, PaneConfiguration, TerminalAction, TerminalViewState, Viewer};
-use crate::ai::agent::conversation::{
-    AIConversation, ConversationStatus, ServerAIConversationMetadata,
-};
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::appearance::Appearance;
-use crate::drive::sharing::ShareableObject;
 use crate::features::FeatureFlag;
 use crate::menu::{MenuItem, MenuItemFields};
 use crate::pane_group::focus_state::{PaneFocusHandle, PaneGroupFocusEvent, PaneGroupFocusState};
@@ -39,16 +34,8 @@ use crate::terminal::shared_session::manager::Manager;
 use crate::terminal::shared_session::participant_avatar_view::render_participants_and_role_elements;
 use crate::terminal::shared_session::render_util::shared_session_indicator_color;
 use crate::terminal::{TerminalManager, TerminalView};
-use crate::ui_components::agent_icon::terminal_view_agent_icon_variant;
-use crate::ui_components::icon_with_status::render_icon_with_status;
 use crate::ui_components::{blended_colors, icons};
 use crate::util::bindings::keybinding_name_to_display_string;
-
-/// Total size of the agent icon-with-status component rendered in the pane header.
-/// Sub-components (circle, badge, cloud) are derived inside `render_icon_with_status`.
-/// Sized so the component fits comfortably within `PANE_HEADER_HEIGHT` (34px) with a
-/// few pixels of vertical buffer.
-const PANE_HEADER_AGENT_SIZE: f32 = 26.;
 
 impl TerminalView {
     /// Returns a reference to the focus handle if one has been set.
@@ -105,85 +92,12 @@ impl TerminalView {
             });
     }
 
-    /// Set the pane title from agent chrome when available, falling back to the regular terminal title.
     pub(super) fn update_pane_configuration(&mut self, ctx: &mut ViewContext<Self>) {
-        let selected_conversation_title = self.selected_conversation_display_title(ctx);
-        let new_pane_title =
-            if self.is_long_running_and_user_controlled() && !self.terminal_title.is_empty() {
-                self.is_using_conversation_for_pane_header_title = false;
-                self.terminal_title.clone()
-            } else {
-                match selected_conversation_title {
-                    Some(conversation_title) => {
-                        self.is_using_conversation_for_pane_header_title = true;
-                        conversation_title
-                    }
-                    None => self.terminal_title.clone(),
-                }
-            };
+        let new_pane_title = self.terminal_title.clone();
         self.pane_configuration.update(ctx, |pane_config, ctx| {
             pane_config.set_title(new_pane_title, ctx);
-            if FeatureFlag::AgentView.is_enabled() {
-                pane_config.refresh_pane_header_overflow_menu_items(ctx);
-            }
-            pane_config.notify_header_content_changed(ctx);
-        });
-        self.update_agent_view_pane_header(ctx);
-    }
-
-    /// Returns the shareable object for the active agent view conversation, if any.
-    fn agent_view_shareable_object(&self, ctx: &ViewContext<Self>) -> Option<ShareableObject> {
-        // Only set shareable object if CloudConversations feature is enabled
-        if !FeatureFlag::CloudConversations.is_enabled() {
-            return None;
-        }
-
-        // If we're in a shared session, prioritize this to share.
-        if let Some(shared_session) = &self.shared_session {
-            return Some(ShareableObject::Session {
-                handle: ctx.handle(),
-                session_id: *shared_session.session_id(),
-                started_at: *shared_session.started_at(),
-            });
-        }
-
-        // Check if agent view is active
-        let conversation_id = self
-            .agent_view_controller
-            .as_ref(ctx)
-            .agent_view_state()
-            .active_conversation_id()?;
-
-        // Don't show share button for empty conversations
-        let conversation = BlocklistAIHistoryModel::as_ref(ctx).conversation(&conversation_id)?;
-        if conversation.is_empty() {
-            return None;
-        }
-        let exchange_count = conversation.exchange_count();
-        // If there's only one exchange, make sure it's completed (not still streaming)
-        if exchange_count == 1
-            && let Some(latest_exchange) = conversation.latest_exchange()
-            && latest_exchange.output_status.is_streaming()
-        {
-            return None;
-        }
-
-        // Return the ShareableObject with the conversation ID
-        Some(ShareableObject::AIConversation(conversation_id))
-    }
-
-    /// Updates the pane header's shareable object based on agent view state.
-    /// This should be called when entering/exiting agent view or when the conversation changes.
-    pub(super) fn update_agent_view_pane_header(&mut self, ctx: &mut ViewContext<Self>) {
-        if !FeatureFlag::AgentView.is_enabled() {
-            return;
-        }
-
-        let shareable_object = self.agent_view_shareable_object(ctx);
-        self.pane_configuration.update(ctx, |pane_config, ctx| {
-            pane_config.set_shareable_object(shareable_object, ctx);
-            pane_config.notify_header_content_changed(ctx);
             pane_config.refresh_pane_header_overflow_menu_items(ctx);
+            pane_config.notify_header_content_changed(ctx);
         });
     }
 
@@ -203,57 +117,16 @@ impl TerminalView {
             .map_or(SplitPaneState::NotInSplitPane, |h| h.split_pane_state(app))
     }
 
-    /// Renders the back button for the pane header, or an empty element if the
-    /// back button should not be shown.
-    fn maybe_render_header_back_button(&self, app: &AppContext) -> Box<dyn Element> {
-        if !FeatureFlag::AgentView.is_enabled() || warpui::platform::is_mobile_device() {
-            return Flex::row().finish();
-        }
-
-        let in_nav_stack = self
-            .pane_stack
-            .as_ref()
-            .and_then(|h| h.upgrade(app))
-            .is_some_and(|stack| stack.as_ref(app).depth() > 1);
-
-        let has_parent_terminal = !self.model.lock().is_conversation_transcript_viewer();
-        let is_fullscreen_agent_view = self.agent_view_controller.as_ref(app).is_fullscreen();
-
-        if in_nav_stack || (is_fullscreen_agent_view && has_parent_terminal) {
-            Flex::row()
-                .with_cross_axis_alignment(CrossAxisAlignment::Center)
-                .with_child(ChildView::new(&self.agent_view_back_button).finish())
-                .finish()
-        } else {
-            Flex::row().finish()
-        }
-    }
-
     fn render_header_title(
         &self,
-        is_fullscreen_agent_view: bool,
         header_ctx: &view::HeaderRenderContext,
         app: &AppContext,
     ) -> Box<dyn Element> {
         let appearance = Appearance::as_ref(app);
         let pane_config = self.pane_configuration.as_ref(app);
         let title = pane_config.title().to_owned();
-        let clip_config = if self.is_using_conversation_for_pane_header_title {
-            ClipConfig::ellipsis()
-        } else {
-            ClipConfig::start()
-        };
+        let clip_config = ClipConfig::start();
 
-        let theme = appearance.theme();
-        let render_agent_circle = |variant| {
-            render_icon_with_status(
-                variant,
-                PANE_HEADER_AGENT_SIZE,
-                0.,
-                theme,
-                theme.background(),
-            )
-        };
         let pane_indicator = if let Some(shared_session) = self.shared_session.as_ref() {
             if let Some(Viewer {
                 sharer: Some(sharer),
@@ -277,16 +150,6 @@ impl TerminalView {
                     .finish(),
                 )
             }
-        } else if self.is_using_conversation_for_pane_header_title
-            || (self.is_long_running()
-                && self
-                    .ai_context_model
-                    .as_ref(app)
-                    .selected_conversation(app)
-                    .is_some())
-        {
-            // Conversation-bound terminal: same shared helper that produces the OzAgent variant.
-            terminal_view_agent_icon_variant(self, app).map(render_agent_circle)
         } else {
             self.render_terminal_mode_indicator(app)
         };
@@ -305,19 +168,7 @@ impl TerminalView {
             // from infinite constraints on flex children.
             center_row.add_child(title_text);
         } else {
-            let title_element =
-                if is_fullscreen_agent_view && self.is_using_conversation_for_pane_header_title {
-                    Shrinkable::new(
-                        1.0,
-                        ConstrainedBox::new(title_text)
-                            .with_max_width(400.0)
-                            .finish(),
-                    )
-                    .finish()
-                } else {
-                    Shrinkable::new(1.0, title_text).finish()
-                };
-            center_row.add_child(title_element);
+            center_row.add_child(Shrinkable::new(1.0, title_text).finish());
         }
 
         center_row.finish()
@@ -331,18 +182,12 @@ impl TerminalView {
         app: &AppContext,
     ) -> (Box<dyn Element>, f32) {
         let appearance = Appearance::as_ref(app);
-        let is_fullscreen_agent_view = FeatureFlag::AgentView.is_enabled()
-            && self.agent_view_controller.as_ref(app).is_fullscreen();
         let icon_color = Some(
             appearance
                 .theme()
                 .sub_text_color(appearance.theme().background()),
         );
-        let button_size = if is_fullscreen_agent_view {
-            Some(24.0)
-        } else {
-            None
-        };
+        let button_size = None;
 
         let left_of_overflow = self.render_shared_session_header_content(app);
 
@@ -385,11 +230,8 @@ impl TerminalView {
         header_ctx: &view::HeaderRenderContext,
         app: &AppContext,
     ) -> Box<dyn Element> {
-        let is_fullscreen_agent_view = FeatureFlag::AgentView.is_enabled()
-            && self.agent_view_controller.as_ref(app).is_fullscreen();
-
-        let left = self.maybe_render_header_back_button(app);
-        let center = self.render_header_title(is_fullscreen_agent_view, header_ctx, app);
+        let left = Flex::row().finish();
+        let center = self.render_header_title(header_ctx, app);
         let (right, min_actions_width) = self.render_header_actions(header_ctx, app);
 
         let header = render_three_column_header(
@@ -533,10 +375,7 @@ impl BackingView for TerminalView {
             .lock()
             .shared_session_status()
             .is_sharer_or_viewer();
-        let is_fullscreen_agent_view = FeatureFlag::AgentView.is_enabled()
-            && self.agent_view_controller.as_ref(app).is_fullscreen();
         is_shared
-            || is_fullscreen_agent_view
             || FeatureFlag::ContextWindowUsageV2.is_enabled()
                 && self.split_pane_state(app).is_in_split_pane()
     }
@@ -649,98 +488,4 @@ impl TerminalView {
             app,
         ))
     }
-
-    fn selected_conversation_for_user_facing_chrome<'a>(
-        &'a self,
-        ctx: &'a AppContext,
-    ) -> Option<&'a AIConversation> {
-        self.ai_context_model
-            .as_ref(ctx)
-            .selected_conversation(ctx)
-            .filter(|conversation| {
-                !conversation.is_entirely_passive()
-                    && (conversation.title().is_some_and(|title| !title.is_empty())
-                        || FeatureFlag::AgentView.is_enabled())
-            })
-    }
-
-    fn selected_conversation_display_title_for_chrome(
-        &self,
-        conversation: &AIConversation,
-    ) -> String {
-        if FeatureFlag::AgentView.is_enabled() {
-            conversation
-                .title()
-                .filter(|title| !title.is_empty())
-                .unwrap_or_else(|| DEFAULT_AGENT_CONVERSATION_TITLE.to_owned())
-        } else {
-            conversation
-                .title()
-                .expect("checked above that title exists")
-        }
-    }
-
-    /// Selected conversation status for chrome, or [`ConversationStatus::InProgress`] while the
-    /// active block is long-running (terminal-derived; not mirrored in history events).
-    pub fn selected_conversation_status(&self, ctx: &AppContext) -> Option<ConversationStatus> {
-        let conversation = self.selected_conversation_for_user_facing_chrome(ctx)?;
-
-        if self.is_long_running() {
-            return Some(ConversationStatus::InProgress);
-        }
-
-        if self.selected_conversation_is_empty(ctx) {
-            return None;
-        }
-
-        Some(conversation.status().clone())
-    }
-
-    pub fn selected_conversation_is_empty(&self, ctx: &AppContext) -> bool {
-        self.selected_conversation_for_user_facing_chrome(ctx)
-            .is_some_and(|conversation| conversation.is_empty())
-    }
-
-    /// Returns the conversation status for display purposes, suppressing the status when the
-    /// conversation is empty (no exchanges yet) AND nothing else makes the run "busy". This
-    /// avoids showing a misleading "In progress" indicator on a brand-new conversation; real
-    /// InProgress states (long-running shell commands) come through
-    /// because [`Self::selected_conversation_status`] surfaces them as `InProgress`.
-    pub fn selected_conversation_status_for_display(
-        &self,
-        ctx: &AppContext,
-    ) -> Option<ConversationStatus> {
-        let status = self.selected_conversation_status(ctx)?;
-        if matches!(status, ConversationStatus::InProgress)
-            || !self.selected_conversation_is_empty(ctx)
-        {
-            Some(status)
-        } else {
-            None
-        }
-    }
-
-    pub fn selected_conversation_display_title(&self, ctx: &AppContext) -> Option<String> {
-        self.selected_conversation_for_user_facing_chrome(ctx)
-            .map(|conversation| self.selected_conversation_display_title_for_chrome(conversation))
-    }
-
-    /// Server metadata for the selected conversation, if any.
-    pub fn selected_conversation_server_metadata<'a>(
-        &'a self,
-        ctx: &'a AppContext,
-    ) -> Option<&'a ServerAIConversationMetadata> {
-        self.selected_conversation_for_user_facing_chrome(ctx)
-            .and_then(AIConversation::server_metadata)
-    }
-
-    pub fn selected_conversation_latest_user_prompt_for_tab_name(
-        &self,
-        ctx: &AppContext,
-    ) -> Option<String> {
-        self.selected_conversation_for_user_facing_chrome(ctx)
-            .and_then(AIConversation::latest_user_query)
-    }
 }
-
-const DEFAULT_AGENT_CONVERSATION_TITLE: &str = "New agent conversation";

@@ -27,14 +27,11 @@ pub enum WorkflowOpenSource {
     New {
         title: Option<String>,
 
-        /// The "content" of the workflow.
-        /// For `Command` workflows, this is the command.
-        /// For `AgentMode` workflows, this is the AI query.
+        /// The command of the workflow.
         content: Option<String>,
 
         owner: Owner,
         initial_folder_id: Option<SyncId>,
-        is_for_agent_mode: bool,
     },
     NewFromWorkflow {
         workflow: Box<Workflow>,
@@ -98,14 +95,12 @@ impl WorkflowManager {
                 content,
                 owner,
                 initial_folder_id,
-                is_for_agent_mode,
             } => view.update(ctx, |view, ctx| {
                 view.open_new_workflow(
                     title.clone(),
                     content.clone(),
                     *owner,
                     *initial_folder_id,
-                    *is_for_agent_mode,
                     SyncId::ClientId(ClientId::default()),
                     ctx,
                 )

@@ -1,12 +1,9 @@
 mod alt_screen;
 pub mod async_find;
 mod block_list;
-#[allow(dead_code)]
-mod rich_content;
 #[cfg(any(test, feature = "integration_tests"))]
 mod testing;
 
-use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
@@ -15,10 +12,8 @@ pub use async_find::{AsyncFindController, AsyncFindStatus};
 use block_list::run_find_on_block_list;
 pub use block_list::{BlockGridMatch, BlockListFindRun, BlockListMatch};
 use parking_lot::FairMutex;
-use rich_content::FindableRichContentHandle;
-pub use rich_content::{FindableRichContentView, RichContentMatchId};
 use settings::Setting as _;
-use warpui::{AppContext, Entity, EntityId, ModelContext, SingletonEntity, ViewHandle};
+use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
 use crate::settings::InputModeSettings;
 use crate::terminal::block_list_element::GridType;
@@ -182,8 +177,6 @@ impl<'a> BlockFindRenderData<'a> {
 pub struct TerminalFindModel {
     terminal_model: Arc<FairMutex<TerminalModel>>,
 
-    rich_content_views: HashMap<EntityId, Box<dyn FindableRichContentHandle>>,
-
     /// The most recent find "run" on the alt screen, if any.
     alt_screen_find_run: Option<AltScreenFindRun>,
 
@@ -251,26 +244,11 @@ impl TerminalFindModel {
 
         Self {
             terminal_model,
-            rich_content_views: HashMap::new(),
             alt_screen_find_run: None,
             block_list_find_run: None,
             is_find_bar_open: false,
             async_find_controller,
         }
-    }
-    pub fn register_findable_rich_content_view<T: FindableRichContentView>(
-        &mut self,
-        view_handle: ViewHandle<T>,
-    ) {
-        let view_id = view_handle.id();
-        let boxed_handle: Box<dyn FindableRichContentHandle> = Box::new(view_handle.clone());
-
-        // Register with async find controller if enabled.
-        if let Some(controller) = &mut self.async_find_controller {
-            controller.register_rich_content_view(view_id, Box::new(view_handle));
-        }
-
-        self.rich_content_views.insert(view_id, boxed_handle);
     }
 
     /// Returns `true` if the find bar is currently open.
@@ -304,61 +282,28 @@ impl TerminalFindModel {
         }
 
         if let Some(controller) = &self.async_find_controller {
-            // Async path: the focused match is either a terminal match or an
-            // AI match (or neither). Try each in turn and synthesize the
-            // corresponding `BlockListMatch` variant so consumers don't need
-            // to know which path produced the focus.
-            if let Some(async_match) = controller.focused_terminal_match() {
-                let block = model.block_list().block_at(async_match.block_index)?;
-                let grid = match async_match.grid_type {
-                    GridType::PromptAndCommand => block.prompt_and_command_grid().grid_handler(),
-                    GridType::Output => block.output_grid().grid_handler(),
-                    _ => return None,
-                };
-                let range = async_match.range.to_range(grid)?;
-                return Some(BlockListMatch::CommandBlock(BlockGridMatch {
-                    block_index: async_match.block_index,
-                    grid_type: async_match.grid_type,
-                    range,
-                    is_filtered: false,
-                }));
-            }
-            if let Some(ai_match) = controller.focused_ai_match() {
-                return Some(BlockListMatch::RichContent {
-                    match_id: ai_match.match_id,
-                    view_id: ai_match.view_id,
-                    index: ai_match.total_index,
-                });
-            }
-            None
+            // Synthesize a `BlockListMatch` so consumers don't need to know which path produced
+            // the focus.
+            let async_match = controller.focused_terminal_match()?;
+            let block = model.block_list().block_at(async_match.block_index)?;
+            let grid = match async_match.grid_type {
+                GridType::PromptAndCommand => block.prompt_and_command_grid().grid_handler(),
+                GridType::Output => block.output_grid().grid_handler(),
+                _ => return None,
+            };
+            let range = async_match.range.to_range(grid)?;
+            Some(BlockListMatch::CommandBlock(BlockGridMatch {
+                block_index: async_match.block_index,
+                grid_type: async_match.grid_type,
+                range,
+                is_filtered: false,
+            }))
         } else {
             // Sync path: get from block_list_find_run.
             self.block_list_find_run
                 .as_ref()
                 .and_then(|run| run.focused_match())
                 .cloned()
-        }
-    }
-
-    /// Returns the focused rich content (AI) match id, if any.
-    ///
-    /// This works for both sync and async find paths and is used by AI block
-    /// rendering to apply the focused-match highlight color.
-    pub(crate) fn focused_rich_content_match_id(&self) -> Option<RichContentMatchId> {
-        if self.terminal_model.lock().is_alt_screen_active() {
-            return None;
-        }
-
-        if let Some(controller) = &self.async_find_controller {
-            controller.focused_ai_match().map(|m| m.match_id)
-        } else {
-            self.block_list_find_run
-                .as_ref()
-                .and_then(|run| run.focused_match())
-                .and_then(|m| match m {
-                    BlockListMatch::RichContent { match_id, .. } => Some(*match_id),
-                    _ => None,
-                })
         }
     }
 
@@ -440,9 +385,7 @@ impl TerminalFindModel {
         self.block_list_find_run = Some(run_find_on_block_list(
             options,
             self.terminal_model.lock().block_list(),
-            &self.rich_content_views,
             block_sort_direction,
-            ctx,
         ));
         ctx.emit(FindEvent::RanFind);
     }
@@ -562,23 +505,6 @@ impl TerminalFindModel {
         ctx.emit(FindEvent::UpdatedFocusedMatch);
     }
 
-    /// Notifies every registered rich-content child view (e.g. AI blocks) to
-    /// drop its cached find state and repaint, **without** touching the active
-    /// find run's options/config.
-    ///
-    /// Callers that just need stale highlights to disappear (e.g.
-    /// `close_find_bar`) must use this rather than [`Self::clear_matches`].
-    /// On the async path, `clear_matches` routes through
-    /// `AsyncFindController::clear_results`, which also drops
-    /// `current_find_options` — losing the query that `open_find_bar` later
-    /// reads back via [`Self::active_find_options`] to restore the previous
-    /// search.
-    pub fn clear_rich_content_matches(&self, ctx: &mut ModelContext<Self>) {
-        for view in self.rich_content_views.values() {
-            view.clear_matches(ctx);
-        }
-    }
-
     /// Clears matches in the active find run, if any.
     pub fn clear_matches(&mut self, ctx: &mut ModelContext<Self>) {
         if self.terminal_model.lock().is_alt_screen_active() {
@@ -586,11 +512,8 @@ impl TerminalFindModel {
                 self.alt_screen_find_run = Some(run.cleared());
             }
         } else if let Some(controller) = &mut self.async_find_controller {
-            controller.clear_results(ctx);
+            controller.clear_results();
         } else if let Some(run) = self.block_list_find_run.take() {
-            for (_, rich_content_view) in self.rich_content_views.iter() {
-                rich_content_view.clear_matches(ctx);
-            }
             self.block_list_find_run = Some(run.cleared());
         }
         ctx.emit(FindEvent::RanFind);
@@ -777,10 +700,6 @@ impl std::fmt::Debug for TerminalFindModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FindModel")
             .field("terminal_model", &"<TerminalModel>")
-            .field(
-                "rich_content_views",
-                &self.rich_content_views.keys().collect::<Vec<_>>(),
-            )
             .field("alt_screen_find_run", &self.alt_screen_find_run)
             .field("block_list_find_run", &self.block_list_find_run)
             .field("is_find_bar_open", &self.is_find_bar_open)

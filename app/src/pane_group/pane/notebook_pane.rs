@@ -4,7 +4,7 @@ use anyhow::Context;
 use url::Url;
 use warpui::{AppContext, ModelHandle, SingletonEntity, ViewContext, ViewHandle};
 
-use super::super::{DefaultSessionModeBehavior, Direction};
+use super::super::Direction;
 use super::view::PaneView;
 use super::{
     DetachType, PaneConfiguration, PaneContent, PaneGroup, PaneId, ShareableLink,
@@ -183,8 +183,6 @@ pub(super) fn subscribe_to_link_model(
                 Some(pane_id),
                 None, /* chosen_shell */
                 Some(path.clone()),
-                None,
-                DefaultSessionModeBehavior::Apply,
                 ctx,
             );
         }
@@ -217,11 +215,6 @@ fn handle_notebook_event(
             run_notebook_workflow(workflow.clone(), *source, ctx)
         }
         NotebookEvent::Pane(pane_event) => group.handle_pane_event(pane_id, pane_event, ctx),
-        NotebookEvent::AttachPlanAsContext(ai_document_id) => {
-            ctx.emit(crate::pane_group::Event::AttachPlanAsContext {
-                ai_document_id: *ai_document_id,
-            })
-        }
     }
 }
 

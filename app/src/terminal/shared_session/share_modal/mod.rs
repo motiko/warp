@@ -6,9 +6,7 @@ use style::{MODAL_HEIGHT, MODAL_WIDTH};
 use warpui::keymap::FixedBinding;
 use warpui::presenter::ChildView;
 use warpui::ui_components::components::UiComponentStyles;
-use warpui::{
-    AppContext, Element, Entity, EntityId, TypedActionView, View, ViewContext, ViewHandle,
-};
+use warpui::{AppContext, Element, Entity, TypedActionView, View, ViewContext, ViewHandle};
 
 use crate::modal::Modal;
 use crate::pane_group::TerminalPaneId;
@@ -115,14 +113,13 @@ impl ShareSessionModal {
         terminal_pane_id: TerminalPaneId,
         open_source: SharedSessionActionSource,
         model: Arc<FairMutex<TerminalModel>>,
-        terminal_view_id: EntityId,
         ctx: &mut ViewContext<Self>,
     ) {
         self.terminal_pane_id = Some(terminal_pane_id);
         self.open_source = open_source;
         self.modal.update(ctx, |modal, ctx| {
             modal.body().update(ctx, |modal, ctx| {
-                modal.open(open_source, model, terminal_view_id, ctx);
+                modal.open(open_source, model, ctx);
             });
         });
         ctx.notify();

@@ -72,12 +72,10 @@ pub enum WorkflowSelectionSource {
     CommandPalette,
     UniversalSearch,
     Voltron,
-    WarpAI,
     Notebook,
     SlashMenu,
     UpArrowHistory,
     WorkflowView,
-    AgentMode,
     Undefined,
     Alias,
 }
@@ -139,12 +137,6 @@ impl WorkflowViewMode {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum AIWorkflowOrigin {
-    CommandSearch,
-    AgentMode,
-}
-
 /// Wrapper type for a workflow that may be saved locally or using cloud sync.
 #[derive(Clone, Debug, PartialEq)]
 pub enum WorkflowType {
@@ -152,11 +144,8 @@ pub enum WorkflowType {
     Local(Workflow),
     /// Saved workflows from personal or team collections, saved using cloud-sync.
     Cloud(Box<CloudWorkflow>),
-    /// Ephemeral/transient workflows created from Warp AI output
-    AIGenerated {
-        workflow: Workflow,
-        origin: AIWorkflowOrigin,
-    },
+    /// Ephemeral workflows generated from a natural-language query.
+    AIGenerated(Workflow),
     /// A workflow that's part of a cloud notebook.
     Notebook(Workflow),
 }
@@ -165,7 +154,7 @@ impl WorkflowType {
     pub fn as_workflow(&self) -> &Workflow {
         match self {
             WorkflowType::Local(workflow) => workflow,
-            WorkflowType::AIGenerated { workflow, .. } => workflow,
+            WorkflowType::AIGenerated(workflow) => workflow,
             WorkflowType::Cloud(workflow) => &workflow.model().data,
             WorkflowType::Notebook(workflow) => workflow,
         }
@@ -175,7 +164,7 @@ impl WorkflowType {
     pub fn take_workflow(self) -> Workflow {
         match self {
             WorkflowType::Local(workflow) => workflow,
-            WorkflowType::AIGenerated { workflow, .. } => workflow,
+            WorkflowType::AIGenerated(workflow) => workflow,
             WorkflowType::Cloud(workflow) => workflow.model().data.clone(),
             WorkflowType::Notebook(workflow) => workflow,
         }
@@ -204,9 +193,9 @@ impl WorkflowType {
         }
     }
 
-    /// We don't show env var selection for Agent Mode suggested commands.
+    /// We don't show env var selection for generated commands.
     pub(super) fn should_show_env_var_selection(&self) -> bool {
-        !matches!(self, WorkflowType::AIGenerated { .. },)
+        !matches!(self, WorkflowType::AIGenerated(_))
     }
 }
 
@@ -217,11 +206,7 @@ impl CloudModelType for CloudWorkflowModel {
     type IdType = WorkflowId;
 
     fn model_type_name(&self) -> &'static str {
-        if self.data.is_agent_mode_workflow() {
-            "Prompt"
-        } else {
-            "Workflow"
-        }
+        "Workflow"
     }
 
     fn object_type(&self) -> ObjectType {

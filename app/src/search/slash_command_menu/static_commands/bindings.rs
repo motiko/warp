@@ -10,22 +10,6 @@ pub enum DefaultSlashCommandBinding {
 
 pub fn default_binding_for_command(name: &'static str) -> DefaultSlashCommandBinding {
     match name {
-        "/agent" => DefaultSlashCommandBinding::PerPlatform(PerPlatformKeystroke {
-            mac: "cmd-enter",
-            linux_and_windows: "ctrl-shift-enter",
-        }),
-        "/cloud-agent" => DefaultSlashCommandBinding::PerPlatform(PerPlatformKeystroke {
-            mac: "cmd-alt-enter",
-            linux_and_windows: "ctrl-alt-enter",
-        }),
-        "/conversations" => DefaultSlashCommandBinding::PerPlatform(PerPlatformKeystroke {
-            mac: "cmd-y",
-            linux_and_windows: "ctrl-shift-Y",
-        }),
-        "/open-repo" => DefaultSlashCommandBinding::PerPlatform(PerPlatformKeystroke {
-            mac: "alt-cmd-o",
-            linux_and_windows: "ctrl-alt-o",
-        }),
         _ => DefaultSlashCommandBinding::None,
     }
 }

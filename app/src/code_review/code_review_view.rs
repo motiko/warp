@@ -1,11 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use ai::project_context::model::ProjectContextModel;
 use indexmap::IndexMap;
 use itertools::Itertools;
 #[cfg(feature = "local_fs")]
@@ -55,17 +54,13 @@ use warpui::{
 };
 
 use super::code_review_header::CodeReviewHeader;
-use super::comment_list_view::{CommentListDebugState, CommentListEvent, CommentListView};
-use super::comments::{AttachedReviewComment, CommentOrigin, attach_pending_imported_comments};
+use super::comment_list_view::{CommentListEvent, CommentListView};
+use super::comments::{AttachedReviewComment, CurrentHead, DiffBase};
 use super::diff_size_limits::DiffSize;
 use super::git_dialog::{GitDialog, GitDialogEvent, GitDialogKind};
 use super::{GlobalCodeReviewEvent, GlobalCodeReviewModel};
 #[cfg(feature = "local_fs")]
 use crate::TelemetryEvent;
-use crate::ai::agent::{
-    AIAgentAttachment, AgentReviewCommentBatch, CurrentHead, DiffBase, DiffSetHunk,
-};
-use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
 use crate::appearance::Appearance;
 use crate::code::ShowCommentEditorProvider;
 #[cfg(not(target_family = "wasm"))]
@@ -85,15 +80,10 @@ use crate::code::local_code_editor::{
     LocalCodeEditorEvent, LocalCodeEditorView, render_unsaved_circle_with_tooltip,
 };
 use crate::code::view::PendingSaveIntent;
-use crate::code_review::DiffSetScope;
 use crate::code_review::comments::{
     AttachedReviewCommentTarget, CommentId, ReviewCommentBatch, ReviewCommentBatchEvent,
 };
-use crate::code_review::context::convert_file_diffs_to_diffset_hunks;
 #[cfg(feature = "local_fs")]
-use crate::code_review::context::{
-    create_attachment_reference_and_key, register_diffset_attachment,
-};
 use crate::code_review::diff_selector::{DiffSelector, DiffSelectorEvent, DiffTarget};
 use crate::code_review::diff_state::{
     DiffHunk, DiffLineType, DiffMode, DiffState, DiffStateModel, DiffStateModelEvent, DiffStats,
@@ -104,11 +94,8 @@ use crate::code_review::find_model::CodeReviewFindModel;
 use crate::code_review::git_repo_model::{GitRepoModels, GitRepoStatusEvent, GitRepoStatusModel};
 use crate::code_review::github_repo_model::{GitHubRepoEvent, GitHubRepoModel};
 use crate::code_review::hidden_lines::calculate_hidden_lines;
-#[cfg(feature = "local_fs")]
-use crate::code_review::telemetry_event::DiffSetContextScope;
 use crate::code_review::telemetry_event::{
-    AddToContextOrigin, CodeReviewContextDestination, CodeReviewTelemetryEvent, GitButtonKind,
-    PaneStateChange,
+    CodeReviewTelemetryEvent, GitButtonKind, PaneStateChange,
 };
 use crate::coding_panel_enablement_state::CodingPanelEnablementState;
 use crate::editor::InteractionState;
@@ -120,10 +107,10 @@ use crate::quit_warning::UnsavedStateSummary;
 use crate::send_telemetry_from_ctx;
 #[cfg(feature = "local_fs")]
 use crate::server::telemetry::CodePanelsFileOpenEntrypoint;
-use crate::settings::{AISettings, CodeSettings};
+use crate::settings::CodeSettings;
 use crate::settings_view::SettingsSection;
 use crate::terminal::input::MenuPositioning;
-use crate::terminal::view::{InitProjectModel, TerminalAction, TerminalView};
+use crate::terminal::view::{TerminalAction, TerminalView};
 use crate::themes::theme::WarpTheme;
 use crate::ui_components::blended_colors::{neutral_2, neutral_3};
 use crate::ui_components::buttons::icon_button_with_color;
@@ -140,13 +127,11 @@ use crate::util::git::{BranchEntry, PrInfo};
 use crate::util::openable_file_type::FileTarget;
 #[cfg(feature = "local_fs")]
 use crate::util::openable_file_type::resolve_file_target_with_editor_choice;
-use crate::view_components::DismissibleToast;
 use crate::view_components::action_button::{
     ActionButton, ActionButtonTheme, AdjoinedSide, ButtonSize, DangerPrimaryTheme, KeystrokeSource,
     NakedTheme, PaneHeaderTheme, SecondaryTheme, TooltipAlignment,
 };
 use crate::view_components::find::{Event as FindViewEvent, Find, FindEvent, FindWithinBlockState};
-use crate::workspace::view::right_panel::{ReviewDestination, ReviewSubmissionResult};
 use crate::workspace::{ToastStack, Workspace, WorkspaceAction};
 
 pub struct CodeReviewHeaderFields {
@@ -164,13 +149,6 @@ pub struct CodeReviewHeaderFields {
     pub git_operations_chevron: ViewHandle<ActionButton>,
     pub git_operations_menu: ViewHandle<Menu<CodeReviewAction>>,
     pub git_operations_menu_open: bool,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct CodeReviewCommentDebugState {
-    pub repo_path: Option<LocalOrRemotePath>,
-    pub has_active_comment_model: bool,
-    pub comment_list: CommentListDebugState,
 }
 
 /// Renders a file navigation button (sidebar toggle) that can be reused across views.
@@ -333,12 +311,10 @@ pub enum CodeReviewAction {
     CancelDiscardFile,
     ToggleStashChanges,
     ToggleFileSelection(String),
-    AddDiffSetAsContext(DiffSetScope),
     CopyFilePath(String),
     OpenCommentComposerFromHeader,
     ShowFindBar,
     FocusView,
-    InitProjectForCurrentDirectory,
     OpenRepository,
     OpenCommitDialog,
     ToggleGitOperationsMenu,
@@ -346,7 +322,6 @@ pub enum CodeReviewAction {
     OpenCreatePrDialog,
     ViewPr(String),
     PublishBranch,
-    SubmitReviewComments,
 }
 
 pub struct FileState {
@@ -358,7 +333,6 @@ pub struct FileState {
     chevron_button: ViewHandle<ActionButton>,
     open_in_tab_button: ViewHandle<ActionButton>,
     discard_button: ViewHandle<ActionButton>,
-    add_context_button: ViewHandle<ActionButton>,
     copy_path_button: ViewHandle<ActionButton>,
 }
 
@@ -434,13 +408,6 @@ pub enum CodeReviewViewEvent {
         path: PathBuf,
         target: FileTarget,
         line_col: Option<LineAndColumnArg>,
-    },
-    ReviewSubmitted,
-    /// Emitted when review comments are ready to be submitted.
-    /// A higher-level view (RightPanelView) handles routing to an available terminal.
-    SubmitReviewComments {
-        comments: AgentReviewCommentBatch,
-        repo_path: LocalOrRemotePath,
     },
     /// Request to open a file in a new tab (e.g. goto-definition).
     OpenFileInNewTab {
@@ -587,17 +554,6 @@ struct RelocateCommentsResult {
 /// late-bound: actions land in the conversation the user is currently focused
 /// on rather than a terminal handle captured when the view was constructed.
 pub trait ReviewActionTargetProvider {
-    /// The terminal that should receive attach-as-context payloads. Uses the
-    /// same selection as review comment submission (focused > repo-preferred >
-    /// any available), falling back to the focused terminal inside `repo_path`
-    /// when none are available so per-action handling for busy terminals still
-    /// targets the focused conversation.
-    fn attach_terminal(
-        &self,
-        repo_path: &LocalOrRemotePath,
-        app: &AppContext,
-    ) -> Option<ViewHandle<TerminalView>>;
-
     /// The focused (or active) terminal of the hosting pane group, regardless
     /// of repo. Used for environment checks and terminal-targeted actions.
     fn focused_terminal(&self, app: &AppContext) -> Option<ViewHandle<TerminalView>>;
@@ -649,7 +605,6 @@ pub struct CodeReviewView {
 
     active_comment_model: Option<ModelHandle<ReviewCommentBatch>>,
 
-    init_project_button: ViewHandle<ActionButton>,
     #[cfg(not(target_family = "wasm"))]
     open_repository_button: ViewHandle<ActionButton>,
 
@@ -800,7 +755,6 @@ impl CodeReviewView {
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
-            CodeFooterViewEvent::RunTabConfigSkill { .. } => {}
             CodeFooterViewEvent::RestartAllServers { servers } => {
                 for server in servers {
                     server.update(ctx, |server, ctx| {
@@ -1014,8 +968,7 @@ impl CodeReviewView {
         } = event
             && self.all_editors_loaded()
         {
-            let diff_mode = self.diff_state_model.as_ref(ctx).diff_mode(ctx);
-            self.reposition_comments_in_file(&diff_mode, ctx);
+            self.reposition_comments_in_file(ctx);
         }
     }
 
@@ -1293,16 +1246,6 @@ impl CodeReviewView {
         let ui_state_handles = UiStateHandles::default();
         let header = CodeReviewHeader::new();
 
-        let init_project_button = ctx.add_typed_action_view(|_ctx| {
-            ActionButton::new("Initialize codebase", NakedTheme)
-                .with_size(ButtonSize::Small)
-                .with_tooltip("Enables codebase indexing and WARP.md")
-                .with_tooltip_alignment(TooltipAlignment::Center)
-                .on_click(|ctx| {
-                    ctx.dispatch_typed_action(CodeReviewAction::InitProjectForCurrentDirectory)
-                })
-        });
-
         #[cfg(not(target_family = "wasm"))]
         let open_repository_button = ctx.add_typed_action_view(|_ctx| {
             ActionButton::new("Open repository", NakedTheme)
@@ -1352,7 +1295,6 @@ impl CodeReviewView {
             pending_precise_scroll: None,
             pending_jump_to_comment: None,
             active_comment_model: None,
-            init_project_button,
             #[cfg(not(target_family = "wasm"))]
             open_repository_button,
             is_open: false,
@@ -1373,27 +1315,6 @@ impl CodeReviewView {
         }
 
         view
-    }
-
-    pub fn set_review_destination(
-        &mut self,
-        destination: ReviewDestination,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.comment_list_view
-            .update(ctx, |comment_list_view, ctx| {
-                comment_list_view.set_review_destination(destination, ctx);
-            });
-    }
-
-    pub fn debug_review_comment_state(&self, ctx: &AppContext) -> CodeReviewCommentDebugState {
-        let comment_list = self.comment_list_view.as_ref(ctx).debug_state(ctx);
-
-        CodeReviewCommentDebugState {
-            repo_path: self.repo_path().cloned(),
-            has_active_comment_model: self.active_comment_model.is_some(),
-            comment_list,
-        }
     }
 
     fn handle_focus_state_event(
@@ -1651,10 +1572,6 @@ impl CodeReviewView {
 
     fn handle_comment_list_event(&mut self, event: &CommentListEvent, ctx: &mut ViewContext<Self>) {
         match event {
-            CommentListEvent::Submitted => {
-                self.handle_submit_review_with_comments(ctx);
-                ctx.notify();
-            }
             CommentListEvent::Cancelled => {
                 self.clear_review_comments(ctx);
                 ctx.notify();
@@ -1729,7 +1646,6 @@ impl CodeReviewView {
                     &comment.id,
                     None,
                     &comment.content,
-                    &comment.origin,
                     ctx,
                 );
             });
@@ -1757,7 +1673,6 @@ impl CodeReviewView {
                         base,
                         head,
                         outdated: false,
-                        origin: CommentOrigin::Native,
                     };
 
                     me.update_review_comment(new_comment, ctx);
@@ -1824,7 +1739,6 @@ impl CodeReviewView {
                             &comment.id,
                             line,
                             &comment.content,
-                            comment.origin(),
                             ctx,
                         );
                     });
@@ -2369,7 +2283,6 @@ impl CodeReviewView {
                 self.update_diff_selector_selection(ctx);
             }
             DiffStateModelEvent::GitOpCompleted(_)
-            | DiffStateModelEvent::CommitMessageGenerated(_)
             | DiffStateModelEvent::BranchCommittedFilesReceived(_) => {
                 // Handled by GitDialog's own subscription.
             }
@@ -2565,8 +2478,7 @@ impl CodeReviewView {
         );
 
         if self.all_editors_loaded() {
-            let diff_mode = self.diff_state_model.as_ref(ctx).diff_mode(ctx);
-            self.reposition_comments_in_file(&diff_mode, ctx);
+            self.reposition_comments_in_file(ctx);
         }
 
         self.update_editor_comment_markers(ctx);
@@ -2674,19 +2586,6 @@ impl CodeReviewView {
                 button
             });
 
-            let context_path = file.file_diff.file_path.clone();
-            let add_context_button = ctx.add_typed_action_view(move |_ctx| {
-                ActionButton::new("", NakedTheme)
-                    .with_icon(Icon::Paperclip)
-                    .with_size(ButtonSize::InlineActionHeader)
-                    .with_tooltip("Add file diff as context")
-                    .on_click(move |ctx| {
-                        ctx.dispatch_typed_action(CodeReviewAction::AddDiffSetAsContext(
-                            DiffSetScope::File(context_path.clone()),
-                        ))
-                    })
-            });
-
             let copy_path = file.file_diff.file_path.clone();
             let copy_path_button = ctx.add_typed_action_view(move |_ctx| {
                 ActionButton::new("", NakedTheme)
@@ -2705,7 +2604,6 @@ impl CodeReviewView {
                 chevron_button,
                 open_in_tab_button,
                 discard_button,
-                add_context_button,
                 copy_path_button,
                 sidebar_mouse_state: MouseStateHandle::default(),
                 header_mouse_state: MouseStateHandle::default(),
@@ -2800,14 +2698,6 @@ impl CodeReviewView {
 
     fn delete_comment_by_id(&mut self, id: CommentId, ctx: &mut ViewContext<Self>) {
         if let Some(model) = self.active_comment_model.clone() {
-            let is_imported = model
-                .read(ctx, |batch, _| {
-                    batch
-                        .get_review_comment_by_id(id)
-                        .map(|c| c.origin.is_imported_from_github())
-                })
-                .unwrap_or(false);
-
             model.update(ctx, |batch, ctx| {
                 batch.delete_comment(id, ctx);
             });
@@ -2815,7 +2705,6 @@ impl CodeReviewView {
             send_telemetry_from_ctx!(
                 CodeReviewTelemetryEvent::CommentDeleted {
                     is_local: self.repo_is_local(),
-                    is_imported,
                 },
                 ctx
             );
@@ -2836,16 +2725,6 @@ impl CodeReviewView {
                 .as_ref(ctx)
                 .lens_for_line_range(line, ctx),
         )
-    }
-
-    /// The terminal that attach-as-context actions should target, resolved at
-    /// action time for the current repo. Returns None if no repo, no provider,
-    /// or no suitable terminal.
-    fn attach_target_terminal(&self, app: &AppContext) -> Option<ViewHandle<TerminalView>> {
-        let repo_path = self.repo_path()?;
-        self.action_target_provider
-            .as_ref()?
-            .attach_terminal(repo_path, app)
     }
 
     /// The focused terminal of the hosting pane group, if any.
@@ -3008,7 +2887,6 @@ impl CodeReviewView {
             // populates the editor with content_at_head.
             self.create_code_review_model(file, ctx)
         } else {
-            let self_handle = ctx.handle();
             // Join host-aware: for local repos this yields a local absolute
             // PathBuf; for remote repos this yields a `RemotePath` with the
             // same host id as `repo_path`.
@@ -3041,7 +2919,6 @@ impl CodeReviewView {
                                 }),
                                 ctx,
                             )
-                            .with_add_context_button() // Enable add context button for code review
                             .with_revert_diff_hunk_button() // Enable revert diff button for code review
                             .with_comment_button() // Enable comment button for code review
                             .with_collapsible_diffs(false) // Disable collapsible diffs
@@ -3056,15 +2933,8 @@ impl CodeReviewView {
                             editor_view
                         })
                     },
-                    false,
-                    None,
                     ctx,
                 )
-                .with_selection_as_context(Box::new(move |_, app| {
-                    self_handle.upgrade(app).and_then(|code_review_view| {
-                        code_review_view.as_ref(app).attach_target_terminal(app)
-                    })
-                }))
             });
 
             let inner_editor = local_code_view.as_ref(ctx).editor().clone();
@@ -3105,7 +2975,6 @@ impl CodeReviewView {
         if file.file_diff.is_binary {
             None
         } else {
-            let self_handle = ctx.handle();
             let code_editor_view = ctx.add_typed_action_view(|ctx| {
                 let mut editor_view = CodeEditorView::new(
                     None,
@@ -3121,7 +2990,6 @@ impl CodeReviewView {
                         }),
                     ctx,
                 )
-                .with_add_context_button() // Enable add context button for code review
                 .with_revert_diff_hunk_button() // Enable revert diff button for code review
                 .with_comment_button() // Enable comment button for code review
                 .with_collapsible_diffs(false) // Disable collapsible diffs
@@ -3147,21 +3015,11 @@ impl CodeReviewView {
             });
 
             let local_code_view = ctx.add_typed_action_view(|ctx| {
-                let mut local_code_view =
-                    LocalCodeEditorView::new(code_editor_view, None, false, None, ctx);
-                if FeatureFlag::HoaCodeReview.is_enabled() {
-                    local_code_view =
-                        local_code_view.with_selection_as_context(Box::new(move |_, app| {
-                            self_handle.upgrade(app).and_then(|code_review_view| {
-                                code_review_view.as_ref(app).attach_target_terminal(app)
-                            })
-                        }));
-                }
                 // Deleted files have no file backing — no FileModel, no GlobalBufferModel.
                 // file_id() will be None for these editors; no downstream code in code_review
                 // relies on file_id for deleted entries (save/conflict flows early-return on None).
                 // Content is populated via reset_with_state in apply_diff_to_code_editor.
-                local_code_view
+                LocalCodeEditorView::new(code_editor_view, ctx)
             });
 
             let comment_line_numbers = self.comment_line_numbers_for_file(&full_file_location, ctx);
@@ -3212,17 +3070,6 @@ impl CodeReviewView {
                 self.mark_editor_loaded_for_file(file_location, ctx);
                 ctx.notify();
             }
-            LocalCodeEditorEvent::SelectionAddedAsContext {
-                relative_file_path,
-                line_range,
-            } => {
-                self.insert_selection_as_context(
-                    relative_file_path.clone(),
-                    line_range.start.as_usize(),
-                    line_range.end.as_usize(),
-                    ctx,
-                );
-            }
             LocalCodeEditorEvent::DiscardUnsavedChanges { path: _path } => {
                 #[cfg(feature = "local_fs")]
                 GlobalBufferModel::handle(ctx).update(ctx, |global_buffer, ctx| {
@@ -3264,14 +3111,12 @@ impl CodeReviewView {
                 match &existing_comment.target {
                     AttachedReviewCommentTarget::Line { line, .. } => {
                         let comment_text = &existing_comment.content;
-                        let origin = &existing_comment.origin;
                         editor.update(ctx, |local_code_editor, ctx| {
                             local_code_editor.editor().update(ctx, |code_editor, ctx| {
                                 code_editor.open_existing_comment(
                                     comment_id,
                                     line,
                                     comment_text,
-                                    origin,
                                     ctx,
                                 );
                             });
@@ -3384,8 +3229,7 @@ impl CodeReviewView {
         }
 
         if self.all_editors_loaded() {
-            let diff_mode = self.diff_state_model.as_ref(ctx).diff_mode(ctx);
-            self.reposition_comments_in_file(&diff_mode, ctx);
+            self.reposition_comments_in_file(ctx);
         }
     }
 
@@ -3546,15 +3390,7 @@ impl CodeReviewView {
                     return comment;
                 };
 
-                // Imported comments store the raw provider diff line, including its
-                // one-char unified-diff marker (`+`/`-`/space); strip it to recover
-                // the file line for matching. Native comments store raw text where a
-                // leading space would be significant indentation, so keep it as-is.
-                let match_text = if comment.origin.is_imported_from_github() {
-                    content.imported_original_text()
-                } else {
-                    content.original_text()
-                };
+                let match_text = content.original_text();
 
                 let (new_location, new_content, used_fallback) =
                     editor_view.update(ctx, |local_editor, ctx| {
@@ -3587,7 +3423,7 @@ impl CodeReviewView {
         }
     }
 
-    fn reposition_comments_in_file(&mut self, diff_mode: &DiffMode, ctx: &mut ViewContext<Self>) {
+    fn reposition_comments_in_file(&mut self, ctx: &mut ViewContext<Self>) {
         let Some(model) = &self.active_comment_model else {
             report_error!(anyhow::anyhow!(
                 "Failed to relocate PR comments: CodeReviewView diff state not loaded",
@@ -3605,14 +3441,7 @@ impl CodeReviewView {
             return;
         };
 
-        let mut comments = model.update(ctx, |batch, _| batch.take_comments());
-        let pending_imported = model.update(ctx, |batch, _| {
-            batch.take_pending_imported_comments_for_branch(diff_mode)
-        });
-
-        let newly_imported = attach_pending_imported_comments(pending_imported, &repo_path);
-        let newly_imported_ids: HashSet<CommentId> = newly_imported.iter().map(|c| c.id).collect();
-        comments.extend(newly_imported);
+        let comments = model.update(ctx, |batch, _| batch.take_comments());
 
         if comments.is_empty() {
             return;
@@ -3628,27 +3457,6 @@ impl CodeReviewView {
                 CodeReviewTelemetryEvent::CommentRelocationFailed {
                     is_local: self.repo_is_local(),
                     fallback_count,
-                },
-                ctx
-            );
-        }
-
-        if !newly_imported_ids.is_empty() {
-            let (active_count, outdated_count) = relocated_comments
-                .iter()
-                .filter(|c| newly_imported_ids.contains(&c.id))
-                .fold((0usize, 0usize), |(active, outdated), c| {
-                    if c.outdated {
-                        (active, outdated + 1)
-                    } else {
-                        (active + 1, outdated)
-                    }
-                });
-            send_telemetry_from_ctx!(
-                CodeReviewTelemetryEvent::CommentsAttached {
-                    is_local: self.repo_is_local(),
-                    active_count,
-                    outdated_count,
                 },
                 ctx
             );
@@ -4053,11 +3861,7 @@ impl CodeReviewView {
     }
 
     /// Renders the state when there are no changes on the current branch.
-    fn render_no_changes_state(
-        &self,
-        appearance: &Appearance,
-        app: &AppContext,
-    ) -> Box<dyn Element> {
+    fn render_no_changes_state(&self, appearance: &Appearance) -> Box<dyn Element> {
         let theme = appearance.theme();
 
         let mut main_row = Flex::row()
@@ -4065,7 +3869,7 @@ impl CodeReviewView {
             .with_cross_axis_alignment(CrossAxisAlignment::Center)
             .with_main_axis_size(MainAxisSize::Max);
 
-        let mut zero_state_column = Flex::column()
+        let zero_state_column = Flex::column()
             .with_main_axis_alignment(MainAxisAlignment::Center)
             .with_cross_axis_alignment(CrossAxisAlignment::Center)
             .with_child(
@@ -4093,7 +3897,7 @@ impl CodeReviewView {
             .with_child(
                 Container::new(
                     Text::new(
-                        "As you or the Agent make changes, you'll be able to track them here.",
+                        "As you make changes, you'll be able to track them here.",
                         appearance.ui_font_family(),
                         14.,
                     )
@@ -4103,50 +3907,6 @@ impl CodeReviewView {
                 .with_margin_top(8.)
                 .finish(),
             );
-
-        let should_show_init = self
-            .repo_path()
-            .and_then(LocalOrRemotePath::to_local_path)
-            .map(|path| {
-                let has_steps = InitProjectModel::should_have_available_steps(path, app);
-                let is_terminal_in_correct_dir = self
-                    .focused_terminal(app)
-                    .and_then(|view| {
-                        view.read(app, |t, _| t.pwd().map(|pwd| pwd == path.to_string_lossy()))
-                    })
-                    .unwrap_or(false);
-                has_steps && is_terminal_in_correct_dir
-            })
-            .unwrap_or(false);
-
-        if should_show_init {
-            zero_state_column.add_child(
-                Container::new(ChildView::new(&self.init_project_button).finish())
-                    .with_margin_top(16.)
-                    .finish(),
-            );
-        } else if let Some(repo_path) = self.repo_path() {
-            // Check for initialized project-scoped rules.
-            if let Some(rules) =
-                ProjectContextModel::as_ref(app).find_applicable_project_rules(repo_path)
-                && let Some(first_rule) = rules.active_rules.first()
-                && let Some(file_name) = first_rule.path.file_name()
-            {
-                zero_state_column.add_child(
-                    Container::new(
-                        Text::new(
-                            format!("Repo is initialized with a {file_name} file."),
-                            appearance.ui_font_family(),
-                            12.,
-                        )
-                        .with_color(theme.sub_text_color(theme.surface_2()).into())
-                        .finish(),
-                    )
-                    .with_margin_top(8.)
-                    .finish(),
-                );
-            }
-        }
 
         let zero_state_content = Container::new(zero_state_column.finish()).finish();
 
@@ -4176,7 +3936,6 @@ impl CodeReviewView {
         app: &AppContext,
     ) -> Box<dyn Element> {
         let has_menu_flags = FeatureFlag::DiscardPerFileAndAllChanges.is_enabled()
-            || FeatureFlag::DiffSetAsContext.is_enabled()
             || FeatureFlag::FileAndDiffSetComments.is_enabled();
         let has_changes = matches!(self.state(), CodeReviewViewState::Loaded(loaded) if !loaded.to_diff_stats().has_no_changes());
         let has_header_menu_items =
@@ -4213,149 +3972,6 @@ impl CodeReviewView {
                 .render(state, appearance, &code_review_header_fields, app)
         };
         SavePosition::new(header, &self.header_position_id).finish()
-    }
-
-    /// Prepares review comments and emits an event for a higher-level view to route
-    /// them to an available terminal.
-    fn handle_submit_review_with_comments(&mut self, ctx: &mut ViewContext<Self>) {
-        let Some(model) = self.active_comment_model.as_ref() else {
-            return;
-        };
-
-        let review_comments = model.read(ctx, |batch, _| batch.clone());
-
-        let active_comments: Vec<_> = review_comments
-            .comments
-            .into_iter()
-            .filter(|c| !c.outdated)
-            .collect();
-
-        if active_comments.is_empty() {
-            log::info!("No review comments to submit");
-            return;
-        }
-
-        let Some(repo_path) = self.repo_path().cloned() else {
-            log::warn!("No active repo path for submitting review");
-            return;
-        };
-
-        let active_batch = ReviewCommentBatch::from_comments(active_comments);
-        let diff_set = self.collect_diff_set(&active_batch);
-        let agent_comment_batch = AgentReviewCommentBatch {
-            comments: active_batch.comments,
-            diff_set,
-        };
-
-        ctx.emit(CodeReviewViewEvent::SubmitReviewComments {
-            comments: agent_comment_batch,
-            repo_path,
-        });
-    }
-
-    /// Called by the routing layer (RightPanelView) after attempting to submit review
-    /// comments to a terminal.
-    pub fn handle_review_submission_result(
-        &mut self,
-        result: ReviewSubmissionResult,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match result {
-            ReviewSubmissionResult::Success {
-                comment_count,
-                file_count,
-                destination,
-            } => {
-                log::info!("Successfully submitted review comments to terminal");
-
-                send_telemetry_from_ctx!(
-                    CodeReviewTelemetryEvent::ReviewSubmitted {
-                        is_local: self.repo_is_local(),
-                        comment_count,
-                        file_count,
-                        destination,
-                    },
-                    ctx
-                );
-
-                self.clear_review_comments(ctx);
-                ToastStack::handle(ctx).update(ctx, |stack, ctx| {
-                    let toast = DismissibleToast::default("Comments sent to agent".into());
-                    stack.add_ephemeral_toast(toast, self.window_id, ctx);
-                });
-                ctx.emit(CodeReviewViewEvent::ReviewSubmitted);
-                ctx.notify();
-            }
-            ReviewSubmissionResult::Error => {
-                report_error!("Failed to submit review comments");
-                let error_message = "Could not submit comments to the agent".to_string();
-                ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                    let toast = DismissibleToast::error(error_message);
-                    toast_stack.add_ephemeral_toast(toast, self.window_id, ctx);
-                });
-            }
-        }
-    }
-
-    /// TODO(CODE-1649): de-duplicate entries in the diff set.
-    fn collect_diff_set(
-        &self,
-        review_comments: &ReviewCommentBatch,
-    ) -> HashMap<String, Vec<DiffSetHunk>> {
-        let mut diff_set: HashMap<String, Vec<DiffSetHunk>> = HashMap::new();
-        let repo_path = self.repo_path();
-
-        for comment in &review_comments.comments {
-            match &comment.target {
-                AttachedReviewCommentTarget::Line {
-                    absolute_file_path,
-                    line,
-                    content,
-                } => {
-                    if let Some(line_number) = line.line_number() {
-                        let hunk = DiffSetHunk {
-                            line_range: line_number..line_number + 1,
-                            diff_content: content.content.clone(),
-                            lines_added: content.lines_added.as_u32(),
-                            lines_removed: content.lines_removed.as_u32(),
-                        };
-
-                        // Build a host-aware repo-relative key when possible;
-                        // fall back to the display path for cross-host or
-                        // out-of-repo edge cases.
-                        let file_key = repo_path
-                            .and_then(|repo_path| repo_path.strip_repo_prefix(absolute_file_path))
-                            .unwrap_or_else(|| absolute_file_path.display_path());
-
-                        diff_set.entry(file_key).or_default().push(hunk);
-                    }
-                }
-                AttachedReviewCommentTarget::File { absolute_file_path } => {
-                    if let (Some(repo_path), CodeReviewViewState::Loaded(loaded_state)) =
-                        (repo_path, self.state())
-                    {
-                        let file_diffs = loaded_state
-                            .file_states
-                            .values()
-                            .filter(|fs| {
-                                let editor_file = repo_path.join(&fs.file_diff.file_path);
-                                absolute_file_path == &editor_file
-                            })
-                            .map(|fs| &fs.file_diff);
-                        let hunks = convert_file_diffs_to_diffset_hunks(file_diffs);
-                        diff_set.extend(hunks);
-                    }
-                }
-                AttachedReviewCommentTarget::General => {
-                    if let CodeReviewViewState::Loaded(loaded_state) = self.state() {
-                        let file_diffs = loaded_state.file_states.values().map(|fs| &fs.file_diff);
-                        let hunks = convert_file_diffs_to_diffset_hunks(file_diffs);
-                        diff_set.extend(hunks);
-                    }
-                }
-            }
-        }
-        diff_set
     }
 
     /// Renders additions and deletions counts
@@ -4476,7 +4092,7 @@ impl CodeReviewView {
         app: &AppContext,
     ) -> Box<dyn Element> {
         if state.file_states.is_empty() {
-            return self.render_no_changes_state(appearance, app);
+            return self.render_no_changes_state(appearance);
         }
 
         let mut sidebar_and_diffs_row =
@@ -4994,20 +4610,6 @@ impl CodeReviewView {
             .with_main_axis_alignment(MainAxisAlignment::End)
             .with_cross_axis_alignment(CrossAxisAlignment::Center);
 
-        // Add file diff as context button (before remove button)
-        if FeatureFlag::DiffSetAsContext.is_enabled() {
-            right_row.add_child(
-                EventHandler::new(
-                    Container::new(ChildView::new(&file.add_context_button).finish())
-                        .with_margin_left(4.)
-                        .finish(),
-                )
-                .on_left_mouse_up(|_, _, _| DispatchEventResult::StopPropagation)
-                .on_left_mouse_down(|_, _, _| DispatchEventResult::StopPropagation)
-                .finish(),
-            );
-        }
-
         if FeatureFlag::DiscardPerFileAndAllChanges.is_enabled() {
             right_row.add_child(
                 EventHandler::new(
@@ -5300,10 +4902,6 @@ impl CodeReviewView {
     #[cfg(feature = "local_fs")]
     fn attach_diff_not_allowed_toast_id(&self, ctx: &mut ViewContext<Self>) -> String {
         format!("attach_diff_not_allowed_{}", ctx.view_id())
-    }
-
-    fn attach_context_not_allowed_toast_id(&self, ctx: &mut ViewContext<Self>) -> String {
-        format!("attach_context_not_allowed_{}", ctx.view_id())
     }
 
     fn render_stats_fallback(appearance: &Appearance) -> Box<dyn Element> {
@@ -5642,9 +5240,6 @@ impl CodeReviewView {
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
-            CodeEditorEvent::DiffHunkContextAdded { line_range } => {
-                self.insert_diff_hunk_as_context(file_path, line_range.clone(), ctx);
-            }
             CodeEditorEvent::DiffReverted => {
                 send_telemetry_from_ctx!(
                     CodeReviewTelemetryEvent::RevertHunkClicked {
@@ -5718,50 +5313,6 @@ impl CodeReviewView {
         }
     }
 
-    fn insert_selection_as_context(
-        &mut self,
-        file_path: String,
-        start_line: usize,
-        end_line: usize,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if let Some(terminal_view) = self.attach_target_terminal(ctx) {
-            let is_long_running =
-                terminal_view.read(ctx, |terminal_view, _| terminal_view.is_long_running());
-
-            if is_long_running {
-                let toast_id = self.attach_context_not_allowed_toast_id(ctx);
-                crate::workspace::ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                    let toast = crate::view_components::DismissibleToast::default(
-                        "Cannot attach context when terminal is running".to_string(),
-                    )
-                    .with_object_id(toast_id);
-                    toast_stack.add_ephemeral_toast(toast, self.window_id, ctx);
-                });
-                return;
-            }
-
-            // Otherwise insert the location snippet into the input buffer (original behavior).
-            let location = format!("{file_path}:{start_line}-{end_line} ");
-            send_telemetry_from_ctx!(
-                CodeReviewTelemetryEvent::AddToContext {
-                    is_local: self.repo_is_local(),
-                    origin: AddToContextOrigin::SelectedText,
-                    destination: CodeReviewContextDestination::AgentInput,
-                    diff_set_scope: None,
-                },
-                ctx
-            );
-            terminal_view.update(ctx, |terminal_view, ctx| {
-                terminal_view.input().update(ctx, |input, ctx| {
-                    input.append_to_buffer(&location, ctx);
-                    // Ensure agent mode for AI features
-                    input.ensure_agent_mode_for_ai_features(true, None, ctx);
-                });
-            });
-        }
-    }
-
     fn maybe_undo_revert(&mut self, ctx: &mut ViewContext<Self>) {
         if let Some((editor, _)) = self.last_revert.take() {
             editor.update(ctx, |editor, ctx| {
@@ -5785,127 +5336,6 @@ impl CodeReviewView {
         !self.get_unsaved_file_paths(ctx).is_empty()
     }
 
-    /// Insert diff set as context in the terminal input (either all files or a specific file)
-    #[cfg(feature = "local_fs")]
-    fn insert_diff_as_context(&mut self, scope: DiffSetScope, ctx: &mut ViewContext<Self>) {
-        if let Some(terminal_view) = self.attach_target_terminal(ctx) {
-            let diff_set_scope = match &scope {
-                DiffSetScope::All => DiffSetContextScope::All,
-                DiffSetScope::File(_) => DiffSetContextScope::File,
-            };
-
-            let is_input_box_visible = terminal_view.read(ctx, |terminal_view, _| {
-                terminal_view.is_input_box_visible(&terminal_view.model.lock(), ctx)
-            });
-
-            if !is_input_box_visible {
-                let toast_id = self.attach_diff_not_allowed_toast_id(ctx);
-                ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                    let toast = DismissibleToast::default(
-                        "Cannot attach diff while input is not available".to_string(),
-                    )
-                    .with_object_id(toast_id);
-                    toast_stack.add_ephemeral_toast(toast, self.window_id, ctx);
-                });
-                return;
-            }
-
-            if let CodeReviewViewState::Loaded(state) = self.state() {
-                // Filter files based on scope
-                let files_to_process = match &scope {
-                    DiffSetScope::All => state
-                        .file_states
-                        .values()
-                        .map(|fs| &fs.file_diff)
-                        .collect_vec(),
-                    DiffSetScope::File(target_path) => state
-                        .file_states
-                        .get(target_path)
-                        .into_iter()
-                        .map(|fs| &fs.file_diff)
-                        .collect_vec(),
-                };
-
-                if files_to_process.is_empty() {
-                    if let DiffSetScope::File(path) = &scope {
-                        log::warn!("Could not find file state for path: {path}");
-                    }
-                    return;
-                }
-
-                // Use the shared function to convert diff data with relative paths
-                let file_diffs = convert_file_diffs_to_diffset_hunks(files_to_process.into_iter());
-
-                let base = match self.get_diff_base(ctx) {
-                    Ok(base) => base,
-                    Err(err) => {
-                        report_error!(err.context(
-                            "CodeReviewView could not find diff base when attaching diff as context"
-                        ));
-                        return;
-                    }
-                };
-
-                // Create attachment reference and key based on scope
-                let main_branch_name = self.diff_state_model.as_ref(ctx).get_main_branch_name(ctx);
-                let (attachment_reference, attachment_key) = create_attachment_reference_and_key(
-                    &scope,
-                    &self.diff_state_model.as_ref(ctx).diff_mode(ctx),
-                    main_branch_name.as_deref(),
-                );
-
-                // Insert the reference into the terminal input
-                terminal_view.update(ctx, |terminal_view, ctx| {
-                    terminal_view.input().update(ctx, |input, ctx| {
-                        input.append_to_buffer(&format!("{attachment_reference} "), ctx);
-                        input.ensure_agent_mode_for_ai_features(true, None, ctx);
-                    });
-                });
-
-                send_telemetry_from_ctx!(
-                    CodeReviewTelemetryEvent::AddToContext {
-                        is_local: self.repo_is_local(),
-                        origin: AddToContextOrigin::CodeReviewHeader,
-                        destination: CodeReviewContextDestination::AgentAttachment,
-                        diff_set_scope: Some(diff_set_scope),
-                    },
-                    ctx
-                );
-
-                // Register the DiffSet attachment in the terminal view's AI context model.
-                let current = self.get_current_head(ctx);
-                terminal_view.update(ctx, |terminal_view, ctx| {
-                    register_diffset_attachment(
-                        terminal_view.ai_context_model(),
-                        attachment_key,
-                        file_diffs,
-                        current,
-                        base,
-                        ctx,
-                    );
-
-                    // Enter agent view if enabled and not already active
-                    if FeatureFlag::AgentView.is_enabled()
-                        && !terminal_view
-                            .agent_view_controller()
-                            .as_ref(ctx)
-                            .is_active()
-                    {
-                        terminal_view.enter_agent_view_for_new_conversation(
-                            None,
-                            AgentViewEntryOrigin::CodeReviewContext,
-                            ctx,
-                        );
-                    }
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "local_fs"))]
-    fn insert_diff_as_context(&mut self, _scope: DiffSetScope, _ctx: &mut ViewContext<Self>) {
-        report_error!("insert_diff_as_context is not supported without the local_fs feature");
-    }
 
     fn get_current_head(&self, ctx: &ViewContext<Self>) -> Option<CurrentHead> {
         self.diff_state_model
@@ -5928,19 +5358,6 @@ impl CodeReviewView {
         }
     }
 
-    /// Configures the code review view to display and scroll to a specific imported comment.
-    /// Sets the diff base, expands the comment list, and queues a jump to the comment location.
-    pub(crate) fn navigate_to_imported_comment(
-        &mut self,
-        comment_id: CommentId,
-        diff_mode: DiffMode,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.set_diff_base(diff_mode, ctx);
-        self.expand_comment_list_and_scroll_to_comment(comment_id, ctx);
-        self.pending_jump_to_comment = Some(comment_id);
-    }
-
     pub(crate) fn set_diff_base(&mut self, diff_mode: DiffMode, ctx: &mut ViewContext<Self>) {
         let preferred_session = self.preferred_review_session(ctx);
         self.diff_state_model.update(ctx, |diff_state_model, ctx| {
@@ -5950,134 +5367,6 @@ impl CodeReviewView {
         self.invalidate_all(None, None, ctx);
     }
 
-    /// Insert diff hunk as an inline attachment in the terminal input
-    fn insert_diff_hunk_as_context(
-        &mut self,
-        file_path: String,
-        line_range: Range<warp_editor::render::model::LineCount>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let Some(repo_path) = self.repo_path().map(LocalOrRemotePath::path_component) else {
-            return;
-        };
-        // Try to get the terminal view and insert the context
-        if let Some(terminal_view) = self.attach_target_terminal(ctx) {
-            let is_long_running =
-                terminal_view.read(ctx, |terminal_view, _| terminal_view.is_long_running());
-            // Long-running command: insert file path + line range as text
-            if is_long_running {
-                // When a command is running, just insert the file path and line range as text
-                // (similar to file tree drag/drop behavior)
-                let full_path = repo_path.join(&file_path);
-                let start_line = line_range.start.as_usize() + 1;
-                let end_line = line_range.end.as_usize();
-                let path_with_range = format!("{full_path}:{start_line}-{end_line} ");
-                terminal_view.update(ctx, |terminal_view, ctx| {
-                    terminal_view.handle_file_tree_drop_on_active_command(&path_with_range, ctx);
-                });
-                send_telemetry_from_ctx!(
-                    CodeReviewTelemetryEvent::AddToContext {
-                        is_local: self.repo_is_local(),
-                        origin: AddToContextOrigin::Gutter,
-                        destination: CodeReviewContextDestination::ActiveCommandBuffer,
-                        diff_set_scope: None,
-                    },
-                    ctx
-                );
-                return;
-            }
-            if let Some((hunk, lines_added, lines_removed)) =
-                self.extract_diff_hunk_data(&file_path, &line_range)
-            {
-                // Create a descriptive key using filename and line range
-                let filename = file_path.clone();
-                // Use 1-indexed, inclusive line numbers for the user visible range.
-
-                let diff_hunk_key =
-                    format!("{filename}:{}-{}", line_range.start + 1, line_range.end);
-
-                let attachment_reference = format!("<change:{diff_hunk_key}>",);
-
-                // Insert the reference into the terminal input and lock into agent mode
-                terminal_view.update(ctx, |terminal_view, ctx| {
-                    terminal_view.input().update(ctx, |input, ctx| {
-                        input.append_to_buffer(&format!("{attachment_reference} "), ctx);
-                        input.ensure_agent_mode_for_ai_features(true, None, ctx);
-                    });
-                });
-
-                // Convert the diff hunk to a formatted diff string
-                let diff_content = self.format_diff_hunk_content(&hunk);
-
-                // Determine the diff base from the current diff state
-                let diff_base = match self
-                    .diff_state_model
-                    .read(ctx, |model, ctx| model.diff_mode(ctx))
-                {
-                    DiffMode::Head => DiffBase::UncommittedChanges,
-                    DiffMode::MainBranch => {
-                        let main_branch_name = self
-                            .diff_state_model
-                            .read(ctx, |model, ctx| model.get_main_branch_name(ctx));
-
-                        match main_branch_name {
-                            Some(name) => DiffBase::BranchName(name),
-                            None => {
-                                log::warn!(
-                                    "Unable to determine main branch name when inserting diff hunk context."
-                                );
-                                return;
-                            }
-                        }
-                    }
-                    DiffMode::OtherBranch(branch_name) => DiffBase::BranchName(branch_name),
-                };
-
-                send_telemetry_from_ctx!(
-                    CodeReviewTelemetryEvent::AddToContext {
-                        is_local: self.repo_is_local(),
-                        origin: AddToContextOrigin::Gutter,
-                        destination: CodeReviewContextDestination::AgentAttachment,
-                        diff_set_scope: None,
-                    },
-                    ctx
-                );
-                // Create the DiffHunk attachment
-                let attachment = AIAgentAttachment::DiffHunk {
-                    file_path: filename.clone(),
-                    line_range: line_range.clone(),
-                    diff_content,
-                    lines_added,
-                    lines_removed,
-                    current: None, // We don't have current branch info here
-                    base: diff_base,
-                };
-
-                // Register the attachment with the terminal's AI controller using the new key format
-                terminal_view.update(ctx, |terminal_view, ctx| {
-                    terminal_view
-                        .ai_context_model()
-                        .update(ctx, |context_model, _| {
-                            context_model.register_diff_hunk_attachment(diff_hunk_key, attachment);
-                        });
-
-                    // Enter agent view if enabled and not already active
-                    if FeatureFlag::AgentView.is_enabled()
-                        && !terminal_view
-                            .agent_view_controller()
-                            .as_ref(ctx)
-                            .is_active()
-                    {
-                        terminal_view.enter_agent_view_for_new_conversation(
-                            None,
-                            AgentViewEntryOrigin::CodeReviewContext,
-                            ctx,
-                        );
-                    }
-                });
-            }
-        }
-    }
 
     /// Extract diff hunk data for the given file and line range
     fn extract_diff_hunk_data(
@@ -6692,20 +5981,6 @@ impl CodeReviewView {
             return items;
         }
 
-        let mut has_changes = false;
-        if let CodeReviewViewState::Loaded(loaded) = self.state() {
-            has_changes = !loaded.to_diff_stats().has_no_changes();
-        }
-
-        if FeatureFlag::DiffSetAsContext.is_enabled() && has_changes {
-            items.push(
-                MenuItemFields::new("Add diff set as context")
-                    .with_icon(Icon::Paperclip)
-                    .with_on_select_action(CodeReviewAction::AddDiffSetAsContext(DiffSetScope::All))
-                    .into_item(),
-            );
-        }
-
         let (comment_label, comment_icon) = if self.get_existing_diffset_comment(ctx).is_some() {
             ("Show saved comment", Icon::MessageText)
         } else {
@@ -6722,7 +5997,7 @@ impl CodeReviewView {
         items
     }
 
-    /// New menu items — individually gated, includes discard and AI check.
+    /// New menu items — individually gated, includes discard.
     fn header_menu_items_new(
         &self,
         ctx: &mut ViewContext<Self>,
@@ -6730,16 +6005,6 @@ impl CodeReviewView {
         let mut items = Vec::new();
 
         let has_changes = matches!(self.state(), CodeReviewViewState::Loaded(loaded) if !loaded.to_diff_stats().has_no_changes());
-
-        let is_ai_enabled = AISettings::as_ref(ctx).is_any_ai_enabled(ctx);
-        if is_ai_enabled && FeatureFlag::DiffSetAsContext.is_enabled() && has_changes {
-            items.push(
-                MenuItemFields::new("Add diff set as context")
-                    .with_icon(Icon::Paperclip)
-                    .with_on_select_action(CodeReviewAction::AddDiffSetAsContext(DiffSetScope::All))
-                    .into_item(),
-            );
-        }
 
         if FeatureFlag::FileAndDiffSetComments.is_enabled() && has_changes {
             let (comment_label, comment_icon) = if self.get_existing_diffset_comment(ctx).is_some()
@@ -7384,9 +6649,6 @@ impl TypedActionView for CodeReviewView {
                     ctx.notify();
                 }
             }
-            CodeReviewAction::AddDiffSetAsContext(scope) => {
-                self.insert_diff_as_context(scope.clone(), ctx);
-            }
             CodeReviewAction::CopyFilePath(path) => {
                 if let Some(repo_path) = self.repo_path() {
                     let absolute_path = repo_path.join(path);
@@ -7402,13 +6664,6 @@ impl TypedActionView for CodeReviewView {
                 if let Some(terminal_view) = self.focused_terminal(ctx) {
                     terminal_view.update(ctx, |terminal, ctx| {
                         terminal.handle_action(&TerminalAction::PickRepoToOpen, ctx);
-                    });
-                }
-            }
-            CodeReviewAction::InitProjectForCurrentDirectory => {
-                if let Some(terminal_view) = self.focused_terminal(ctx) {
-                    terminal_view.update(ctx, |terminal, ctx| {
-                        terminal.handle_action(&TerminalAction::InitProject, ctx);
                     });
                 }
             }
@@ -7481,12 +6736,6 @@ impl TypedActionView for CodeReviewView {
                     button.set_active(self.git_operations_menu_open, ctx);
                 });
                 ctx.notify();
-            }
-            CodeReviewAction::SubmitReviewComments => {
-                if self.comment_list_view.as_ref(ctx).can_send(ctx) {
-                    self.handle_submit_review_with_comments(ctx);
-                    ctx.notify();
-                }
             }
         }
     }

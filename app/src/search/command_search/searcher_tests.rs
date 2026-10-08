@@ -12,12 +12,9 @@ use warpui::elements::Empty;
 use warpui::{App, AppContext, Element, SingletonEntity};
 
 use super::*;
-use crate::ai::blocklist::AIQueryHistoryOutputStatus;
 use crate::appearance::Appearance;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::AuthManager;
-use crate::search::ai_queries::fuzzy_match::FuzzyMatchAIQueryResults;
-use crate::search::command_search::ai_queries::AIQuerySearchResultItem;
 use crate::search::command_search::history::{
     history_data_source, history_data_source_for_session,
 };
@@ -429,39 +426,11 @@ fn test_history_score_stays_comparable_to_other_sources_raw_skim_scale() {
             fuzzy_matched_workflow,
         };
 
-        let weak_saved_prompt = Workflow::AgentMode {
-            name: "Unrelated saved prompt".to_owned(),
-            query: weak_match_text.to_owned(),
-            description: None,
-            arguments: vec![],
-        };
-        let fuzzy_matched_saved_prompt =
-            FuzzyMatchWorkflowResult::try_match("test", &weak_saved_prompt, "")
-                .expect("the saved prompt's query should fuzzy-match \"test\"");
-        let saved_prompt_item = WorkflowSearchItem {
-            identity: WorkflowIdentity::Local(Box::new(WorkflowType::Local(weak_saved_prompt))),
-            source: WorkflowSource::Local,
-            fuzzy_matched_workflow: fuzzy_matched_saved_prompt,
-        };
-
-        let ai_prompt_item = AIQuerySearchResultItem {
-            query_text: weak_match_text.to_owned(),
-            start_time: Local::now(),
-            output_status: AIQueryHistoryOutputStatus::Completed,
-            working_directory: None,
-            fuzzy_match_results: FuzzyMatchAIQueryResults::try_match("test", weak_match_text)
-                .expect("the AI query text should fuzzy-match \"test\""),
-        };
-
         let mixer = app.add_model(|_| CommandSearchMixer::new());
         mixer.update(&mut app, |mixer, ctx| {
             mixer.add_sync_source(
-                FixedResults(vec![workflow_item, saved_prompt_item]),
+                FixedResults(vec![workflow_item]),
                 HashSet::from([QueryFilter::Workflows]),
-            );
-            mixer.add_sync_source(
-                FixedResults(vec![ai_prompt_item]),
-                HashSet::from([QueryFilter::PromptHistory]),
             );
             mixer.add_async_source(
                 history_data_source(vec![HistoryEntry::command_only(history_command.clone())]),
@@ -483,7 +452,7 @@ fn test_history_score_stays_comparable_to_other_sources_raw_skim_scale() {
 
         app.read(|app| {
             let results = mixer.as_ref(app).results();
-            assert_eq!(results.len(), 4);
+            assert_eq!(results.len(), 2);
 
             assert!(matches!(
                 results.last().map(|result| result.accept_result()),

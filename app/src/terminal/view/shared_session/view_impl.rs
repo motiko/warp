@@ -26,7 +26,6 @@ use super::adapter::{Adapter, Kind, Participant};
 use super::sharer::Sharer;
 use super::sharer::inactivity_modal::InactivityModalEvent;
 use super::viewer::Viewer;
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::auth::UserUid;
 use crate::context_chips::ContextChipKind;
 use crate::drive::sharing::ShareableObject;
@@ -414,7 +413,6 @@ impl TerminalView {
         scrollback_type: SharedSessionScrollbackType,
         action_source: Option<SharedSessionActionSource>,
         source: SharedSessionSource,
-        bypass_conversation_guard: bool,
         ctx: &mut ViewContext<Self>,
     ) {
         // We should only be attempting to share a session
@@ -426,25 +424,6 @@ impl TerminalView {
         if !self.model.lock().block_list().is_bootstrapped() {
             log::warn!("Tried to share session before it was bootstrapped.");
             return;
-        }
-
-        // Check if we're trying to share without scrollback while agent shared sessions is enabled
-        // and there are active conversations. This would break the viewer experience since they
-        // wouldn't receive the conversation history they need to continue conversations.
-        if !bypass_conversation_guard
-            && FeatureFlag::AgentSharedSessions.is_enabled()
-            && scrollback_type == SharedSessionScrollbackType::None
-        {
-            let has_conversations = BlocklistAIHistoryModel::as_ref(ctx)
-                .all_live_conversations_for_terminal_surface(ctx.handle().id())
-                .any(|conv| conv.exchange_count() > 0);
-
-            if has_conversations {
-                log::warn!(
-                    "Cannot share without scrollback when agent conversations exist. Agent shared sessions require conversation history to be shared."
-                );
-                return;
-            }
         }
 
         self.set_show_pane_accent_border(false, ctx);
@@ -605,13 +584,6 @@ impl TerminalView {
                     prompt_display.update_shared_session_viewer_status(true, ctx);
                 });
 
-            input.editor().update(ctx, |editor, ctx| {
-                if let Some(ai_context_menu) = editor.ai_context_menu() {
-                    ai_context_menu.update(ctx, |menu, ctx| {
-                        menu.set_is_shared_session_viewer(true, ctx);
-                    });
-                }
-            });
         });
 
         // If viewer joined as an executor, make sure the view state is updated.
@@ -643,8 +615,6 @@ impl TerminalView {
             self.terminal_title = pwd.to_string();
         }
 
-        // Update the pane title, which will show either the conversation title/status
-        // if there's an active conversation, or fall back to the terminal_title (pwd).
         self.update_pane_configuration(ctx);
 
         self.update_shared_session_pane_header(ctx);
@@ -1256,13 +1226,6 @@ impl TerminalView {
                 let role = &role;
                 editor.set_interaction_state(role.into(), ctx);
             });
-            // Role gates whether prompts can be sent, so the queued prompts panel's
-            // send-now buttons and enter hint must re-sync.
-            if let Some(panel) = input.queued_prompts_panel().cloned() {
-                panel.update(ctx, |panel, ctx| {
-                    panel.set_can_send_prompt(role.can_execute(), ctx);
-                });
-            }
         });
     }
 

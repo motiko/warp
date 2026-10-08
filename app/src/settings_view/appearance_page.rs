@@ -93,8 +93,7 @@ use crate::workspace::header_toolbar_editor::HeaderToolbarInlineEditor;
 use crate::workspace::tab_settings::{
     DirectoryTabColor, HideTitleBarSearchBarInVerticalTabs, PreserveActiveTabColor,
     ShowIndicatorsButton, ShowVerticalTabPanelInRestoredWindows, TabCloseButtonPosition,
-    TabSettings, TabSettingsChangedEvent, UseLatestUserPromptAsConversationTitleInTabNames,
-    UseVerticalTabs, WorkspaceDecorationVisibility, canonical_directory_key,
+    TabSettings, TabSettingsChangedEvent, UseVerticalTabs, WorkspaceDecorationVisibility, canonical_directory_key,
 };
 use crate::{send_telemetry_from_ctx, themes};
 
@@ -393,14 +392,6 @@ pub fn init_actions_from_parent_view<T: Action + Clone>(
             context,
             flags::SHOW_VERTICAL_TAB_PANEL_IN_RESTORED_WINDOWS_FLAG,
         ));
-        toggle_binding_pairs.push(ToggleSettingActionPair::new(
-            "latest user prompt as conversation title in tab names",
-            builder(SettingsAction::AppearancePageToggle(
-                AppearancePageAction::ToggleUseLatestUserPromptAsConversationTitleInTabNames,
-            )),
-            context,
-            flags::USE_LATEST_USER_PROMPT_AS_CONVERSATION_TITLE_IN_TAB_NAMES_FLAG,
-        ));
     }
 
     if FeatureFlag::Ligatures.is_enabled() {
@@ -493,7 +484,6 @@ pub enum AppearancePageAction {
     ToggleVerticalTabs,
     ToggleShowVerticalTabPanelInRestoredWindows,
     ToggleHideTitleBarSearchBarInVerticalTabs,
-    ToggleUseLatestUserPromptAsConversationTitleInTabNames,
     ToggleLigatureRendering,
     SetWindowBackdrop(WindowBackdrop),
     ToggleLeftPanelVisibility,
@@ -661,9 +651,6 @@ impl TypedActionView for AppearanceSettingsPageView {
             }
             ToggleHideTitleBarSearchBarInVerticalTabs => {
                 self.toggle_hide_title_bar_search_bar_in_vertical_tabs(ctx)
-            }
-            ToggleUseLatestUserPromptAsConversationTitleInTabNames => {
-                self.toggle_use_latest_user_prompt_as_conversation_title_in_tab_names(ctx)
             }
             ToggleLigatureRendering => self.toggle_ligature_rendering(ctx),
             ToggleFocusPaneOnHover => {
@@ -1498,9 +1485,6 @@ impl AppearanceSettingsPageView {
             ));
             tab_settings_widgets.push(Box::new(
                 HideTitleBarSearchBarInVerticalTabsWidget::default(),
-            ));
-            tab_settings_widgets.push(Box::new(
-                UseLatestUserPromptAsConversationTitleInTabNamesWidget::default(),
             ));
             if FeatureFlag::ConfigurableToolbar.is_enabled() {
                 tab_settings_widgets.push(Box::new(EditToolbarWidget));
@@ -2473,19 +2457,6 @@ impl AppearanceSettingsPageView {
             report_if_error!(
                 settings
                     .hide_title_bar_search_bar_in_vertical_tabs
-                    .toggle_and_save_value(ctx)
-            );
-        });
-    }
-
-    fn toggle_use_latest_user_prompt_as_conversation_title_in_tab_names(
-        &mut self,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        TabSettings::handle(ctx).update(ctx, |settings, ctx| {
-            report_if_error!(
-                settings
-                    .use_latest_user_prompt_as_conversation_title_in_tab_names
                     .toggle_and_save_value(ctx)
             );
         });
@@ -4954,59 +4925,6 @@ impl SettingsWidget for HideTitleBarSearchBarInVerticalTabsWidget {
                 .finish(),
             Some(
                 "When using the vertical tab layout, hide the search bar in the title bar. Search stays available via the command palette and keyboard shortcuts."
-                    .to_string(),
-            ),
-        )
-    }
-}
-
-#[derive(Default)]
-struct UseLatestUserPromptAsConversationTitleInTabNamesWidget {
-    switch_state: SwitchStateHandle,
-}
-
-impl SettingsWidget for UseLatestUserPromptAsConversationTitleInTabNamesWidget {
-    type View = AppearanceSettingsPageView;
-
-    fn search_terms(&self) -> &str {
-        "latest user prompt conversation title tab names vertical tabs oz agent"
-    }
-
-    fn render(
-        &self,
-        view: &Self::View,
-        appearance: &Appearance,
-        app: &AppContext,
-    ) -> Box<dyn Element> {
-        let tab_settings = TabSettings::as_ref(app);
-
-        render_body_item::<AppearancePageAction>(
-            "Use latest user prompt as conversation title in tab names".into(),
-            None,
-            LocalOnlyIconState::for_setting(
-                UseLatestUserPromptAsConversationTitleInTabNames::storage_key(),
-                UseLatestUserPromptAsConversationTitleInTabNames::sync_to_cloud(),
-                &mut view.local_only_icon_tooltip_states.borrow_mut(),
-                app,
-            ),
-            ToggleState::Enabled,
-            appearance,
-            appearance
-                .ui_builder()
-                .switch(self.switch_state.clone())
-                .check(
-                    *tab_settings
-                        .use_latest_user_prompt_as_conversation_title_in_tab_names,
-                )
-                .build()
-                .on_click(move |ctx, _, _| {
-                    ctx.dispatch_typed_action(
-                        AppearancePageAction::ToggleUseLatestUserPromptAsConversationTitleInTabNames,
-                    );
-                })
-                .finish(),
-            Some(
-                "Show the latest user prompt instead of the generated conversation title for Oz agent sessions in vertical tabs."
                     .to_string(),
             ),
         )

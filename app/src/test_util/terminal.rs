@@ -16,7 +16,7 @@ use crate::ai::AIRequestUsageModel;
 use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 use crate::ai::agent_conversations_model::AgentConversationsModel;
 use crate::ai::blocklist::{
-    BlocklistAIHistoryModel, BlocklistAIPermissions, QueuedQueryModel, SerializedBlockListItem,
+    BlocklistAIHistoryModel, BlocklistAIPermissions, QueuedQueryModel, SerializedBlock,
 };
 use crate::ai::document::ai_document_model::AIDocumentModel;
 use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
@@ -48,7 +48,6 @@ use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::suggestions::ignored_suggestions_model::IgnoredSuggestionsModel;
 use crate::system::{SystemInfo, SystemStats};
 use crate::terminal::alt_screen_reporting::AltScreenReporting;
-use crate::terminal::keys::TerminalKeybindings;
 use crate::terminal::resizable_data::ResizableData;
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::terminal::view::inline_banner::ByoLlmAuthBannerSessionState;
@@ -107,7 +106,6 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
         AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client())
     });
     app.add_singleton_model(|_| KeybindingChangedNotifier::new());
-    app.add_singleton_model(TerminalKeybindings::new);
     app.add_singleton_model(|_| ActiveSession::default());
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
     app.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
@@ -168,7 +166,7 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
 /// Returns the handle to that terminal view.
 pub fn add_window_with_terminal(
     app: &mut App,
-    restored_blocks: Option<&[SerializedBlockListItem]>,
+    restored_blocks: Option<&[SerializedBlock]>,
 ) -> ViewHandle<TerminalView> {
     add_window_with_id_and_terminal(app, restored_blocks).1
 }
@@ -177,7 +175,7 @@ pub fn add_window_with_terminal(
 /// Returns the WindowID and the handle to that terminal view.
 pub fn add_window_with_id_and_terminal(
     app: &mut App,
-    restored_blocks: Option<&[SerializedBlockListItem]>,
+    restored_blocks: Option<&[SerializedBlock]>,
 ) -> (WindowId, ViewHandle<TerminalView>) {
     app.add_window(WindowStyle::NotStealFocus, |ctx| {
         TerminalView::new_for_test(restored_blocks, ctx)

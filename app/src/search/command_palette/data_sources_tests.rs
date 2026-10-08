@@ -124,8 +124,6 @@ fn mock_server_notebook(id: NotebookId, owner: Owner) -> ServerNotebook {
         CloudNotebookModel {
             title: format!("foo{id}"),
             data: format!("bar{id}"),
-            ai_document_id: None,
-            conversation_id: None,
         },
         mock_server_metadata(),
         mock_server_permissions(owner),
@@ -429,7 +427,7 @@ async fn drain_index(marker_id: i64, mixer: &ModelHandle<CommandPaletteMixer>, a
         .await;
 }
 
-fn prompt_or_workflow_uid(id: i64) -> ObjectUid {
+fn workflow_uid(id: i64) -> ObjectUid {
     SyncId::ServerId(WorkflowId::from(id).into()).uid()
 }
 
@@ -601,7 +599,7 @@ fn test_full_text_drive_data_source_indexes_an_object_that_moves_into_the_window
         // The server reassigns the workflow to this window's team.
         CloudModel::handle(&app).update(&mut app, |model, ctx| {
             model.update_object_permissions(
-                &prompt_or_workflow_uid(1),
+                &workflow_uid(1),
                 mock_server_permissions(Owner::Team {
                     team_uid: selected_team.uid,
                 }),
@@ -666,7 +664,7 @@ fn test_full_text_drive_data_source_removes_an_object_that_moves_out_of_the_wind
         // The user moves the workflow into the other team's drive.
         CloudModel::handle(&app).update(&mut app, |model, ctx| {
             model.update_object_location(
-                &prompt_or_workflow_uid(1),
+                &workflow_uid(1),
                 Some(Owner::Team {
                     team_uid: other_team.uid,
                 }),

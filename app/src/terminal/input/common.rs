@@ -22,21 +22,6 @@ use crate::terminal::model::TerminalModel;
 use crate::terminal::view::{PADDING_LEFT, TerminalAction};
 use crate::ui_components::icons::Icon;
 
-/// Whether the terminal input message bar should be shown.
-///
-/// The message bar is hidden when AI is disabled, the user has turned it off in settings,
-/// or the session is a shared ambient agent session.
-pub(super) fn should_show_terminal_input_message_bar(
-    model: &TerminalModel,
-    app: &AppContext,
-) -> bool {
-    FeatureFlag::AgentView.is_enabled()
-        && !FeatureFlag::AgentViewPromptChip.is_enabled()
-        && InputSettings::as_ref(app).is_terminal_input_message_bar_enabled()
-        && AISettings::as_ref(app).is_any_ai_enabled(app)
-        && !model.is_shared_ambient_agent_session()
-}
-
 /// Renders vim status bar
 /// Used by: agent.rs, terminal.rs, universal.rs, legacy.rs
 pub(super) fn render_vim_status(vim_state: &VimState, appearance: &Appearance) -> Container {
@@ -80,33 +65,6 @@ pub(super) fn render_vim_status(vim_state: &VimState, appearance: &Appearance) -
     )
     .with_margin_right(8.)
     .with_margin_bottom(4.)
-}
-
-/// Renders the vim status indicator in the bottom right corner of the given stack.
-pub(super) fn add_vim_status_to_stack(
-    stack: &mut Stack,
-    vim_state: &VimState,
-    appearance: &Appearance,
-    use_adjusted_padding: bool,
-) {
-    let terminal_padding = if use_adjusted_padding {
-        *PADDING_LEFT / 1.5
-    } else {
-        0.
-    };
-    let status_bar = render_vim_status(vim_state, appearance)
-        .with_padding_bottom(4.)
-        .with_uniform_margin(terminal_padding)
-        .finish();
-    stack.add_positioned_child(
-        status_bar,
-        OffsetPositioning::offset_from_parent(
-            vec2f(0.0, 0.0),
-            ParentOffsetBounds::Unbounded,
-            ParentAnchor::BottomRight,
-            ChildAnchor::BottomRight,
-        ),
-    )
 }
 
 /// Wraps the given column, assumed to represent the full input content, with appropriate
@@ -298,29 +256,10 @@ pub(super) fn add_input_suggestions_overlays(
                 ),
             );
         }
-        InputSuggestionsMode::AIContextMenu { .. } => {
-            input.render_ai_context_menu(stack, &menu_positioning, app);
-        }
         // SlashCommandsMenu is rendered separately via inline_slash_commands_menu_view
         InputSuggestionsMode::SlashCommands => {}
-        // Conversation menu is rendered separately via inline_conversation_menu_view
-        InputSuggestionsMode::ConversationMenu => {}
-        // Model selector is rendered separately via inline_model_selector_view
-        InputSuggestionsMode::ModelSelector => {}
-        // Profile selector is rendered separately via inline_profile_selector_view
-        InputSuggestionsMode::ProfileSelector => {}
-        // Prompts menu is rendered separately via inline_prompts_menu_view
-        InputSuggestionsMode::PromptsMenu => {}
-        // Skill menu is rendered separately via inline_skill_selector_view
-        InputSuggestionsMode::SkillMenu => {}
-        // User query menu is rendered separately via user_query_menu_view
-        InputSuggestionsMode::UserQueryMenu { .. } => {}
         // Inline history menu is rendered separately via inline_history_menu_view
-        InputSuggestionsMode::InlineHistoryMenu { .. } => {}
-        // Repos menu is rendered separately via inline_repos_menu_view
-        InputSuggestionsMode::IndexedReposMenu => {}
-        // Plan menu is rendered separately via inline_plan_menu_view
-        InputSuggestionsMode::PlanMenu { .. } => {}
+        InputSuggestionsMode::InlineHistoryMenu => {}
         InputSuggestionsMode::Closed => {}
     }
 }

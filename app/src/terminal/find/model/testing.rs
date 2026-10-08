@@ -33,13 +33,9 @@ impl BlockListFindRun {
 
     pub fn focused_match_block_index(&self) -> Option<BlockIndex> {
         self.focused_match_index().and_then(|index| {
-            self.matches().nth(index).and_then(|m| {
-                if let BlockListMatch::CommandBlock(block_match) = m {
-                    Some(block_match.block_index)
-                } else {
-                    None
-                }
-            })
+            self.matches()
+                .nth(index)
+                .map(|BlockListMatch::CommandBlock(block_match)| block_match.block_index)
         })
     }
 }

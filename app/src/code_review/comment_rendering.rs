@@ -1,14 +1,11 @@
-//! Shared rendering helpers for displaying code review comments.
-//!
-//! These functions are used by both the `CommentListView` (in the code review panel)
-//! and the blocklist's imported comments rendering.
+//! Rendering helpers for displaying code review comments in the `CommentListView`.
 
 use std::rc::Rc;
 
 use chrono::{Duration, Local};
 use pathfinder_color::ColorU;
 use warp_core::ui::theme::Fill;
-use warp_core::ui::theme::color::internal_colors::{neutral_1, neutral_2, text_sub};
+use warp_core::ui::theme::color::internal_colors::{neutral_1, neutral_2};
 use warp_editor::content::buffer::InitialBufferState;
 use warp_editor::render::element::VerticalExpansionBehavior;
 use warpui::elements::new_scrollable::ScrollableAppearance;
@@ -158,7 +155,6 @@ fn render_comment_file_path_header(
 fn render_comment_text_section(
     comment_editor: &ViewHandle<RichTextEditorView>,
     last_updated_duration: Duration,
-    is_imported_from_github: bool,
     metadata_trailing_element: Option<Box<dyn Element>>,
     appearance: &Appearance,
 ) -> Box<dyn Element> {
@@ -168,18 +164,6 @@ fn render_comment_text_section(
     let mut left_section = Flex::row()
         .with_cross_axis_alignment(CrossAxisAlignment::Center)
         .with_spacing(8.);
-
-    if is_imported_from_github {
-        left_section.add_child(
-            Text::new(
-                "From GitHub".to_string(),
-                appearance.ui_font_family(),
-                appearance.ui_font_size(),
-            )
-            .with_color(text_sub(theme, background))
-            .finish(),
-        );
-    }
 
     left_section.add_child(
         Text::new(
@@ -282,10 +266,7 @@ enum CommentDiffContent {
     StaticEditor(ViewHandle<CodeEditorView>),
 }
 
-/// A shared UI component for a single code review comment card.
-///
-/// Used by both `CommentListView` (code review panel) and the blocklist's
-/// imported comments. Owns the view handles for the comment body editor and
+/// A UI component for a single code review comment card. Owns the view handles for the comment body editor and
 /// (optionally) a static diff editor, plus the underlying comment data.
 pub(crate) struct CommentViewCard {
     comment_editor: ViewHandle<RichTextEditorView>,
@@ -427,7 +408,6 @@ impl CommentViewCard {
         card.add_child(render_comment_text_section(
             &self.comment_editor,
             self.last_updated_duration,
-            self.source.origin.is_imported_from_github(),
             metadata_trailing_element,
             appearance,
         ));

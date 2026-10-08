@@ -14,16 +14,11 @@ use crate::themes::theme::Fill;
 pub struct WarpDriveNotebook {
     id: CloudObjectTypeAndId,
     notebook: CloudNotebook,
-    is_ai_document: bool,
 }
 
 impl WarpDriveNotebook {
-    pub fn new(id: CloudObjectTypeAndId, notebook: CloudNotebook, is_ai_document: bool) -> Self {
-        Self {
-            id,
-            notebook,
-            is_ai_document,
-        }
+    pub fn new(id: CloudObjectTypeAndId, notebook: CloudNotebook) -> Self {
+        Self { id, notebook }
     }
 }
 
@@ -41,9 +36,7 @@ impl WarpDriveItem for WarpDriveNotebook {
     }
 
     fn object_type(&self) -> Option<DriveObjectType> {
-        Some(DriveObjectType::Notebook {
-            is_ai_document: self.is_ai_document,
-        })
+        Some(DriveObjectType::Notebook)
     }
 
     fn secondary_icon(&self, _color: Option<Fill>) -> Option<Box<dyn Element>> {

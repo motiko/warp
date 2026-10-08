@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use ai::api_keys::CustomEndpointSchema;
+use ai_config::api_keys::CustomEndpointSchema;
 use settings::Setting as _;
 use warpui::{App, SingletonEntity as _};
 use warpui_extras::secure_storage;

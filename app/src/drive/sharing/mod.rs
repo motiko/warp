@@ -8,8 +8,6 @@ use warpui::color::ColorU;
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::{AppContext, SingletonEntity, WeakViewHandle};
 
-use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::server::ids::ServerId;
 use crate::server::server_api::object::GuestIdentifier;
@@ -43,8 +41,6 @@ pub enum ShareableObject {
         session_id: SessionId,
         started_at: DateTime<Local>,
     },
-    /// An AI conversation.
-    AIConversation(AIConversationId),
 }
 
 impl ShareableObject {
@@ -68,18 +64,6 @@ impl ShareableObject {
                     .session_id_for_link(&handle.id(), &shared_session_status)?;
 
                 (link_session_id == *session_id).then(|| join_link(session_id))
-            }
-            ShareableObject::AIConversation(id) => {
-                // Use the unified helper that checks both loaded conversation and historical metadata
-                BlocklistAIHistoryModel::as_ref(app)
-                    .get_server_conversation_metadata(id)
-                    .map(|m| {
-                        format!(
-                            "{}/conversation/{}",
-                            ChannelState::server_root_url(),
-                            m.server_conversation_token.as_str()
-                        )
-                    })
             }
         }
     }

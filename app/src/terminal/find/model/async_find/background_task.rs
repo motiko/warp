@@ -101,18 +101,6 @@ async fn run_find_task_loop(
                 )
                 .await;
             }
-            FindWorkItem::AIBlock {
-                view_id,
-                total_index,
-            } => {
-                // Forward to main thread for execution.
-                let _ = result_tx
-                    .send(FindTaskMessage::ScanAIBlock {
-                        view_id,
-                        total_index,
-                    })
-                    .await;
-            }
         }
 
         // The emptiness flag is checked atomically with the pop inside

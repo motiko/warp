@@ -19,20 +19,16 @@ use warpui::{
     ViewContext,
 };
 
-use crate::ai::agent::icons::{yellow_running_icon, yellow_stop_icon};
-use crate::ai::blocklist::block::view_impl::{
-    CONTENT_HORIZONTAL_PADDING, CONTENT_ITEM_VERTICAL_MARGIN,
-};
-use crate::ai::blocklist::inline_action::inline_action_header::{
-    ExpandedConfig, HeaderConfig, INLINE_ACTION_HORIZONTAL_PADDING, InteractionMode,
-};
-use crate::ai::blocklist::inline_action::inline_action_icons::{self};
 use crate::appearance::Appearance;
 use crate::settings::InputModeSettings;
 use crate::terminal::block_list_element::BlockListMenuSource;
 use crate::terminal::block_list_viewport::InputMode;
 use crate::terminal::view::TerminalAction;
 use crate::ui_components::blended_colors;
+use crate::ui_components::inline_action_header::{
+    ExpandedConfig, HeaderConfig, INLINE_ACTION_HORIZONTAL_PADDING, InteractionMode,
+};
+use crate::ui_components::inline_action_icons::{self, yellow_running_icon, yellow_stop_icon};
 use crate::view_components::action_button::{
     ButtonSize, KeystrokeSource, NakedTheme, PrimaryTheme,
 };
@@ -43,6 +39,8 @@ use crate::view_components::compactible_action_button::{
 /// The vertical padding applied to the env var collection block's content body.
 /// For horizontal padding, use [`INLINE_ACTION_HORIZONTAL_PADDING`] for consistency.
 const ENV_VAR_COLLECTION_BODY_VERTICAL_PADDING: f32 = 16.;
+const CONTENT_HORIZONTAL_PADDING: f32 = 20.;
+const CONTENT_ITEM_VERTICAL_MARGIN: f32 = 16.;
 
 const ENV_VAR_COLLECTION_CANCEL_LABEL: &str = "Cancel";
 const ENV_VAR_COLLECTION_ACCEPT_LABEL: &str = "Run";

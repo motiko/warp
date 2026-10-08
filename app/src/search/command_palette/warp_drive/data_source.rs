@@ -21,7 +21,6 @@ use crate::search::mixer::DataSourceRunErrorWrapper;
 use crate::search::notebooks::fuzzy_match::FuzzyMatchNotebookResult;
 use crate::search::workflows::fuzzy_match::FuzzyMatchWorkflowResult;
 use crate::server::ids::{ObjectUid, ServerId, SyncId};
-use crate::settings::AISettings;
 use crate::workflows::CloudWorkflow;
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 
@@ -233,21 +232,14 @@ impl DataSource {
         }
     }
 
-    pub fn search_workflows(
+    fn search_workflows(
         &self,
         query: &Query,
-        should_include_agent_mode_prompts: bool,
-        should_include_command_workflows: bool,
         app: &AppContext,
     ) -> anyhow::Result<Vec<WorkflowSearchItem>> {
         Ok(self
             .searcher
-            .search_workflow(
-                &query.text.to_lowercase(),
-                app,
-                should_include_agent_mode_prompts,
-                should_include_command_workflows,
-            )?
+            .search_workflow(&query.text.to_lowercase(), app)?
             .into_iter()
             .filter(|item| self.scope.contains(&item.cloud_workflow, app))
             .collect())
@@ -280,35 +272,9 @@ impl crate::search::mixer::SyncDataSource for DataSource {
             );
         }
 
-        if query.filters.contains(&QueryFilter::Plans) || should_include_all_drive_objects {
+        if query.filters.contains(&QueryFilter::Workflows) || should_include_all_drive_objects {
             filtered_cloud_objects.extend(
-                self.searcher
-                    .search_plans(&query.text.to_lowercase(), app)
-                    .map_err(|err| {
-                        Box::new(DataSourceSearchError::new(err.to_string()))
-                            as DataSourceRunErrorWrapper
-                    })?
-                    .into_iter()
-                    .filter(|item| self.scope.contains(&item.cloud_notebook, app))
-                    .map(QueryResult::from),
-            );
-        }
-
-        let should_include_agent_mode_prompts =
-            (query.filters.contains(&QueryFilter::AgentModeWorkflows)
-                || should_include_all_drive_objects)
-                && AISettings::as_ref(app).is_any_ai_enabled(app);
-        let should_include_command_workflows =
-            query.filters.contains(&QueryFilter::Workflows) || should_include_all_drive_objects;
-
-        if should_include_agent_mode_prompts || should_include_command_workflows {
-            filtered_cloud_objects.extend(
-                self.search_workflows(
-                    query,
-                    should_include_agent_mode_prompts,
-                    should_include_command_workflows,
-                    app,
-                )
+                self.search_workflows(query, app)
                 .map_err(|err| {
                     Box::new(DataSourceSearchError::new(err.to_string()))
                         as DataSourceRunErrorWrapper
@@ -414,25 +380,15 @@ trait WarpDriveSearcher {
         app: &AppContext,
     ) -> anyhow::Result<Vec<NotebookSearchItem>>;
 
-    fn search_workflow(
-        &self,
-        query: &str,
-        app: &AppContext,
-        should_include_am_prompts: bool,
-        should_include_command_workflow: bool,
-    ) -> anyhow::Result<Vec<WorkflowSearchItem>>;
+    /// Searches command workflows; agent-mode prompts synced from the server are never returned.
+    fn search_workflow(&self, query: &str, app: &AppContext)
+    -> anyhow::Result<Vec<WorkflowSearchItem>>;
 
     fn search_env_var(
         &self,
         query: &str,
         app: &AppContext,
     ) -> anyhow::Result<Vec<EnvVarCollectionSearchItem>>;
-
-    fn search_plans(
-        &self,
-        query: &str,
-        app: &AppContext,
-    ) -> anyhow::Result<Vec<NotebookSearchItem>>;
 }
 
 #[derive(Default)]
@@ -582,42 +538,16 @@ impl WarpDriveSearcher for FuzzyWarpDriveSearcher {
             .collect())
     }
 
-    fn search_plans(
-        &self,
-        query: &str,
-        app: &AppContext,
-    ) -> anyhow::Result<Vec<NotebookSearchItem>> {
-        let cloud_notebooks = CloudModel::as_ref(app)
-            .get_all_active_notebooks()
-            .filter(|notebook| notebook.model().ai_document_id.is_some());
-        Ok(cloud_notebooks
-            .filter_map(|cloud_notebook| {
-                FuzzyMatchNotebookResult::try_match(query, cloud_notebook, app).map(
-                    |match_result| NotebookSearchItem {
-                        match_result,
-                        cloud_notebook: cloud_notebook.clone(),
-                    },
-                )
-            })
-            .collect())
-    }
-
     fn search_workflow(
         &self,
         query: &str,
         app: &AppContext,
-        should_include_am_prompts: bool,
-        should_include_command_workflow: bool,
     ) -> anyhow::Result<Vec<WorkflowSearchItem>> {
         let cloud_workflows = CloudModel::as_ref(app).get_all_active_workflows();
 
         Ok(cloud_workflows
             .filter_map(move |cloud_workflow| {
-                if !should_include_am_prompts
-                    && cloud_workflow.model().data.is_agent_mode_workflow()
-                    || !should_include_command_workflow
-                        && cloud_workflow.model().data.is_command_workflow()
-                {
+                if !cloud_workflow.model().data.is_command_workflow() {
                     return None;
                 };
                 FuzzyMatchWorkflowResult::try_match(
@@ -748,11 +678,10 @@ mod full_text_searcher {
         env_var_searcher: AsyncSearcher<EnvVarConfig>,
     }
 
-    impl FullTextWarpDriveSearcher {
-        fn search_notebooks_with_filter(
+    impl WarpDriveSearcher for FullTextWarpDriveSearcher {
+        fn search_notebook(
             &self,
             query: &str,
-            filter_by_plan: bool,
             app: &AppContext,
         ) -> anyhow::Result<Vec<NotebookSearchItem>> {
             if query.is_empty() {
@@ -765,9 +694,6 @@ mod full_text_searcher {
                             .get_by_uid(&search_match.uid)?
                             .into();
                         let cloud_notebook = notebook?;
-                        if filter_by_plan && cloud_notebook.model().ai_document_id.is_none() {
-                            return None;
-                        }
 
                         Some(NotebookSearchItem {
                             match_result: FuzzyMatchNotebookResult::no_match(),
@@ -786,10 +712,6 @@ mod full_text_searcher {
                         .get_by_uid(&search_match.values.uid)?
                         .into();
                     let notebook = notebook?;
-
-                    if filter_by_plan && notebook.model().ai_document_id.is_none() {
-                        return None;
-                    }
 
                     // Since Tantivy only produces a single score for the entire document, we put it as the score of all 3.
                     let name_match_result = Some(FuzzyMatchResult {
@@ -816,9 +738,7 @@ mod full_text_searcher {
                 })
                 .collect())
         }
-    }
 
-    impl WarpDriveSearcher for FullTextWarpDriveSearcher {
         fn insert_searchable_object(
             &mut self,
             object: &dyn CloudObject,
@@ -1073,28 +993,10 @@ mod full_text_searcher {
             Ok(())
         }
 
-        fn search_notebook(
-            &self,
-            query: &str,
-            app: &AppContext,
-        ) -> anyhow::Result<Vec<NotebookSearchItem>> {
-            self.search_notebooks_with_filter(query, false, app)
-        }
-
-        fn search_plans(
-            &self,
-            query: &str,
-            app: &AppContext,
-        ) -> anyhow::Result<Vec<NotebookSearchItem>> {
-            self.search_notebooks_with_filter(query, true, app)
-        }
-
         fn search_workflow(
             &self,
             query: &str,
             app: &AppContext,
-            should_include_am_prompts: bool,
-            should_include_command_workflow: bool,
         ) -> anyhow::Result<Vec<WorkflowSearchItem>> {
             if query.is_empty() {
                 return Ok(self
@@ -1106,11 +1008,7 @@ mod full_text_searcher {
                             .get_by_uid(&search_match.uid)?
                             .into();
                         let cloud_workflow = cloud_workflow?;
-                        let workflow = &cloud_workflow.model().data;
-
-                        if !should_include_am_prompts && workflow.is_agent_mode_workflow()
-                            || !should_include_command_workflow && workflow.is_command_workflow()
-                        {
+                        if !cloud_workflow.model().data.is_command_workflow() {
                             return None;
                         }
 
@@ -1131,11 +1029,7 @@ mod full_text_searcher {
                         .get_by_uid(&search_match.values.uid)?
                         .into();
                     let cloud_workflow = cloud_workflow?;
-                    let workflow = &cloud_workflow.model().data;
-
-                    if !should_include_am_prompts && workflow.is_agent_mode_workflow()
-                        || !should_include_command_workflow && workflow.is_command_workflow()
-                    {
+                    if !cloud_workflow.model().data.is_command_workflow() {
                         return None;
                     }
 

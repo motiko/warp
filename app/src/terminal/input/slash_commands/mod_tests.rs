@@ -1,46 +1,15 @@
-use super::slash_command_is_submitted_as_prompt;
 use crate::search::slash_command_menu::static_commands::{SlashCommandKind, commands};
-
-/// The centralized classifier must mark only the prompt-submitting commands (/compact, /plan) as
-/// "submitted as a prompt". Every other slash command emits an immediate action
-/// and must be treated as "run now" by the prompt-queue gate and the shared-session viewer path.
-#[test]
-fn slash_command_is_submitted_as_prompt_only_for_prompt_commands() {
-    assert!(slash_command_is_submitted_as_prompt(&commands::COMPACT));
-    assert!(slash_command_is_submitted_as_prompt(&commands::PLAN));
-
-    for command in [
-        &*commands::FORK,
-        &*commands::FORK_AND_COMPACT,
-        &commands::FORK_FROM,
-        &*commands::COMPACT_AND,
-        &*commands::MODEL,
-        &commands::REWIND,
-        &commands::CONVERSATIONS,
-        &*commands::QUEUE,
-    ] {
-        assert!(!slash_command_is_submitted_as_prompt(command));
-    }
-}
 
 #[test]
 fn commands_have_typed_identities() {
     for (command, expected) in [
-        (&*commands::AGENT, SlashCommandKind::Agent),
-        (&*commands::NEW, SlashCommandKind::New),
-        (&*commands::COMPACT, SlashCommandKind::Compact),
-        (&commands::COST, SlashCommandKind::Cost),
-        (&*commands::PLAN, SlashCommandKind::Plan),
-        (&*commands::MODEL, SlashCommandKind::Model),
-        (
-            &*commands::CREATE_NEW_PROJECT,
-            SlashCommandKind::CreateNewProject,
-        ),
-        (
-            &commands::EXPORT_TO_CLIPBOARD,
-            SlashCommandKind::ExportToClipboard,
-        ),
-        (&*commands::EXPORT_TO_FILE, SlashCommandKind::ExportToFile),
+        (&*commands::EDIT, SlashCommandKind::Edit),
+        (&*commands::RENAME_TAB, SlashCommandKind::RenameTab),
+        (&*commands::SET_TAB_COLOR, SlashCommandKind::SetTabColor),
+        (&commands::OPEN_CODE_REVIEW, SlashCommandKind::OpenCodeReview),
+        (&commands::OPEN_SETTINGS_FILE, SlashCommandKind::OpenSettingsFile),
+        (&commands::CHANGELOG, SlashCommandKind::Changelog),
+        (&*commands::FEEDBACK, SlashCommandKind::Feedback),
     ] {
         assert_eq!(
             command.kind, expected,
@@ -48,13 +17,6 @@ fn commands_have_typed_identities() {
             command.name
         );
     }
-}
-
-#[test]
-fn model_command_is_not_a_prompt_command() {
-    assert_eq!(commands::MODEL.kind, SlashCommandKind::Model);
-    assert!(!slash_command_is_submitted_as_prompt(&commands::MODEL));
-    assert!(commands::MODEL.argument.is_none());
 }
 
 #[cfg(all(feature = "local_fs", windows))]

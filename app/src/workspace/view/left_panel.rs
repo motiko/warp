@@ -693,11 +693,6 @@ impl LeftPanelView {
                     path: path.clone(),
                 }));
             }
-            FileTreeEvent::AttachAsContext { path } => {
-                ctx.emit(LeftPanelEvent::FileTree(
-                    pane_group::Event::AttachPathAsContext { path: path.clone() },
-                ));
-            }
             FileTreeEvent::OpenFile {
                 path,
                 target,

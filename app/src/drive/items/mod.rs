@@ -8,10 +8,8 @@ use crate::cloud_object::{CloudObjectMetadata, Space};
 use crate::themes::theme::Fill;
 use crate::ui_components::icons::Icon;
 
-pub mod ai_fact;
 pub mod env_var_collection;
 pub mod folder;
-pub mod mcp_server;
 pub mod notebook;
 pub mod space;
 pub mod workflow;
@@ -53,8 +51,6 @@ pub trait WarpDriveItem {
 /// Includes spaces (which CloudObjectTypeAndId does not entail)
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum WarpDriveItemId {
-    AIFactCollection,
-    MCPServerCollection,
     Object(CloudObjectTypeAndId),
     Space(Space),
     Trash,

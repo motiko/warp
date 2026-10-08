@@ -130,8 +130,8 @@ fn render_current_session_pill(
     Shrinkable::new(
         // We need different flex values when different hint texts are present, otherwise the actual command won't take up enough room.
         match command_context {
-            CommandContext::LastRunCommand { .. } | CommandContext::LastRunAIBlock { .. } => 0.5,
-            CommandContext::RunningCommand { .. } | CommandContext::RunningAIBlock { .. } => 0.35,
+            CommandContext::LastRunCommand { .. } => 0.5,
+            CommandContext::RunningCommand { .. } => 0.35,
             CommandContext::None => 1.,
         },
         Align::new(
@@ -180,7 +180,7 @@ fn render_prompt_udi(snapshot: &PromptSnapshot, appearance: &Appearance) -> Box<
 
         let color = chip_result
             .kind()
-            .default_styles(appearance, false)
+            .default_styles(appearance)
             .value_color;
         let value_text = value.to_string();
         let config = if let Some(icon) = chip_result.kind().udi_icon() {
@@ -360,18 +360,6 @@ impl CommandRenderInfo {
                     Some(mins) => format!("Completed {mins} minutes ago"),
                     None => "No timestamp found".to_string(),
                 },
-            },
-            CommandContext::RunningAIBlock { prompt } => CommandRenderInfo {
-                command_text: Some(prompt),
-                hint_text: "Running...".to_string(),
-                row_spacing: styles::NAVIGATION_PALETTE_COMMAND_ROW_SPACING,
-                hint_margin: styles::NAVIGATION_PALETTE_COMMAND_HINT_MARGIN,
-            },
-            CommandContext::LastRunAIBlock { prompt } => CommandRenderInfo {
-                command_text: Some(prompt),
-                hint_text: "Completed".to_string(),
-                row_spacing: styles::NAVIGATION_PALETTE_COMMAND_ROW_SPACING,
-                hint_margin: styles::NAVIGATION_PALETTE_COMMAND_HINT_MARGIN,
             },
             CommandContext::None => CommandRenderInfo {
                 command_text: Some(String::new()),

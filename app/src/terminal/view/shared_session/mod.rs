@@ -1,7 +1,6 @@
 //! Session-sharing logic related to the terminal view.
 
 pub(in crate::terminal::view) mod adapter;
-pub(crate) mod query_routing;
 pub(in crate::terminal::view) mod sharer;
 #[cfg(test)]
 pub mod test_utils;

@@ -35,8 +35,7 @@ use super::active_notebook_data::{
 };
 use super::manager::NotebookManager;
 use super::{CloudNotebookModel, NotebookId, NotebookLocation};
-use crate::ai::blocklist::secret_redaction::find_secrets_in_text;
-use crate::ai::document::ai_document_model::AIDocumentId;
+use secret_redaction::find_secrets_in_text;
 use crate::appearance::Appearance;
 use crate::cloud_object::grab_edit_access_modal::{GrabEditAccessModal, GrabEditAccessModalEvent};
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent, UpdateSource};
@@ -247,7 +246,6 @@ pub enum NotebookEvent {
         source: WorkflowSource,
     },
     Pane(PaneEvent),
-    AttachPlanAsContext(AIDocumentId),
 }
 
 impl From<PaneEvent> for NotebookEvent {
@@ -275,7 +273,6 @@ pub enum NotebookAction {
     CopyLink(String),
     OpenLinkOnDesktop(Url),
     Export,
-    AttachPlanAsContext(AIDocumentId),
 }
 
 impl From<ContextMenuAction> for NotebookAction {
@@ -806,8 +803,6 @@ impl NotebookView {
                             CloudNotebookModel {
                                 title: notebook.model().title.clone(),
                                 data: content.to_string(),
-                                ai_document_id: notebook.model().ai_document_id,
-                                conversation_id: notebook.model().conversation_id.clone(),
                             },
                             CloudObjectEventEntrypoint::Unknown,
                             true,
@@ -983,13 +978,6 @@ impl NotebookView {
         });
         self.set_editor_interaction_state(InteractionState::Selectable, ctx);
         ctx.notify();
-    }
-
-    pub fn is_plan(&self, ctx: &AppContext) -> bool {
-        self.active_notebook_data
-            .as_ref(ctx)
-            .ai_document_id(ctx)
-            .is_some()
     }
 
     fn mode<C: ModelAsRef>(&self, ctx: &C) -> Mode {
@@ -1233,15 +1221,6 @@ impl NotebookView {
         // local edits.
         let content = self.content(ctx);
         let title = self.title.as_ref(ctx).buffer_text(ctx);
-        let active_notebook = self.active_notebook_data.as_ref(ctx).active_notebook();
-
-        let ai_document_id = match active_notebook {
-            ActiveNotebook::CommittedNotebook(id) => CloudModel::as_ref(ctx)
-                .get_notebook(&id)
-                .and_then(|n| n.model().ai_document_id),
-            ActiveNotebook::NewNotebook(notebook) => notebook.model().ai_document_id,
-            ActiveNotebook::None => None,
-        };
 
         let copy_client_id = ClientId::new();
         let copy_sync_id = SyncId::ClientId(copy_client_id);
@@ -1259,8 +1238,6 @@ impl NotebookView {
                 CloudNotebookModel {
                     title: title.clone(),
                     data: content,
-                    ai_document_id,
-                    conversation_id: None,
                 },
                 CloudObjectEventEntrypoint::Unknown,
                 true,
@@ -1313,15 +1290,6 @@ impl NotebookView {
             || active_notebook_data.trash_status(ctx) != TrashStatus::Active
         {
             return menu_items;
-        }
-
-        if let Some(ai_document_id) = self.active_notebook_data.as_ref(ctx).ai_document_id(ctx) {
-            menu_items.push(
-                MenuItemFields::new("Attach to active session")
-                    .with_on_select_action(NotebookAction::AttachPlanAsContext(ai_document_id))
-                    .with_icon(icons::Icon::Paperclip)
-                    .into_item(),
-            );
         }
 
         // Add "Copy Link" to menu
@@ -1646,8 +1614,6 @@ impl NotebookView {
                             CloudNotebookModel {
                                 title: title.to_string(),
                                 data: notebook.model().data.to_owned(),
-                                ai_document_id: notebook.model().ai_document_id,
-                                conversation_id: notebook.model().conversation_id.clone(),
                             },
                             CloudObjectEventEntrypoint::Unknown,
                             true,
@@ -2215,9 +2181,6 @@ impl TypedActionView for NotebookView {
                 // No-op when not on wasm
             }
             NotebookAction::Export => self.export(ctx),
-            NotebookAction::AttachPlanAsContext(id) => {
-                ctx.emit(NotebookEvent::AttachPlanAsContext(*id))
-            }
         };
     }
 }

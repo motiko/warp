@@ -6,8 +6,8 @@ use warpui::fonts::{Properties, Weight};
 use warpui::prelude::{ConstrainedBox, Container, CrossAxisAlignment, Empty, Flex, Text};
 use warpui::{AppContext, Element, SingletonEntity};
 
-use super::{AcceptSlashCommandOrSavedPrompt, InlineItem};
-use crate::ai::blocklist::agent_view::shortcuts::render_keystroke_with_color_overrides;
+use super::{AcceptSlashCommand, InlineItem};
+use crate::ui_components::keystroke::render_keystroke_with_color_overrides;
 use crate::search::item::SearchItemDetail;
 use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGISTRY;
 use crate::search::{ItemHighlightState, SearchItem};
@@ -32,7 +32,7 @@ fn inline_width_for_name_column(app: &AppContext) -> f32 {
 }
 
 impl SearchItem for InlineItem {
-    type Action = AcceptSlashCommandOrSavedPrompt;
+    type Action = AcceptSlashCommand;
 
     fn render_icon(
         &self,
@@ -82,11 +82,7 @@ impl SearchItem for InlineItem {
             );
         }
 
-        let keystroke = if highlight_state.is_selected()
-            && matches!(
-                &self.action,
-                AcceptSlashCommandOrSavedPrompt::SlashCommand { .. }
-            ) {
+        let keystroke = if highlight_state.is_selected() {
             keybinding_name_to_keystroke(&self.name, app)
         } else {
             None

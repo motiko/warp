@@ -1,10 +1,9 @@
-mod ai_queries;
 mod env_var_collections;
 mod history;
-pub mod projects;
 pub mod searcher;
+pub mod natural_language;
+mod natural_language_data_source;
 pub mod settings;
 pub mod view;
-mod warp_ai;
 mod workflows;
 mod zero_state;

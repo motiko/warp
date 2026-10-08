@@ -36,8 +36,7 @@ use warpui::{
 use super::aliases::WorkflowAliases;
 use super::command_parser::WorkflowCommandDisplayData;
 use super::{CloudWorkflowModel, WorkflowSource, WorkflowType, WorkflowViewMode};
-use crate::ai::AIRequestUsageModel;
-use crate::ai::blocklist::secret_redaction::find_secrets_in_text;
+use secret_redaction::find_secrets_in_text;
 use crate::appearance::Appearance;
 use crate::cloud_object::breadcrumbs::ContainingObject;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
@@ -71,12 +70,9 @@ use crate::server::cloud_objects::update_manager::{
     UpdateManagerEvent,
 };
 use crate::server::ids::{ClientId, ServerId, SyncId};
-use crate::server::server_api::ServerApiProvider;
-use crate::server::server_api::ai::AIClient;
 use crate::server::telemetry::{
     CloudObjectTelemetryMetadata, TelemetryCloudObjectType, TelemetryEvent,
 };
-use crate::settings::AISettings;
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
 };
@@ -130,7 +126,6 @@ const SCROLLBAR_WIDTH: ScrollbarWidth = ScrollbarWidth::Auto;
 const TITLE_PLACEHOLDER_TEXT: &str = "Add a title";
 const DESCRIPTION_PLACEHOLDER_TEXT: &str = "Add a description";
 const COMMAND_PLACEHOLDER_TEXT: &str = "echo \"Hello {{your_name}}\" # insert arguments with curly braces\n# enter a single-line command or an entire shell script";
-const AGENT_MODE_QUERY_PLACEHOLDER_TEXT: &str = "Enter your prompt here... (e.g., 'Create a function to sort an array of objects by date' or 'Help me debug this React component').";
 const DESCRIPTION_MARGIN_TOP: f32 = 10.;
 
 const CORE_HORIZONATAL_MARGIN: f32 = 24.;
@@ -160,9 +155,6 @@ const BUTTON_FONT_SIZE: f32 = 14.;
 const BUTTON_BORDER_RADIUS: f32 = 4.;
 const BUTTON_HEIGHT: f32 = 32.;
 
-const AI_ASSIST_BUTTON_SIZE: f32 = 92.;
-const AI_ASSIST_BUTTON_TEXT: &str = "Autofill";
-const AI_ASSIST_LOADING_TEXT: &str = "Loading";
 
 const ALIAS_HELP_TEXT: &str = "Aliases allow you to create short strings to execute workflows. Each alias can have different argument values and environment variables, and aliases are personal to you.";
 
@@ -174,12 +166,6 @@ const KEEP_EDITING_TEXT: &str = "Keep editing";
 const DISCARD_CHANGES_TEXT: &str = "Discard changes";
 const DIALOG_WIDTH: f32 = 460.;
 const MODAL_HORIZONTAL_MARGIN: f32 = 28.;
-
-pub(super) enum AiAssistState {
-    PreRequest,
-    RequestInFlight,
-    Generated,
-}
 
 /// A grouping of various error states the modal can be in. Any of these being
 /// `true` prevents the save button from being clickable.
@@ -217,7 +203,6 @@ pub enum WorkflowAction {
     ForceClose,
     Save,
     Cancel,
-    AiAssist,
     Duplicate,
     CopyLink(String),
     OpenLinkOnDesktop(Url),
@@ -262,8 +247,6 @@ struct UiStateHandles {
     restore_from_trash_button: MouseStateHandle,
     keep_editing_state: MouseStateHandle,
     discard_changes_state: MouseStateHandle,
-    ai_assist_state: MouseStateHandle,
-    ai_assist_tool_tip: MouseStateHandle,
     edit_mode_button_mouse_state: MouseStateHandle,
     copy_content_button_mouse_state: MouseStateHandle,
     execute_command_mouse_state: MouseStateHandle,
@@ -297,9 +280,7 @@ pub struct WorkflowView {
     /// to append a number to the default argument name (argument_1, argument_2,
     /// etc.).
     default_argument_id: usize,
-    pub(super) ai_metadata_assist_state: AiAssistState,
     revision_ts: Option<Revision>,
-    pub(super) ai_client: Arc<dyn AIClient>,
     owner: Option<Owner>,
     initial_folder_id: Option<SyncId>,
 
@@ -309,17 +290,6 @@ pub struct WorkflowView {
     show_enum_creation_dialog: bool,
     enum_creation_dialog: ViewHandle<EnumCreationDialog>,
     all_workflow_enums: HashMap<SyncId, WorkflowEnumData>,
-
-    /// `true` if this workflow view is for viewing/editing an AI workflow.
-    ///
-    /// This is currently internal-only, gated with the `am_workflows` feature flag.
-    is_for_agent_mode: bool,
-}
-
-impl WorkflowView {
-    pub fn is_agent_mode_workflow(&self) -> bool {
-        self.is_for_agent_mode
-    }
 }
 
 impl WorkflowView {
@@ -394,8 +364,6 @@ impl WorkflowView {
             me.handle_content_editor_event(event, ctx);
         });
 
-        let ai_client = ServerApiProvider::as_ref(ctx).get_ai_client();
-
         let enum_creation_dialog = ctx.add_typed_action_view(EnumCreationDialog::new);
         ctx.subscribe_to_view(&enum_creation_dialog, |me, _, event, ctx| {
             me.handle_enum_creation_dialog_event(event, ctx);
@@ -440,31 +408,26 @@ impl WorkflowView {
             ui_state_handles: Default::default(),
             show_unsaved_changes: None,
             default_argument_id: 0,
-            ai_metadata_assist_state: AiAssistState::PreRequest,
             owner: None,
             initial_folder_id: None,
             revision_ts: None,
             command_display_data: WorkflowCommandDisplayData::new_empty(),
-            ai_client,
             pending_argument_editor_row: None,
             show_enum_creation_dialog: false,
             enum_creation_dialog,
             all_workflow_enums: Default::default(),
-            is_for_agent_mode: false,
         };
 
         me.subscribe_to_model_updates(ctx);
         me
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn open_new_workflow(
         &mut self,
         title: Option<String>,
         content: Option<String>,
         owner: Owner,
         initial_folder_id: Option<SyncId>,
-        is_for_agent_mode: bool,
         sync_id: SyncId,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -472,13 +435,6 @@ impl WorkflowView {
         self.set_workflow_id(sync_id, ctx);
         self.workflow_view_mode = WorkflowViewMode::Create;
         self.command_display_data = WorkflowCommandDisplayData::new_empty();
-        self.is_for_agent_mode = is_for_agent_mode;
-        if is_for_agent_mode {
-            self.content_editor.update(ctx, |editor, ctx| {
-                editor.set_placeholder_text(AGENT_MODE_QUERY_PLACEHOLDER_TEXT, ctx);
-                editor.set_font_family(Appearance::as_ref(ctx).ui_font_family(), ctx);
-            });
-        }
 
         if let Some(title_string) = title {
             self.name_editor.update(ctx, |editor, ctx| {
@@ -495,12 +451,6 @@ impl WorkflowView {
         self.owner = Some(owner);
         self.all_workflow_enums =
             workflow_arg_type_helpers::load_workflow_enums_with_owner(owner, ctx);
-
-        if is_for_agent_mode {
-            self.content_editor.update(ctx, |editor, ctx| {
-                editor.set_placeholder_text(AGENT_MODE_QUERY_PLACEHOLDER_TEXT, ctx);
-            });
-        }
 
         self.update_editors_interactivity(ctx);
     }
@@ -675,13 +625,6 @@ impl WorkflowView {
         ctx: &mut ViewContext<Self>,
     ) {
         self.set_workflow_id(workflow.id, ctx);
-        self.is_for_agent_mode = workflow.model().data.is_agent_mode_workflow();
-        if self.is_for_agent_mode {
-            self.content_editor.update(ctx, |editor, ctx| {
-                editor.set_placeholder_text(AGENT_MODE_QUERY_PLACEHOLDER_TEXT, ctx);
-                editor.set_font_family(Appearance::as_ref(ctx).ui_font_family(), ctx);
-            });
-        }
 
         self.workflow_view_mode = match mode {
             // Force view mode if the user is not allowed to edit the workflow.
@@ -768,33 +711,27 @@ impl WorkflowView {
         self.update_arguments_rows(ctx);
         self.load_argument_data(workflow_data, ctx);
 
-        if self.is_for_agent_mode {
-            self.content_editor.update(ctx, |editor, ctx| {
-                editor.set_placeholder_text(AGENT_MODE_QUERY_PLACEHOLDER_TEXT, ctx);
+        self.content_editor_highlight_model
+            .update(ctx, |model, ctx| {
+                model.highlight_syntax(ctx);
             });
-        } else {
-            self.content_editor_highlight_model
-                .update(ctx, |model, ctx| {
-                    model.highlight_syntax(ctx);
-                });
-            self.view_only_content_editor_highlight_model
-                .update(ctx, |model, ctx| {
-                    model.highlight_syntax(ctx);
-                });
+        self.view_only_content_editor_highlight_model
+            .update(ctx, |model, ctx| {
+                model.highlight_syntax(ctx);
+            });
 
-            if let Workflow::Command {
-                environment_variables,
-                ..
-            } = workflow_data
-            {
-                self.env_vars_state = EnvironmentVariablesState {
-                    default_env_vars: *environment_variables,
-                    is_dirty: false,
-                };
-                self.env_vars_selector.update(ctx, |selector, ctx| {
-                    selector.set_selected_env_vars(*environment_variables, ctx)
-                });
-            }
+        if let Workflow::Command {
+            environment_variables,
+            ..
+        } = workflow_data
+        {
+            self.env_vars_state = EnvironmentVariablesState {
+                default_env_vars: *environment_variables,
+                is_dirty: false,
+            };
+            self.env_vars_selector.update(ctx, |selector, ctx| {
+                selector.set_selected_env_vars(*environment_variables, ctx)
+            });
         }
         self.update_breadcrumb(ctx);
         self.update_editors_interactivity(ctx);
@@ -956,26 +893,20 @@ impl WorkflowView {
 
                 self.errors.content_empty_error = current_content.trim().is_empty();
 
-                self.arguments_state = if self.is_for_agent_mode {
-                    ArgumentsState::for_saved_prompt(&self.arguments_state, current_content.clone())
-                } else {
-                    ArgumentsState::for_command_workflow(
-                        &self.arguments_state,
-                        current_content.clone(),
-                    )
-                };
+                self.arguments_state = ArgumentsState::for_command_workflow(
+                    &self.arguments_state,
+                    current_content.clone(),
+                );
                 self.update_arguments_rows(ctx);
 
                 self.clear_content_formatting(current_content.chars().count(), ctx);
                 self.apply_error_underlining_to_content(ctx);
                 self.apply_argument_highlighting_to_content(ctx);
 
-                if !self.is_for_agent_mode {
-                    self.content_editor_highlight_model
-                        .update(ctx, |model, ctx| {
-                            model.highlight_syntax(ctx);
-                        });
-                }
+                self.content_editor_highlight_model
+                    .update(ctx, |model, ctx| {
+                        model.highlight_syntax(ctx);
+                    });
 
                 self.errors.invalid_argument_error = !self
                     .arguments_state
@@ -1481,26 +1412,17 @@ impl WorkflowView {
             title_in_editor
         };
 
-        let mut workflow = if self.is_for_agent_mode {
-            Workflow::AgentMode {
-                name: workflow_name,
-                query: content,
-                arguments: self.arguments_with_metadata(ctx),
-                description: None,
-            }
-        } else {
-            Workflow::Command {
-                name: workflow_name,
-                command: content,
-                description: None,
-                arguments: self.arguments_with_metadata(ctx),
-                tags: vec![],
-                source_url: None,
-                author: None,
-                author_url: None,
-                shells: vec![],
-                environment_variables: self.env_vars_state.default_env_vars,
-            }
+        let mut workflow = Workflow::Command {
+            name: workflow_name,
+            command: content,
+            description: None,
+            arguments: self.arguments_with_metadata(ctx),
+            tags: vec![],
+            source_url: None,
+            author: None,
+            author_url: None,
+            shells: vec![],
+            environment_variables: self.env_vars_state.default_env_vars,
         };
 
         let workflow_description = self.description_editor.as_ref(ctx).buffer_text(ctx);
@@ -1679,11 +1601,7 @@ impl WorkflowView {
         let window_id = ctx.window_id();
         crate::workspace::ToastStack::handle(ctx).update(ctx, |stack, ctx| {
             stack.add_ephemeral_toast(
-                DismissibleToast::success(if self.is_for_agent_mode {
-                    "Prompt copied.".to_string()
-                } else {
-                    "Command copied.".to_string()
-                }),
+                DismissibleToast::success("Command copied.".to_string()),
                 window_id,
                 ctx,
             );
@@ -1693,13 +1611,6 @@ impl WorkflowView {
 
     fn is_editable(&self) -> bool {
         self.workflow_view_mode.is_editable()
-    }
-
-    fn is_ai_assist_button_disabled(&self, app: &AppContext) -> bool {
-        // Autofill button should be disabled when there is no content or when there are secrets in the workflow.
-        self.content_editor.as_ref(app).is_empty(app)
-            || self.show_enum_creation_dialog
-            || self.workflow_contains_secrets(app)
     }
 
     fn clear_content_formatting(&mut self, num_chars_content: usize, ctx: &mut ViewContext<Self>) {
@@ -1978,22 +1889,10 @@ impl WorkflowView {
     fn render_workflow_details(&self, appearance: &Appearance) -> Box<dyn Element> {
         let workflow_icon = Container::new(
             ConstrainedBox::new(
-                if self.is_for_agent_mode {
-                    Icon::Prompt
-                } else {
-                    Icon::Workflow
-                }
-                .to_warpui_icon(
-                    warp_drive_icon_color(
-                        appearance,
-                        if self.is_for_agent_mode {
-                            DriveObjectType::AgentModeWorkflow
-                        } else {
-                            DriveObjectType::Workflow
-                        },
+                Icon::Workflow
+                    .to_warpui_icon(
+                        warp_drive_icon_color(appearance, DriveObjectType::Workflow).into(),
                     )
-                    .into(),
-                )
                 .finish(),
             )
             .with_width(WORKFLOW_ICON_DIMENSIONS)
@@ -2348,58 +2247,6 @@ impl WorkflowView {
 
         let mut button_row = Flex::row();
 
-        let label_and_icon = match self.ai_metadata_assist_state {
-            AiAssistState::PreRequest => Some((AI_ASSIST_BUTTON_TEXT, Icon::AiAssistant)),
-            AiAssistState::RequestInFlight => Some((AI_ASSIST_LOADING_TEXT, Icon::Refresh)),
-            AiAssistState::Generated => None,
-        };
-
-        if let Some((label, icon)) = label_and_icon {
-            // AI-generated workflow metadata is only supported for Command workflows currently.
-            if AISettings::as_ref(app).is_any_ai_enabled(app)
-                && self.is_editable()
-                && !self.is_for_agent_mode
-            {
-                let mut button = self
-                    .build_footer_button(
-                        ButtonVariant::Secondary,
-                        label.to_string(),
-                        Some((icon, TextAndIconAlignment::TextFirst)),
-                        self.ui_state_handles.ai_assist_state.clone(),
-                        appearance,
-                    )
-                    .with_style(UiComponentStyles {
-                        width: Some(AI_ASSIST_BUTTON_SIZE),
-                        ..Default::default()
-                    });
-
-                if self.is_ai_assist_button_disabled(app) {
-                    button = button.disabled();
-                }
-
-                let rendered_button = button
-                    .build()
-                    .with_cursor(Cursor::PointingHand)
-                    .on_click(move |ctx, _, _| ctx.dispatch_typed_action(WorkflowAction::AiAssist))
-                    .finish();
-
-                let button_with_tool_tip = appearance.ui_builder().tool_tip_on_element(
-                    "Generate a title, descriptions, or parameters with Warp AI".to_string(),
-                    self.ui_state_handles.ai_assist_tool_tip.clone(),
-                    rendered_button,
-                    ParentAnchor::TopMiddle,
-                    ChildAnchor::BottomMiddle,
-                    vec2f(0., 5.),
-                );
-
-                button_row.add_child(
-                    Container::new(button_with_tool_tip)
-                        .with_margin_right(8.)
-                        .finish(),
-                )
-            }
-        }
-
         if self.is_editable() {
             // If we are in a context where we can't run workflows and are in the edit mode, then
             // show the cancel button
@@ -2526,144 +2373,7 @@ impl WorkflowView {
         })
     }
 
-    fn issue_request(&mut self, ctx: &mut ViewContext<Self>) {
-        let ai_client = self.ai_client.clone();
-        let command = self.content_editor.as_ref(ctx).buffer_text(ctx);
-        let raw_request = command.trim().to_string();
-
-        ctx.spawn(
-            async move { ai_client.generate_metadata_for_command(raw_request).await },
-            move |pane, response, ctx| {
-                match response {
-                    Ok(metadata) => {
-                        pane.ai_metadata_assist_state = AiAssistState::Generated;
-                        pane.enable_editors(ctx);
-
-                        let arguments = metadata
-                            .arguments
-                            .into_iter()
-                            .map(|parameter| Argument {
-                                name: parameter.name,
-                                description: Some(parameter.description),
-                                default_value: Some(parameter.default_value),
-                                arg_type: Default::default(),
-                            })
-                            .collect_vec();
-
-                        let workflow = Workflow::Command {
-                            name: metadata.title,
-                            description: Some(metadata.description),
-                            command: metadata.command,
-                            arguments,
-                            tags: vec![],
-                            source_url: None,
-                            author: None,
-                            author_url: None,
-                            shells: vec![],
-                            environment_variables: None,
-                        };
-
-                        send_telemetry_from_ctx!(TelemetryEvent::AutoGenerateMetadataSuccess, ctx);
-
-                        pane.populate_missing_field_with_suggestion(workflow, ctx);
-                        ctx.notify();
-                    }
-                    Err(err) => {
-                        pane.display_error_toast(err.user_facing_message(), ctx);
-
-                        send_telemetry_from_ctx!(
-                            TelemetryEvent::AutoGenerateMetadataError {
-                                error_payload: serde_json::json!(err)
-                            },
-                            ctx
-                        );
-
-                        pane.ai_metadata_assist_state = AiAssistState::PreRequest;
-                        pane.enable_editors(ctx);
-                        ctx.notify();
-                    }
-                }
-                AIRequestUsageModel::handle(ctx).update(ctx, |request_usage_model, ctx| {
-                    request_usage_model.refresh_request_usage_async(ctx);
-                });
-            },
-        );
-
-        self.ai_metadata_assist_state = AiAssistState::RequestInFlight;
-        self.disable_editors(ctx);
-        ctx.notify();
-    }
-
     // Populate only the missing field in the workflow editor with the generated suggestion from AI.
-    fn populate_missing_field_with_suggestion(
-        &mut self,
-        workflow: Workflow,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.name_editor.update(ctx, |editor, ctx| {
-            if editor.is_empty(ctx) {
-                editor.set_buffer_text(workflow.name(), ctx);
-            }
-        });
-
-        self.description_editor.update(ctx, |editor, ctx| {
-            if editor.is_empty(ctx) {
-                editor.set_buffer_text(
-                    workflow
-                        .description()
-                        .map(String::as_str)
-                        .unwrap_or_default(),
-                    ctx,
-                );
-            }
-        });
-
-        let content_parsed = !self.arguments_state.arguments.is_empty();
-        if !content_parsed {
-            self.content_editor.update(ctx, |editor, ctx| {
-                editor.set_buffer_text(workflow.content(), ctx);
-            });
-
-            // note: normally, we wouldn't have to do this, since editing the command
-            // editor's text will trigger the event that does this automatically.
-            // however, that happens in a callback, yet we need to know what the args
-            // are right away to populate the description/default value editors.
-            self.arguments_state = ArgumentsState::for_command_workflow(
-                &self.arguments_state,
-                workflow.content().to_string(),
-            );
-            self.update_arguments_rows(ctx);
-
-            workflow
-                .arguments()
-                .iter()
-                .enumerate()
-                .for_each(|(index, argument)| {
-                    // Since suggestion generated by AI is non-deterministic, we should make sure to handle each
-                    // operation safely.
-                    if index >= self.arguments_rows.len() {
-                        return;
-                    }
-
-                    if let Some(description) = &argument.description {
-                        self.arguments_rows[index]
-                            .description_editor
-                            .update(ctx, |editor, ctx| {
-                                editor.set_buffer_text(description.as_str(), ctx);
-                            });
-                    }
-
-                    if let Some(default_value) = &argument.default_value {
-                        self.arguments_rows[index].default_value_editor.update(
-                            ctx,
-                            |editor, ctx| {
-                                editor.set_buffer_text(default_value.as_str(), ctx);
-                            },
-                        );
-                    }
-                });
-        }
-    }
 
     pub(super) fn render_trash_banner(&self, app: &AppContext) -> Option<Box<dyn Element>> {
         let cloud_model = CloudModel::as_ref(app);
@@ -2800,7 +2510,7 @@ impl View for WorkflowView {
         let mut main_section = Flex::column();
         main_section.add_child(self.render_workflow_details(appearance));
 
-        if FeatureFlag::WorkflowAliases.is_enabled() && !self.is_for_agent_mode {
+        if FeatureFlag::WorkflowAliases.is_enabled() {
             main_section.add_child(self.render_alias_section(appearance));
         }
 
@@ -2995,7 +2705,6 @@ impl TypedActionView for WorkflowView {
             }
             WorkflowAction::RunWorkflow => self.copy_to_command_line(ctx),
             WorkflowAction::CopyContent => self.copy_content(ctx),
-            WorkflowAction::AiAssist => self.issue_request(ctx),
             WorkflowAction::Duplicate => self.duplicate_object(ctx),
             WorkflowAction::CopyLink(link) => {
                 send_telemetry_from_ctx!(

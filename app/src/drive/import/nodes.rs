@@ -557,9 +557,7 @@ impl FileNode {
                 .to_warpui_icon(Fill::Solid(override_color.unwrap_or(
                     warp_drive_icon_color(
                         appearance,
-                        DriveObjectType::Notebook {
-                            is_ai_document: false,
-                        },
+                        DriveObjectType::Notebook,
                     ),
                 )))
                 .finish(),

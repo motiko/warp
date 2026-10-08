@@ -110,11 +110,7 @@ impl SearchItem for WorkflowSearchItem {
     ) -> Box<dyn Element> {
         Container::new(
             ConstrainedBox::new(
-                if self.workflow_data().is_agent_mode_workflow() {
-                    Icon::Prompt
-                } else {
-                    Icon::Workflow
-                }
+                Icon::Workflow
                 .to_warpui_icon(highlight_state.icon_fill(appearance))
                 .finish(),
             )

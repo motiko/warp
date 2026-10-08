@@ -67,7 +67,6 @@ use crate::suggestions::ignored_suggestions_model::IgnoredSuggestionsModel;
 use crate::system::SystemStats;
 use crate::tab_configs::tab_config::{TabConfigPaneNode, TabConfigPaneType};
 use crate::terminal::history::History;
-use crate::terminal::keys::TerminalKeybindings;
 use crate::terminal::local_tty::spawner::PtySpawner;
 use crate::terminal::shared_session::{
     SharedSessionScrollbackType, SharedSessionSource, SharedSessionStatus,
@@ -136,7 +135,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     app.add_singleton_model(|_| WorkspaceToastStack);
     app.add_singleton_model(|_| ObjectActions::new(Vec::new()));
     app.add_singleton_model(NotebookKeybindings::new);
-    app.add_singleton_model(TerminalKeybindings::new);
     app.add_singleton_model(NotebookManager::mock);
     app.add_singleton_model(|ctx| {
         CloudPreferencesSyncer::new(
@@ -1076,7 +1074,6 @@ fn mock_workspace_with_shared_session(app: &mut App) -> ViewHandle<Workspace> {
             SharedSessionScrollbackType::All,
             None,
             SharedSessionSource::user(None),
-            false,
             ctx,
         );
     });
@@ -1761,7 +1758,6 @@ fn setup_session_sharing_test(workspace: &ViewHandle<Workspace>, app: &mut App) 
                         SharedSessionScrollbackType::None,
                         None,
                         SharedSessionSource::user(None),
-                        false,
                         ctx,
                     );
                 });
@@ -2492,7 +2488,6 @@ fn test_stop_sharing_all_sessions_in_tab() {
                                 SharedSessionScrollbackType::None,
                                 None,
                                 SharedSessionSource::user(None),
-                                false,
                                 ctx,
                             );
                         });
@@ -2510,7 +2505,6 @@ fn test_stop_sharing_all_sessions_in_tab() {
                                 SharedSessionScrollbackType::None,
                                 None,
                                 SharedSessionSource::user(None),
-                                false,
                                 ctx,
                             );
                         });
@@ -2931,7 +2925,7 @@ fn add_get_started_tab(workspace: &mut Workspace, ctx: &mut ViewContext<Workspac
             custom_vertical_tabs_title: None,
             contents: LeafContents::GetStarted,
         }))),
-        Arc::new(HashMap::<PaneUuid, Vec<SerializedBlockListItem>>::new()),
+        Arc::new(HashMap::<PaneUuid, Vec<SerializedBlock>>::new()),
         None,
         ctx,
     );
