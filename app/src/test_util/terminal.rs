@@ -31,7 +31,6 @@ use crate::system::{SystemInfo, SystemStats};
 use crate::terminal::alt_screen_reporting::AltScreenReporting;
 use crate::terminal::model::block::SerializedBlock;
 use crate::terminal::resizable_data::ResizableData;
-use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::terminal::{History, TerminalView};
 use crate::undo_close::UndoCloseStack;
 use crate::warp_managed_paths_watcher::WarpManagedPathsWatcher;
@@ -47,9 +46,8 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
     initialize_history_persistence_for_tests(app);
 
     app.add_singleton_model(|_| ServerApiProvider::new_for_test());
-    // Register a disabled `IapManager` (no IAP state) so code paths that read
-    // the singleton (e.g. the shared-session viewer network) don't panic in
-    // tests. With `None` state it is an inert no-op.
+    // Register a disabled `IapManager` (no IAP state) so code paths that read the singleton
+    // don't panic in tests. With `None` state it is an inert no-op.
     app.add_singleton_model(|ctx| {
         IapManager::new(
             None,
@@ -80,7 +78,6 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
     app.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
     app.add_singleton_model(AuthManager::new_for_test);
-    app.add_singleton_model(SessionPermissionsManager::new);
     app.add_singleton_model(DirectoryWatcher::new);
     app.add_singleton_model(|_| DetectedRepositories::default());
     #[cfg(feature = "local_fs")]

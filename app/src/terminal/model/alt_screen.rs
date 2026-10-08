@@ -21,7 +21,6 @@ use super::index::Direction;
 use super::kitty::{KittyAction, KittyResponse};
 use super::secrets::RespectObfuscatedSecrets;
 use super::selection::{ExpandedSelectionRange, ScrollDelta};
-use crate::terminal::event::Event as TerminalEvent;
 use crate::terminal::event_listener::ChannelEventListener;
 use crate::terminal::grid_renderer::ColorSampler;
 use crate::terminal::model::ansi;
@@ -62,8 +61,6 @@ pub struct AltScreen {
     /// This has interior mutability because it's updated at render time, as we render each cell in
     /// the output grid.
     pub bg_color_sampler: Arc<Mutex<ColorSampler>>,
-
-    event_proxy: ChannelEventListener,
 }
 
 impl AltScreen {
@@ -76,7 +73,7 @@ impl AltScreen {
         let grid_handler = GridHandler::new(
             size_info,
             max_scroll_limit,
-            event_proxy.clone(),
+            event_proxy,
             true,
             obfuscate_secrets,
             PerformResetGridChecks::default(),
@@ -88,7 +85,6 @@ impl AltScreen {
             selection: None,
             smart_select_override: None,
             bg_color_sampler: Arc::new(Mutex::new(ColorSampler::new())),
-            event_proxy,
         }
     }
 
@@ -238,14 +234,10 @@ impl AltScreen {
 
     fn set_selection(&mut self, value: Selection) {
         self.selection = Some(value);
-        self.event_proxy
-            .send_app_event(TerminalEvent::TextSelectionChanged);
     }
 
     pub fn clear_selection(&mut self) {
         self.selection = None;
-        self.event_proxy
-            .send_app_event(TerminalEvent::TextSelectionChanged);
     }
 
     pub fn selection_to_string(&self, semantic_selection: &SemanticSelection) -> Option<String> {

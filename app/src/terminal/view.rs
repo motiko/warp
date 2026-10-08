@@ -13,7 +13,6 @@ mod link_detection;
 mod open_in_warp;
 mod pane_impl;
 pub mod rich_content;
-mod shared_session;
 mod shell_terminated_banner;
 pub mod ssh_file_upload;
 pub(crate) mod ssh_remote_server_choice_view;
@@ -72,14 +71,7 @@ use repo_metadata::repositories::DetectedRepositories;
 use repo_metadata::repositories::RepoDetectionSource;
 use serde::Serialize;
 use serde_json::json;
-use session_sharing_protocol::common::{
-    ParticipantId, Role, RoleRequestId, RoleRequestResponse, WindowSize as SessionSharingWindowSize,
-};
-use session_sharing_protocol::sharer::{
-    RoleUpdateReason, SessionEndedReason, SessionRetentionReason,
-};
 use settings::{Setting, ToggleableSetting};
-use shared_session::{SharedSessionAdapter, Viewer};
 use ssh_file_upload::{FileUpload, FileUploadEvent};
 use uuid::Uuid;
 use vec1::vec1;
@@ -101,13 +93,13 @@ use warpui::r#async::executor::Background;
 use warpui::r#async::{SpawnedFutureHandle, Timer};
 use warpui::clipboard::ClipboardContent;
 use warpui::elements::new_scrollable::{
-    AxisConfiguration, ClippedAxisConfiguration, DualAxisConfig, NewScrollableElement,
+    NewScrollableElement,
     ScrollableAppearance, SingleAxisConfig,
 };
 use warpui::elements::shimmering_text::ShimmeringTextStateHandle;
 use warpui::elements::{
     Align, ChildAnchor, ChildView, Clipped, ClippedScrollStateHandle, ConstrainedBox, Container,
-    CornerRadius, CrossAxisAlignment, DispatchEventResult, DropTarget, DropTargetData, Empty,
+    CornerRadius, DispatchEventResult, DropTarget, DropTargetData, Empty,
     EventHandler, Fill, Flex, Hoverable, Icon, LiveElement, MouseStateHandle, NewScrollable,
     OffsetPositioning, ParentAnchor, ParentElement, ParentOffsetBounds, PositionedElementAnchor,
     PositionedElementOffsetBounds, Radius, Rect, SavePosition, ScrollStateHandle, Scrollable,
@@ -151,7 +143,7 @@ use super::{GridType, should_right_click_paste};
 use crate::antivirus::AntivirusInfo;
 use crate::appearance::{Appearance, AppearanceEvent};
 use crate::auth::auth_state::AuthState;
-use crate::auth::{AuthStateProvider, UserUid};
+use crate::auth::AuthStateProvider;
 use crate::autoupdate::{self, AutoupdateStage, get_update_state};
 use crate::banner::{
     Banner, BannerAction, BannerEvent, BannerState, BannerTextButton, BannerTextContent,
@@ -170,7 +162,7 @@ use crate::context_chips::prompt::{Prompt, PromptSelection};
 use crate::context_chips::prompt_type::PromptType;
 use crate::drive::CloudObjectTypeAndId;
 use crate::drive::settings::WarpDriveSettings;
-use crate::editor::{CrdtOperation, EditorAction};
+use crate::editor::EditorAction;
 use crate::env_vars::env_var_collection_block::{
     EnvVarCollectionBlock, EnvVarCollectionBlockEvent,
 };
@@ -251,7 +243,7 @@ use crate::terminal::local_tty::shell::ShellStarter;
 use crate::terminal::local_tty::windows::get_user_and_system_env_variable;
 use crate::terminal::model::ansi::{ClearMode, Handler};
 use crate::terminal::model::block::{
-    Block, BlockId, BlockMetadata, LONG_RUNNING_BOTTOM_PADDING_LINES,
+    Block, BlockMetadata, LONG_RUNNING_BOTTOM_PADDING_LINES,
 };
 use crate::terminal::model::blocks::{BlockList, BlockListPoint, Gap};
 use crate::terminal::model::escape_sequences::{
@@ -277,14 +269,6 @@ use crate::terminal::session_settings::{
     SessionSettings, SessionSettingsChangedEvent,
 };
 use crate::terminal::settings::{TerminalSettings, TerminalSettingsChangedEvent};
-use crate::terminal::shared_session::manager::Manager;
-use crate::terminal::shared_session::role_change_modal::{
-    RoleChangeCloseSource, RoleChangeOpenSource,
-};
-use crate::terminal::shared_session::{
-    SharedSessionActionSource, SharedSessionScrollbackType, SharedSessionSource,
-    SharedSessionStatus,
-};
 use crate::terminal::view::inline_banner::{
     AliasExpansionBannerState, NotificationsDiscoveryBannerState, NotificationsErrorBannerState,
     VimModeBannerState,
@@ -852,25 +836,6 @@ impl SizeUpdateBuilder {
         }
     }
 
-    fn for_shared_session_update(last_size: SizeInfo, num_rows: usize, num_cols: usize) -> Self {
-        // Shared session updates don't change the actual pane / content sizes.
-        Self {
-            update_reason: SizeUpdateReason::SharerSizeChanged { num_rows, num_cols },
-            last_size,
-            new_pane_size_px: last_size.pane_size_px(),
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn for_viewer_size_report(last_size: SizeInfo, num_rows: usize, num_cols: usize) -> Self {
-        // Viewer size reports don't change the sharer's actual pane size.
-        Self {
-            update_reason: SizeUpdateReason::ViewerSizeReported { num_rows, num_cols },
-            last_size,
-            new_pane_size_px: last_size.pane_size_px(),
-        }
-    }
-
     fn after_layout(last_size: SizeInfo, new_pane_size_px: Vector2F) -> Self {
         Self {
             update_reason: SizeUpdateReason::AfterLayout,
@@ -894,56 +859,6 @@ impl SizeUpdateBuilder {
             appearance.line_height_ratio(),
             ctx,
         );
-
-        // Capture the pane-computed natural size before shared session adjustments.
-        let natural_rows = new_size.rows;
-        let natural_cols = new_size.columns;
-
-        let new_size = match self.update_reason {
-            SizeUpdateReason::SharerSizeChanged { num_rows, num_cols } => {
-                // For a shared session viewer, we want to use the larger
-                // of our own size and the sharer's size. So we adjust
-                // the number of rows and columns to be the greater
-                // of our own and the sharer's.
-                let rows = num_rows.max(new_size.rows);
-                let cols = num_cols.max(new_size.columns);
-                new_size.with_rows_and_columns(rows, cols)
-            }
-            SizeUpdateReason::ViewerSizeReported { num_rows, num_cols } => {
-                // Use the viewer's reported size directly so the PTY
-                // matches the viewer's viewport (floored at 1).
-                new_size.with_rows_and_columns(num_rows.max(1), num_cols.max(1))
-            }
-            _ => {
-                // For a shared session viewer, we want to use the larger
-                // of our own size and the sharer's size.
-                // However, if the viewer is actively reporting its size to the sharer
-                // (viewer-driven sizing), skip the MAX — the PTY is already at our size.
-                if let Some(Viewer {
-                    sharer_size,
-                    last_reported_natural_size,
-                    ..
-                }) = view.shared_session_viewer()
-                {
-                    if last_reported_natural_size.is_some() {
-                        // Viewer-driven sizing is active; use our own natural size.
-                        new_size
-                    } else if let Some(size) = sharer_size {
-                        let rows = size.num_rows.max(new_size.rows);
-                        let cols = size.num_cols.max(new_size.columns);
-                        new_size.with_rows_and_columns(rows, cols)
-                    } else {
-                        new_size
-                    }
-                } else if let Some((viewer_rows, viewer_cols)) = view.active_viewer_driven_size {
-                    // Sharer honoring a viewer's reported size: use the viewer's
-                    // dimensions so AfterLayout doesn't override back to the sharer's natural size.
-                    new_size.with_rows_and_columns(viewer_rows.max(1), viewer_cols.max(1))
-                } else {
-                    new_size
-                }
-            }
-        };
 
         // Adjust the gap size to maintain the model invariant that the height of the
         // gap + all block_heights after the gap equals the height of the current
@@ -1005,8 +920,6 @@ impl SizeUpdateBuilder {
             last_size: self.last_size,
             new_size,
             new_gap_height,
-            natural_rows,
-            natural_cols,
         }
     }
 }
@@ -1043,9 +956,6 @@ pub enum ContextMenuAction {
     CopyBlockCommands,
     CopyBlockOutputs,
     CopyBlockFilteredOutputs,
-    OpenShareBlockModal {
-        block_index: BlockIndex,
-    },
     FindWithinBlock,
     ToggleBookmark,
     ScrollToBottomOfBlock,
@@ -1057,8 +967,6 @@ pub enum ContextMenuAction {
     CopyRprompt,
     EditPrompt,
     OpenWorkflowModal,
-    OpenShareSessionModal,
-    StopSharing,
 }
 
 #[derive(Clone)]
@@ -1084,9 +992,6 @@ impl fmt::Debug for ContextMenuAction {
             CopyBlocks => f.write_str("CopyBlocks"),
             CopyBlockCommands => f.write_str("CopyBlockCommands"),
             CopyBlockOutputs => f.write_str("CopyBlockOutputs"),
-            OpenShareBlockModal { block_index } => {
-                write!(f, "OpenShareModal {{ block_index: {block_index} }}")
-            }
             FindWithinBlock => f.write_str("FindWithinBlock"),
             ScrollToBottomOfBlock => f.write_str("ScrollToBottomOfBlock"),
             ScrollToTopOfBlock => f.write_str("ScrollToTopOfBlock"),
@@ -1099,9 +1004,7 @@ impl fmt::Debug for ContextMenuAction {
             CopyUrl { .. } => f.write_str("CopyUrl"),
             EditPrompt => f.write_str("EditPrompt"),
             OpenWorkflowModal => f.write_str("OpenWorkflowModal"),
-            OpenShareSessionModal => f.write_str("OpenShareSessionModal"),
             CopyBlockFilteredOutputs => f.write_str("CopyBlockFilteredOutput"),
-            StopSharing => f.write_str("StopSharing"),
         }
     }
 }
@@ -1224,7 +1127,6 @@ pub enum Event {
     Escape,
     Exited,
     BlockListCleared,
-    ShareModalOpened(BlockIndex),
     SendNotification(BlockNotification),
     BlockCompleted {
         block: Arc<SerializedBlock>,
@@ -1235,10 +1137,6 @@ pub enum Event {
     /// Event propagates terminal inputs up to the workspace,
     /// to be processed on the way back down through the view hierarchy.
     SyncInput(SyncEvent),
-    /// A shared-session viewer sent input into this (sharer-side) session: raw PTY bytes,
-    /// a command execution, or an edit to the shared input buffer. Distinct from sharer-local
-    /// input, which cannot occur for a headless cloud agent.
-    SharedSessionViewerInput,
     /// Event used to propagate a state change for one of the terminal views
     /// inside this pane group.
     TerminalViewStateChanged,
@@ -1282,98 +1180,9 @@ pub enum Event {
     },
     OpenCodeReviewPane(CodeReviewPanelArg),
     ToggleCodeReviewPane(CodeReviewPanelArg),
-    StartSharingCurrentSession {
-        scrollback_type: SharedSessionScrollbackType,
-        source: SharedSessionSource,
-    },
-    EstablishedSharedSession {
-        session_id: session_sharing_protocol::common::SessionId,
-    },
-    FailedToShareSession {
-        reason: String,
-        cause: Option<Arc<anyhow::Error>>,
-    },
-    RejoinCurrentSession,
-    StopSharingCurrentSession {
-        reason: SessionEndedReason,
-    },
-    ExtendSessionRetention {
-        reason: SessionRetentionReason,
-    },
     CloseRequested,
-    OpenShareSessionModal {
-        open_source: SharedSessionActionSource,
-    },
     /// Used to focus and bring this session to the foreground.
     FocusSession,
-    SelectedBlocksChanged,
-    SelectedTextChanged,
-    UpdateSessionLinkPermissions {
-        role: Option<Role>,
-    },
-    UpdateSessionTeamPermissions {
-        role: Option<Role>,
-        team_uid: String,
-    },
-    /// Emitted when a shared session sharer updates a viewer's role and
-    /// needs to notify the server of a role change.
-    UpdateRole {
-        participant_id: ParticipantId,
-        role: Role,
-    },
-    UpdateUserRole {
-        user_uid: UserUid,
-        role: Role,
-    },
-    UpdatePendingUserRole {
-        email: String,
-        role: Role,
-    },
-    AddGuests {
-        emails: Vec<String>,
-        role: Role,
-    },
-    RemoveGuest {
-        user_uid: UserUid,
-    },
-    RemovePendingGuest {
-        email: String,
-    },
-    MakeAllParticipantsReaders {
-        reason: RoleUpdateReason,
-    },
-    RequestSharedSessionRole(Role),
-    /// The viewer is reporting its terminal size for viewer-driven PTY sizing.
-    ReportViewerTerminalSize {
-        window_size: SessionSharingWindowSize,
-    },
-    /// The input editor was locally edited and
-    /// peers should be notified, if applicable.
-    InputEditorUpdated {
-        /// The block ID associated to the buffer that
-        /// these operations were made in.
-        block_id: BlockId,
-
-        /// The CRDT-compliant operations.
-        operations: Rc<Vec<CrdtOperation>>,
-    },
-    /// Emitted when a shared session participant tries to
-    /// change a role. `source` dictates how the modal is rendered,
-    /// and what fields are needed
-    OpenSharedSessionRoleChangeModal {
-        source: RoleChangeOpenSource,
-    },
-    CloseSharedSessionRoleChangeModal(RoleChangeCloseSource),
-    RoleRequestInFlight {
-        role_request_id: RoleRequestId,
-    },
-    CancelRoleRequest(RoleRequestId),
-    RoleRequestCancelled(RoleRequestId),
-    RespondToRoleRequest {
-        participant_id: ParticipantId,
-        role_request_id: RoleRequestId,
-        response: RoleRequestResponse,
-    },
     /// Emitted when a pending command (e.g. tab config setup commands) has
     /// been submitted and its block has completed.
     PendingCommandCompleted,
@@ -1695,10 +1504,6 @@ pub struct TerminalView {
     /// Scroll state for scrolling vertically in the blocklist.
     blocklist_vertical_scroll_state: ScrollStateHandle,
 
-    /// Scroll state for scrolling vertically in the alt screen.
-    /// This only happens if we're a shared session viewer and
-    /// our window is smaller than the sharer's.
-    alt_screen_vertical_scroll_state: ScrollStateHandle,
     /// Lines from the top of the content we are scrolled in the alt screen.
     alt_screen_scroll_top: Lines,
 
@@ -1888,15 +1693,6 @@ pub struct TerminalView {
 
     pending_env_var_collection: Option<CloudEnvVarCollection>,
 
-    // TODO(suraj): consider flattening this to the [`SharedSessionKind`]
-    // and adding a `Unshared` variant to it. This would require [`SharedSessionKind::Sharer`]
-    // and [`SharedSessionKind::Viewer`] to store some common struct for common fields.
-    shared_session: Option<SharedSessionAdapter>,
-
-    /// Stashed source from `attempt_to_share_session` so `on_session_share_started`
-    /// can decide whether to auto-copy the link vs open the sharing dialog.
-    pending_share_source: Option<SharedSessionActionSource>,
-
     /// The ID of the containing window.
     window_id: WindowId,
 
@@ -1991,11 +1787,6 @@ pub struct TerminalView {
     /// Per-session PTY recorder for writing PTY bytes to a file.
     pty_recorder: ModelHandle<PtyRecorder>,
 
-    /// When viewer-driven sizing is active on the sharer, this stores the
-    /// viewer's last reported (rows, cols).
-    /// Used by `SizeUpdateBuilder::build()` to prevent `AfterLayout` from
-    /// overriding the viewer-reported size back to the sharer's natural pane size.
-    active_viewer_driven_size: Option<(usize, usize)>,
 
     /// State handle for the shimmering text animation in the remote server loading footer.
     /// Persisted across renders so the animation doesn't restart.
@@ -2125,17 +1916,6 @@ impl TerminalView {
             SyncInputType::StartSyncing => (),
             SyncInputType::StopSyncing => {}
         }
-    }
-
-    /// Returns whether local input-editor CRDT edits should be published to the shared-session
-    /// sharer. Viewer-local editor events can still fire from ended/setup-only cloud agent surfaces,
-    /// where sending them upstream would be rejected and surfaced back as edit failures.
-    pub(crate) fn should_publish_shared_session_input_editor_update(
-        &self,
-        model: &TerminalModel,
-        app: &AppContext,
-    ) -> bool {
-        self.is_input_box_visible(model, app)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2636,7 +2416,6 @@ impl TerminalView {
             colors,
             scroll_position: ScrollState::new(ScrollPosition::FollowsBottomOfMostRecentBlock),
             blocklist_vertical_scroll_state: Default::default(),
-            alt_screen_vertical_scroll_state: Default::default(),
             alt_screen_scroll_top: Lines::zero(),
             horizontal_clipped_scroll_state: Default::default(),
             is_selecting: false,
@@ -2704,8 +2483,6 @@ impl TerminalView {
             env_vars: Vec::new(),
             show_snackbar: true,
             hover_near_snackbar_area: false,
-            shared_session: None,
-            pending_share_source: None,
             window_id,
             content_element_position_id: terminal_content_element_position_id,
             input_position_id,
@@ -2735,7 +2512,6 @@ impl TerminalView {
             pane_stack: None,
             pty_recorder: ctx
                 .add_model(|ctx| PtyRecorder::new(inactive_pty_reads_rx, window_id, ctx)),
-            active_viewer_driven_size: None,
         };
         terminal_view.register_subscriptions_for_warpify_footer(ctx);
 
@@ -3113,11 +2889,11 @@ impl TerminalView {
         self.deferred_code_review_open = None;
 
         self.current_prompt.update(ctx, |prompt_type, ctx| {
-            if let PromptType::Dynamic { prompt } = prompt_type {
-                prompt.update(ctx, |current_prompt, ctx| {
-                    current_prompt.set_git_repo_status(None, ctx);
-                });
-            }
+            let PromptType::Dynamic { prompt } = prompt_type;
+            prompt.update(ctx, |current_prompt, ctx| {
+                current_prompt.set_git_repo_status(None, ctx);
+            });
+        
         });
     }
 
@@ -3127,11 +2903,11 @@ impl TerminalView {
         };
 
         self.current_prompt.update(ctx, |prompt_type, ctx| {
-            if let PromptType::Dynamic { prompt } = prompt_type {
-                prompt.update(ctx, |current_prompt, ctx| {
-                    current_prompt.set_github_repo_model(None, ctx);
-                });
-            }
+            let PromptType::Dynamic { prompt } = prompt_type;
+            prompt.update(ctx, |current_prompt, ctx| {
+                current_prompt.set_github_repo_model(None, ctx);
+            });
+        
         });
 
         // TerminalView doesn't currently subscribe to GitHubRepoModel events
@@ -3227,11 +3003,11 @@ impl TerminalView {
                     let weak_for_prompt = handle.downgrade();
                     self.github_repo_model = Some(handle);
                     self.current_prompt.update(ctx, |prompt_type, ctx| {
-                        if let PromptType::Dynamic { prompt } = prompt_type {
-                            prompt.update(ctx, |current_prompt, ctx| {
-                                current_prompt.set_github_repo_model(Some(weak_for_prompt), ctx);
-                            });
-                        }
+                        let PromptType::Dynamic { prompt } = prompt_type;
+                        prompt.update(ctx, |current_prompt, ctx| {
+                            current_prompt.set_github_repo_model(Some(weak_for_prompt), ctx);
+                        });
+                    
                     });
                 }
                 Err(err) => {
@@ -3301,11 +3077,11 @@ impl TerminalView {
                 let weak_for_prompt = handle.downgrade();
                 self.git_repo_status = Some(handle);
                 self.current_prompt.update(ctx, |prompt_type, ctx| {
-                    if let PromptType::Dynamic { prompt } = prompt_type {
-                        prompt.update(ctx, |current_prompt, ctx| {
-                            current_prompt.set_git_repo_status(Some(weak_for_prompt), ctx);
-                        });
-                    }
+                    let PromptType::Dynamic { prompt } = prompt_type;
+                    prompt.update(ctx, |current_prompt, ctx| {
+                        current_prompt.set_git_repo_status(Some(weak_for_prompt), ctx);
+                    });
+                
                 });
                 // Acquire a GitHub-info handle if the terminal's prompt chips need PR or
                 // repository info.
@@ -3459,12 +3235,9 @@ impl TerminalView {
         &self.sessions
     }
 
-    /// Returns whether a specific session is local, treating shared-session viewers as non-local
-    /// even when their session hasn't been joined yet.
+    /// Returns whether a specific session is local.
     pub fn session_is_local<C: ModelAsRef>(&self, session_id: SessionId, ctx: &C) -> bool {
-        let is_shared_session_viewer = self.model.lock().is_shared_session_viewer();
-        !is_shared_session_viewer
-            && self
+        self
                 .sessions
                 .as_ref(ctx)
                 .get(session_id)
@@ -3605,30 +3378,6 @@ impl TerminalView {
         self.is_ssh_file_uploader = is_uploader;
     }
 
-    /// Whether or not this terminal view is actively sharing its session.
-    pub fn is_sharing_session(&self) -> bool {
-        self.model.lock().shared_session_status().is_active_sharer()
-    }
-
-    pub fn is_shared_ambient_agent_session(&self) -> bool {
-        self.model.lock().is_shared_ambient_agent_session()
-    }
-
-    pub fn is_shared_session_viewer(&self) -> bool {
-        self.model.lock().is_shared_session_viewer()
-    }
-
-    pub(crate) fn apply_viewer_shared_session_input_update(
-        &mut self,
-        block_id: &BlockId,
-        operations: Vec<CrdtOperation>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.input().update(ctx, |input, ctx| {
-            input.process_remote_edits(block_id, operations, ctx);
-        });
-    }
-
     pub fn ssh_file_upload(&self) -> &ViewHandle<FileUpload> {
         &self.ssh_file_upload
     }
@@ -3673,10 +3422,6 @@ impl TerminalView {
             return false;
         }
         if model.is_alt_screen_active() {
-            return false;
-        }
-
-        if model.shared_session_status().is_view_pending() {
             return false;
         }
 
@@ -4037,20 +3782,15 @@ impl TerminalView {
     /// long-running and received keyboard input.
     /// Emits if at least one terminal inputs is synced, so receivers of this
     /// event must determine how to process this event.
-    /// Also emits an event for shared session viewers to notify the sharer of a write to pty request.
     fn emit_non_editor_typed_event(&self, chars: Vec<u8>, ctx: &mut ViewContext<Self>) {
         if SyncedInputState::as_ref(ctx).is_syncing_any_inputs(ctx.window_id()) {
             ctx.emit(Event::SyncInput(SyncEvent {
                 source_view_id: self.view_id,
                 data: SyncInputType::NonEditorTyped {
-                    chars: Arc::new(chars.clone()),
+                    chars: Arc::new(chars),
                 },
             }));
         }
-
-        self.model
-            .lock()
-            .send_write_to_pty_events_for_shared_session(chars);
     }
 
     fn update_scroll_position_locking(
@@ -4123,13 +3863,9 @@ impl TerminalView {
         // Make sure we don't write any text to the pty until we've echoed out
         // the bootstrap script, otherwise the user could accidentally interfere
         // with bootstrap script execution.
-        let was_bootstrap_script_echoed = self
-            .sessions
+        self.sessions
             .as_ref(ctx)
-            .has_pending_or_bootstrapped_session();
-        let is_shared_session_executor = model.shared_session_status().is_executor();
-
-        was_bootstrap_script_echoed || is_shared_session_executor
+            .has_pending_or_bootstrapped_session()
     }
     /// Receiving a warpui::Event::TypedCharacters event from a child element.
     /// We can assume `characters` consists of all printable characters, and therefore,
@@ -4194,11 +3930,6 @@ impl TerminalView {
         ctx: &mut ViewContext<Self>,
     ) {
         ctx.emit(Event::WriteBytesToPty { bytes: data.into() });
-    }
-
-    /// Writes a shared session viewer's bytes to the pty.
-    pub fn write_viewer_bytes_to_pty(&mut self, bytes: Vec<u8>, ctx: &mut ViewContext<Self>) {
-        self.write_user_bytes_to_pty(bytes, ctx);
     }
 
     /// Ends the current line before writing the given bytes to the PTY.
@@ -4736,11 +4467,6 @@ impl TerminalView {
 
         let mut model = self.model.lock();
 
-        // Shared session viewers can't initiate warpification currently.
-        if model.shared_session_status().is_viewer() {
-            return;
-        }
-
         let a11y_message = match &warpify_keybinding {
             Some(keystroke) => format!(
                 "You can press {} to Warpify this {} for more Warp features.",
@@ -5136,12 +4862,12 @@ impl TerminalView {
         });
 
         self.current_prompt.update(ctx, |prompt_type, ctx| {
-            if let PromptType::Dynamic { prompt } = prompt_type {
-                prompt.update(ctx, |current_prompt, ctx| {
-                    current_prompt
-                        .update_context(self.model.lock().block_list().active_block(), ctx);
-                });
-            }
+            let PromptType::Dynamic { prompt } = prompt_type;
+            prompt.update(ctx, |current_prompt, ctx| {
+                current_prompt
+                    .update_context(self.model.lock().block_list().active_block(), ctx);
+            });
+        
         });
     }
 
@@ -6365,9 +6091,6 @@ impl TerminalView {
                     });
                 }
             }
-            ModelEvent::SelectedTextChanged => {
-                ctx.emit(Event::SelectedTextChanged);
-            }
             ModelEvent::ShellSpawned(shell_type) => {
                 ctx.emit(Event::ShellSpawned(*shell_type));
                 ctx.notify();
@@ -6789,17 +6512,6 @@ impl TerminalView {
 
         if self.should_display_vim_banner(&session, ctx) {
             self.insert_vim_mode_banner(ctx);
-        }
-
-        // If we were waiting to share this session once it was bootstrapped,
-        // we can now attempt to share it.
-        let pending_share = match self.model.lock().shared_session_status() {
-            SharedSessionStatus::SharePendingPreBootstrap { source } => Some(source.clone()),
-            _ => None,
-        };
-        if let Some(source) = pending_share {
-            log::info!("Terminal bootstrapped with pending shared session; attempting to share");
-            self.attempt_to_share_session(SharedSessionScrollbackType::All, None, source, ctx);
         }
 
         if let Some(env_var_collection) = self.pending_env_var_collection.take() {
@@ -7551,12 +7263,6 @@ impl TerminalView {
     }
 
     fn resize_internal(&mut self, size_update: SizeUpdate, ctx: &mut ViewContext<Self>) {
-        // Viewer-driven sizing: report the viewer's natural size to the sharer.
-        // This runs before the early-return so the initial report on viewer join
-        // fires even when the pane size hasn't changed yet.
-        // The resize-reason check prevents loops (SharerSizeChanged is never re-reported).
-        self.maybe_report_viewer_terminal_size(&size_update, ctx);
-
         // If this isn't an actionable resize, there's nothing to do.
         if !(size_update.anything_changed() || size_update.is_refresh()) {
             return;
@@ -7596,44 +7302,8 @@ impl TerminalView {
         ctx.emit(Event::Resize { size_update });
     }
 
-    /// If we're a viewer eligible for viewer-driven sizing, report our natural
-    /// terminal size to the sharer — but only when the resize was NOT caused by
-    /// the sharer (which would create a loop).
-    fn maybe_report_viewer_terminal_size(
-        &mut self,
-        size_update: &SizeUpdate,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if size_update.is_sharer_size_change() {
-            return;
-        }
-        if !self.model.lock().shared_session_status().is_active_viewer() {
-            return;
-        }
-        let eligible = self.is_viewer_driven_sizing_eligible(false, ctx);
-        if eligible {
-            let new_natural = (size_update.natural_rows(), size_update.natural_cols());
-            let last_reported = self
-                .shared_session_viewer()
-                .and_then(|v| v.last_reported_natural_size);
-            if last_reported != Some(new_natural) {
-                if let Some(viewer) = self.shared_session_viewer_mut() {
-                    viewer.last_reported_natural_size = Some(new_natural);
-                }
-                ctx.emit(Event::ReportViewerTerminalSize {
-                    window_size: SessionSharingWindowSize {
-                        num_rows: new_natural.0,
-                        num_cols: new_natural.1,
-                    },
-                });
-            }
-        } else if let Some(viewer) = self.shared_session_viewer_mut() {
-            viewer.last_reported_natural_size = None;
-        }
-    }
-
     /// This handler is called after *every* terminal view layout with the
-    /// size of the entire terminal (block_list + input OR alt-grid OR shared session viewer loading) as its
+    /// size of the entire terminal (block_list + input OR alt-grid) as its
     /// argument.
     fn after_terminal_view_layout(&mut self, size: Vector2F, ctx: &mut ViewContext<Self>) {
         let size_update = SizeUpdateBuilder::after_layout(*self.size_info, size).build(self, ctx);
@@ -8056,13 +7726,6 @@ impl TerminalView {
                 };
 
                 let is_single_selection = self.selected_blocks.is_singleton();
-                let is_active_block_selected = self
-                    .selected_blocks
-                    .is_selected(model.block_list().active_block_index());
-                let is_active_block_running = model
-                    .block_list()
-                    .active_block()
-                    .is_active_and_long_running();
 
                 let copy_commands_str = if is_single_selection {
                     "Copy command"
@@ -8086,22 +7749,10 @@ impl TerminalView {
                     "Scroll to bottom of blocks"
                 };
 
-                // currently, we don't support share for multi selections
-                let is_share_disabled =
-                    !is_single_selection || (is_active_block_selected && is_active_block_running);
-
                 let is_copy_commands_disabled =
                     is_single_selection && tail_block.command_to_string().trim().is_empty();
                 let is_copy_both_disabled =
                     is_copy_commands_disabled && tail_block.output_to_string().trim().is_empty();
-
-                let share_block_label = if FeatureFlag::CreatingSharedSessions.is_enabled()
-                    && ContextFlag::CreateSharedSession.is_enabled()
-                {
-                    "Share block..."
-                } else {
-                    "Share..."
-                };
 
                 // Only right-click sources offer general terminal actions like "Paste";
                 // the overflow-button and keybinding menus are scoped to the selected block(s).
@@ -8177,41 +7828,6 @@ impl TerminalView {
                 // the block sit together, ending with the general clipboard paste.
                 if is_right_click_source {
                     items.push(self.paste_menu_item(ctx));
-                }
-
-                items.push(MenuItem::Separator);
-                items.push(
-                    MenuItemFields::new(share_block_label)
-                        .with_on_select_action(TerminalAction::ContextMenu(
-                            ContextMenuAction::OpenShareBlockModal {
-                                block_index: tail_block_index,
-                            },
-                        ))
-                        .with_key_shortcut_label(keybinding_name_to_display_string(
-                            "terminal:open_share_block_modal",
-                            ctx,
-                        ))
-                        .with_disabled(is_share_disabled)
-                        .into_item(),
-                );
-
-                if FeatureFlag::CreatingSharedSessions.is_enabled()
-                    && ContextFlag::CreateSharedSession.is_enabled()
-                {
-                    // Sharing a session from a context menu is disabled for multi block selections, restored blocks, and viewers.
-                    let is_share_session_disabled = !is_single_selection
-                        || model
-                            .block_list()
-                            .block_at(tail_block_index)
-                            .is_none_or(|b| b.is_restored());
-
-                    let has_session_link = Manager::as_ref(ctx)
-                        .has_session_link(&ctx.view_id(), model.shared_session_status());
-                    items.extend(self.session_sharing_context_menu_items(
-                        &model,
-                        is_share_session_disabled,
-                        has_session_link,
-                    ));
                 }
 
                 if WarpDriveSettings::is_warp_drive_enabled(ctx) {
@@ -8299,21 +7915,7 @@ impl TerminalView {
                 true,
             ) => {
                 // If selection is empty, only show non-block related options
-                let mut items = Vec::new();
-
-                if FeatureFlag::CreatingSharedSessions.is_enabled()
-                    && ContextFlag::CreateSharedSession.is_enabled()
-                {
-                    let has_session_link = Manager::as_ref(ctx)
-                        .has_session_link(&ctx.view_id(), model.shared_session_status());
-                    items.extend(self.session_sharing_context_menu_items(
-                        &model,
-                        false,
-                        has_session_link,
-                    ));
-                }
-
-                items
+                Vec::new()
             }
             _ => vec![],
         };
@@ -8546,7 +8148,6 @@ impl TerminalView {
         let edit_menu_item = Some(
             MenuItemFields::new("Edit prompt")
                 .with_on_select_action(TerminalAction::ContextMenu(ContextMenuAction::EditPrompt))
-                .with_disabled(self.model.lock().shared_session_status().is_active_viewer())
                 .into_item(),
         );
 
@@ -8600,10 +8201,6 @@ impl TerminalView {
         let model = self.model.lock();
         let mut items = Vec::new();
 
-        // Input editor is not available for read-only viewers in a shared session,
-        // so certain menu items are disabled/removed
-        let is_editor_disabled = model.shared_session_status().is_reader();
-
         // Section 1: Cut, Copy, Copy All, Paste, Share Session
         let (all_current_input_text, selected_input_text) = self.input.read(ctx, |input, ctx| {
             input.editor().read(ctx, |editor, ctx| {
@@ -8640,7 +8237,6 @@ impl TerminalView {
                         "editor_view:select_all",
                         ctx,
                     ))
-                    .with_disabled(is_editor_disabled)
                     .into_item(),
             );
         }
@@ -8651,17 +8247,9 @@ impl TerminalView {
                     InputContextMenuAction::Paste,
                 ))
                 .with_key_shortcut_label(keybinding_name_to_display_string("terminal:paste", ctx))
-                .with_disabled(is_editor_disabled)
                 .into_item(),
         );
 
-        if FeatureFlag::CreatingSharedSessions.is_enabled()
-            && ContextFlag::CreateSharedSession.is_enabled()
-        {
-            let has_session_link = Manager::as_ref(ctx)
-                .has_session_link(&ctx.view_id(), model.shared_session_status());
-            items.extend(self.session_sharing_context_menu_items(&model, false, has_session_link));
-        }
 
         // Section 2: Command search
         items.extend([
@@ -8674,7 +8262,6 @@ impl TerminalView {
                     "workspace:show_command_search",
                     ctx,
                 ))
-                .with_disabled(is_editor_disabled)
                 .into_item(),
         ]);
 
@@ -8688,7 +8275,6 @@ impl TerminalView {
                         "input:toggle_natural_language_command_search",
                         ctx,
                     ))
-                    .with_disabled(is_editor_disabled)
                     .into_item(),
             );
         }
@@ -8706,22 +8292,20 @@ impl TerminalView {
         }
 
         // Section 4: input hint text toggle
-        if !is_editor_disabled {
-            let input_settings = InputSettings::as_ref(ctx);
-            let inverse_action = if *input_settings.show_hint_text {
-                "Hide"
-            } else {
-                "Show"
-            };
-            items.push(MenuItem::Separator);
-            items.push(
-                MenuItemFields::new(format!("{inverse_action} input hint text"))
-                    .with_on_select_action(TerminalAction::InputContextMenuItem(
-                        InputContextMenuAction::ToggleInputHintText,
-                    ))
-                    .into_item(),
-            );
-        }
+        let input_settings = InputSettings::as_ref(ctx);
+        let inverse_action = if *input_settings.show_hint_text {
+            "Hide"
+        } else {
+            "Show"
+        };
+        items.push(MenuItem::Separator);
+        items.push(
+            MenuItemFields::new(format!("{inverse_action} input hint text"))
+                .with_on_select_action(TerminalAction::InputContextMenuItem(
+                    InputContextMenuAction::ToggleInputHintText,
+                ))
+                .into_item(),
+        );
         // Section 5: All Pane related
         let current_shell = model.shell_launch_state().available_shell();
         let pane_context_menu_items = self.pane_context_menu_items(current_shell, ctx);
@@ -8855,17 +8439,6 @@ impl TerminalView {
             );
         }
 
-        if FeatureFlag::CreatingSharedSessions.is_enabled()
-            && ContextFlag::CreateSharedSession.is_enabled()
-        {
-            let has_session_link = Manager::as_ref(ctx)
-                .has_session_link(&ctx.view_id(), model.shared_session_status());
-            menu_items.extend(self.session_sharing_context_menu_items(
-                &model,
-                false,
-                has_session_link,
-            ));
-        }
         let current_shell = model.shell_launch_state().available_shell();
         let mut pane_context_menu_items = self.pane_context_menu_items(current_shell, ctx);
         if !menu_items.is_empty() && !pane_context_menu_items.is_empty() {
@@ -9051,7 +8624,6 @@ impl TerminalView {
     {
         change_selection(&mut self.selected_blocks);
         self.update_find_selection(ctx);
-        ctx.emit(Event::SelectedBlocksChanged);
     }
 
     pub fn integration_test_change_block_selection_to_single(
@@ -10555,32 +10127,6 @@ impl TerminalView {
         }
     }
 
-    fn context_menu_open_share_block_modal(
-        &mut self,
-        block_index: BlockIndex,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if AuthStateProvider::as_ref(ctx)
-            .get()
-            .is_anonymous_or_logged_out()
-        {
-            return;
-        }
-
-        send_telemetry_from_ctx!(
-            TelemetryEvent::ContextMenuOpenShareModal(self.selected_blocks.cardinality()),
-            ctx
-        );
-        ctx.emit(Event::ShareModalOpened(block_index));
-        self.close_context_menu(ctx, true);
-        ctx.notify();
-    }
-
-    fn open_share_block_modal(&mut self, ctx: &mut ViewContext<Self>) {
-        if let Some(selected_index) = self.selected_blocks.tail() {
-            self.context_menu_open_share_block_modal(selected_index, ctx);
-        }
-    }
 
     fn context_menu_copy_blocks(&mut self, ctx: &mut ViewContext<Self>) {
         self.copy_blocks(BlockEntity::CommandAndOutput, ctx);
@@ -10864,15 +10410,6 @@ impl TerminalView {
                     self.show_emacs_bindings_banner(ctx);
                 }
             }
-            InputEvent::EditorUpdated {
-                block_id,
-                operations,
-            } => {
-                ctx.emit(Event::InputEditorUpdated {
-                    block_id: block_id.clone(),
-                    operations: operations.clone(),
-                });
-            }
             InputEvent::InputFocusedFromMiddleClick => {
                 self.focus_input_box(ctx);
             }
@@ -10906,9 +10443,6 @@ impl TerminalView {
                     message: message.clone(),
                     flavor: *flavor,
                 });
-            }
-            InputEvent::OpenShareSessionModal => {
-                self.open_share_session_modal(SharedSessionActionSource::FooterChip, ctx);
             }
         }
     }
@@ -12306,19 +11840,6 @@ impl TerminalView {
     ) -> Box<dyn Element> {
         let appearance = Appearance::as_ref(app);
 
-        // For the alt-screen in a shared session viewer, we need to use
-        // the sharer's size exactly. We don't want to render an alt-screen
-        // larger than the sharer's since that would look janky.
-        // TODO: we should have more ergonomic ways of getting Viewer / Sharer from the session.
-        let (rows, columns) = if let Some(Viewer { sharer_size, .. }) = self.shared_session_viewer()
-        {
-            sharer_size
-                .map(|s| (s.num_rows, s.num_cols))
-                .unwrap_or((self.size_info.rows(), self.size_info.columns()))
-        } else {
-            (self.size_info.rows(), self.size_info.columns())
-        };
-
         // Note: The Alt screen relies on the accuracy of the `padding` elements of SizeInfo
         // for things like hit detection and selection. Since we are taking into account the
         // padding separately (using `Align` and `ConstrainedBox`), we need to create a new
@@ -12343,38 +11864,7 @@ impl TerminalView {
         if should_use_ligature_rendering(app) {
             alt_screen_element = alt_screen_element.with_ligature_rendering();
         }
-        alt_screen_element =
-            alt_screen_element.with_shared_session_presence(self.shared_session_presence_manager());
-
-        let required_terminal_height = self.size_info.cell_height_px.as_f32() * (rows as f32)
-            + 2. * self.size_info.padding_y_px().as_f32();
-        let pane_height = self.content_element_height_px(app);
-
-        let required_terminal_width = self.size_info.cell_width_px.as_f32() * (columns as f32)
-            + 2. * self.size_info.padding_x_px().as_f32();
-        let pane_width = self.content_element_width_px(app);
-
-        // If this is a shared session viewer and the height required to display the entire
-        // terminal is larger than the height of the pane, we should make it vertically scrollable.
-        let should_be_vertical_scrollable = model.shared_session_status().is_active_viewer()
-            && required_terminal_height > pane_height;
-
-        // If this is a shared session viewer and the width required to display the entire
-        // terminal is larger than the width of the pane, we should make it horizontally scrollable.
-        let should_be_horizontal_scrollable = FeatureFlag::ViewingSharedSessions.is_enabled()
-            && model.shared_session_status().is_active_viewer()
-            && required_terminal_width > pane_width;
-
-        let theme = appearance.theme();
-        let element = maybe_wrap_terminal_element_in_scrollable(
-            should_be_vertical_scrollable,
-            should_be_horizontal_scrollable,
-            self.alt_screen_vertical_scroll_state.clone(),
-            self.horizontal_clipped_scroll_state.clone(),
-            required_terminal_width,
-            theme,
-            alt_screen_element,
-        );
+        let element = alt_screen_element.finish();
 
         SavePosition::new(
             Container::new(
@@ -12393,35 +11883,6 @@ impl TerminalView {
                 .finish(),
             )
             .with_vertical_padding(self.size_info.padding_y_px().as_f32())
-            .finish(),
-            &self.content_element_position_id,
-        )
-        .finish()
-    }
-
-    fn render_viewer_loading(&self, app: &AppContext) -> Box<dyn Element> {
-        let appearance = Appearance::as_ref(app);
-        let color = appearance
-            .theme()
-            .sub_text_color(appearance.theme().background());
-
-        SavePosition::new(
-            Align::new(
-                Flex::column()
-                    .with_child(
-                        ConstrainedBox::new(Icon::new("bundled/svg/refresh.svg", color).finish())
-                            .with_height(16.)
-                            .with_width(16.)
-                            .finish(),
-                    )
-                    .with_child(
-                        Text::new_inline("Loading session...", appearance.ui_font_family(), 14.)
-                            .with_color(color.into())
-                            .finish(),
-                    )
-                    .with_cross_axis_alignment(CrossAxisAlignment::Center)
-                    .finish(),
-            )
             .finish(),
             &self.content_element_position_id,
         )
@@ -12619,54 +12080,15 @@ impl TerminalView {
             );
         }
 
-        if let Some(shared_session) = &self.shared_session {
-            let presence_avatars = shared_session.presence_avatars(app);
-            let presence_manager = shared_session.presence_manager().clone();
-            element = element.with_shared_session_presence(presence_avatars, presence_manager);
-        }
-
         let total_height: Lines = model.block_list().block_heights().summary().height;
         let visible_rows = self.content_element_height_lines(app);
-
-        // Since blocks in a blocklist can have different sizes, we want
-        // to make sure we're rendering with enough columns to support them all.
-        let columns_needed = model
-            .block_list()
-            .blocks()
-            .iter()
-            .filter(|b| b.is_visible())
-            .map(|b| b.size().columns)
-            .max()
-            .unwrap_or(self.size_info.columns);
-
-        let required_terminal_width = self.size_info.cell_width_px.as_f32()
-            * (columns_needed as f32)
-            + 2. * self.size_info.padding_x_px().as_f32();
-        let pane_width = self.content_element_width_px(app);
 
         let should_be_vertical_scrollable =
             heights_approx_gt(total_height, visible_rows) && is_scrollable;
 
-        // If this is a shared session viewer and the width required to display the entire
-        // terminal is larger than the width of the pane, we should make it horizontally scrollable.
-        // If there aren't any visible blocks, we should not show a horizontally-scrollable view.
-        let should_be_horizontal_scrollable = FeatureFlag::ViewingSharedSessions.is_enabled()
-            && model.shared_session_status().is_active_viewer()
-            && model
-                .block_list()
-                .blocks()
-                .iter()
-                .filter(|b| b.is_visible())
-                .count()
-                > 0
-            && required_terminal_width > pane_width;
-
         let block_list = maybe_wrap_terminal_element_in_scrollable(
             should_be_vertical_scrollable,
-            should_be_horizontal_scrollable,
             self.blocklist_vertical_scroll_state.clone(),
-            self.horizontal_clipped_scroll_state.clone(),
-            required_terminal_width,
             theme,
             element,
         );
@@ -13050,10 +12472,6 @@ impl TerminalView {
     fn context_menu_action(&mut self, action: &ContextMenuAction, ctx: &mut ViewContext<Self>) {
         use ContextMenuAction::*;
 
-        // TODO: handle sharing session with > 1 block selected
-        let source = SharedSessionActionSource::BlocklistContextMenu {
-            block_index: self.selected_blocks.tail(),
-        };
         match action {
             InsertSelectedText => self.context_menu_insert_selected_text(ctx),
             CopySelectedText => self.context_menu_copy_selected_text(ctx),
@@ -13061,9 +12479,6 @@ impl TerminalView {
             CopyBlocks => self.context_menu_copy_blocks(ctx),
             CopyBlockCommands => self.context_menu_copy_block_commands(ctx),
             CopyBlockOutputs => self.context_menu_copy_block_outputs(ctx),
-            OpenShareBlockModal { block_index } => {
-                self.context_menu_open_share_block_modal(*block_index, ctx)
-            }
             FindWithinBlock => self.find_within_block(ctx),
             ScrollToBottomOfBlock => self.scroll_to_bottom_of_bottommost_selected_block(ctx),
             ScrollToTopOfBlock => self.scroll_to_top_of_topmost_selected_block(ctx),
@@ -13072,8 +12487,6 @@ impl TerminalView {
             CopyRprompt => self.copy_rprompt(ctx),
             EditPrompt => self.edit_prompt(ctx),
             OpenWorkflowModal => self.open_workflow_modal(ctx),
-            OpenShareSessionModal => self.open_share_session_modal(source, ctx),
-            StopSharing => self.stop_sharing_session(source, ctx),
             CopyBlockFilteredOutputs => self.context_menu_copy_filtered_block_outputs(ctx),
         }
     }
@@ -13815,14 +13228,6 @@ impl TerminalView {
 
     /// Shows the warpify footer for a detected subshell command.
     fn show_warpify_footer(&mut self, ctx: &mut ViewContext<Self>) {
-        let model = self.model.lock();
-
-        // Shared session viewers can't initiate warpification currently.
-        if model.shared_session_status().is_viewer() {
-            return;
-        }
-        drop(model);
-
         self.warpify_footer
             .update(ctx, |footer, ctx| footer.show(ctx));
         self.maybe_show_warpify_footer_in_blocklist(ctx);
@@ -13887,11 +13292,9 @@ impl PtyIntentEvent for Event {
 impl TerminalSurface for TerminalView {
     #[cfg(feature = "local_tty")]
     fn on_shell_determined(&mut self, ctx: &mut ViewContext<Self>) {
-        if !self.model.lock().shared_session_status().is_viewer() {
-            // Start a timer for the initial session bootstrapping, so that we can log and show a
-            // banner to the user if the bootstrapping takes too long
-            self.start_bootstrap_timer(BOOTSTRAP_FAILED_DURATION, ctx);
-        }
+        // Start a timer for the initial session bootstrapping, so that we can log and show a
+        // banner to the user if the bootstrapping takes too long
+        self.start_bootstrap_timer(BOOTSTRAP_FAILED_DURATION, ctx);
     }
 
     fn on_active_shell_launch_data_updated(
@@ -14181,7 +13584,6 @@ impl TypedActionView for TerminalView {
             | CopyCommands
             | MaybeHoverSecret { .. }
             | CopyGitBranch
-            | OpenShareModal
             | ReinputCommands
             | ReinputCommandsWithSudo
             | ClearBuffer
@@ -14216,8 +13618,6 @@ impl TypedActionView for TerminalView {
             | AliasExpansionBanner(_)
             | VimModeBanner(_)
             | InsertMostRecentCommandCorrection
-            | StopSharingCurrentSession { .. }
-            | RequestSharedSessionRole(_)
             | ImportSettings
             | DragAndDropFiles(_)
             | ToggleBlockFilterOnSelectedOrLastBlock(_)
@@ -14235,7 +13635,6 @@ impl TypedActionView for TerminalView {
             // debug version shouldn't be announced.
             Scroll { .. }
             | AltScroll { .. }
-            | SharedSessionViewerAltScroll { .. }
             | ClickOnGrid { .. }
             | MaybeDismissToolTip { .. }
             | MaybeClearAltSelect
@@ -14252,11 +13651,6 @@ impl TypedActionView for TerminalView {
             | OpenWorkflowModalForGeneratedWorkflow(_)
             | OpenWorkflowModalForBlock(_)
             | OpenWorkflowModalWithCloudWorkflow(_)
-            | OpenShareSessionModal { .. }
-            | OpenSharedSessionViewerRoleMenu
-            | CopySharedSessionLink { .. }
-            | OpenSharedSessionOnDesktop { .. }
-            | MakeAllParticipantsReaders { .. }
             | ToggleSnackbarInActivePane
             | HyperlinkClick { .. }
             | StartFileDropTarget
@@ -14277,10 +13671,6 @@ impl TypedActionView for TerminalView {
         match action {
             Scroll { delta } => self.scroll(*delta, ctx),
             AltScroll { delta, point } => self.alt_scroll(*delta, *point, ctx),
-            SharedSessionViewerAltScroll { new_scroll_top } => {
-                self.alt_screen_scroll_top = *new_scroll_top;
-                ctx.notify()
-            }
             ScrollToTopOfBlock { topmost_block } => {
                 self.jump_to_previous_command(*topmost_block, ctx)
             }
@@ -14340,7 +13730,6 @@ impl TypedActionView for TerminalView {
                 };
                 self.copy_prompt(&prompt_position, &PromptPart::GitBranch, ctx)
             }
-            OpenShareModal => self.open_share_block_modal(ctx),
             ReinputCommands => self.reinput_commands(false, ctx),
             ReinputCommandsWithSudo => self.reinput_commands(true, ctx),
             ClearBuffer => self.clear_buffer(ctx),
@@ -14542,23 +13931,12 @@ impl TypedActionView for TerminalView {
                     send_telemetry_from_ctx!(TelemetryEvent::SettingsImportInitiated, ctx);
                 }
             }
-            OpenShareSessionModal { source } => self.open_share_session_modal(*source, ctx),
-            StopSharingCurrentSession { source } => self.stop_sharing_session(*source, ctx),
             ToggleBlockFilterOnSelectedOrLastBlock(source) => {
                 self.toggle_block_filter_on_selected_or_last_block(*source, ctx);
             }
-            CopySharedSessionLink { source } => self.copy_shared_session_link(*source, ctx),
             ToggleSnackbarInActivePane => self.toggle_snackbar_in_active_pane(ctx),
-            MakeAllParticipantsReaders { reason } => {
-                self.make_all_shared_session_participants_readers(*reason, ctx)
-            }
-            OpenSharedSessionViewerRoleMenu => self.open_shared_session_viewer_role_menu(ctx),
-            RequestSharedSessionRole(role) => self.request_shared_session_role(*role, ctx),
             MiddleClickOnGrid { position } => self.middle_click_on_grid(position, ctx),
             MiddleClickOnInput => self.middle_click_on_input(ctx),
-            OpenSharedSessionOnDesktop { source } => {
-                self.open_shared_session_on_desktop(*source, ctx)
-            }
             DragAndDropFiles(paths) => {
                 self.drag_and_drop_files(paths, ctx);
             }
@@ -14701,9 +14079,7 @@ impl View for TerminalView {
                 self.render_waterfall_gap_element(&model, &viewport, active_gap, appearance, app)
             }
             (input_mode, _, _) => {
-                let output_area = if model.shared_session_status().is_view_pending() {
-                    self.render_viewer_loading(app)
-                } else if is_alt_screen_active {
+                let output_area = if is_alt_screen_active {
                     did_wrap_terminal_size = true;
                     wrap_in_terminal_size_element(
                         &self.resize_tx,
@@ -14745,56 +14121,6 @@ impl View for TerminalView {
 
         if self.is_any_tooltip_open() {
             self.render_grid_tooltip(&mut stack, &model, appearance, app);
-        }
-
-        // For shared session viewers, we want to show a "Request edit access"
-        // button near the input if the input (or the button) are being hovered.
-        // This is disabled when the viewer is offline.
-        if let Some(Viewer {
-            input_request_edit_access_button_handle,
-            pending_role_request,
-            is_reconnecting,
-            ..
-        }) = self.shared_session_viewer()
-            && model.shared_session_status().is_reader()
-            && !*is_reconnecting
-            && !pending_role_request
-            && self.context_menu_state.is_none()
-            && self.is_input_box_visible(&model, app)
-            && (self
-                .input_hoverable_handle
-                .lock()
-                .is_ok_and(|handle| handle.is_hovered())
-                || input_request_edit_access_button_handle
-                    .lock()
-                    .is_ok_and(|handle| handle.is_hovered()))
-        {
-            // Position the button above / below the input depending
-            // on the input model.
-            let input_anchor = match input_mode {
-                InputMode::PinnedToBottom => PositionedElementAnchor::TopMiddle,
-                InputMode::PinnedToTop => PositionedElementAnchor::BottomMiddle,
-                InputMode::Waterfall => {
-                    if model.block_list().active_gap().is_some() {
-                        PositionedElementAnchor::BottomMiddle
-                    } else {
-                        PositionedElementAnchor::TopMiddle
-                    }
-                }
-            };
-            stack.add_positioned_overlay_child(
-                self.render_input_request_edit_access_button(
-                    input_request_edit_access_button_handle.clone(),
-                    appearance,
-                ),
-                OffsetPositioning::offset_from_save_position_element(
-                    self.input.as_ref(app).status_free_input_save_position_id(),
-                    Vector2F::zero(),
-                    PositionedElementOffsetBounds::WindowByPosition,
-                    input_anchor,
-                    ChildAnchor::Center,
-                ),
-            );
         }
 
         match &self.context_menu_state.map(|c| c.menu_type) {
@@ -14911,15 +14237,7 @@ impl View for TerminalView {
             );
         }
 
-        if let Some(reconnecting_banner) = self
-            .shared_session
-            .as_ref()
-            .and_then(|s| s.reconnecting_banner())
         {
-            stack.add_child(ChildView::new(reconnecting_banner).finish());
-        } else if !model.shared_session_status().is_viewer() {
-            // We don't care about these banners for shared session viewers.
-
             // Only show one of these banners at a time, to avoid them visually
             // stacking on top of each other.
             if self.is_slow_bootstrap_banner_open
@@ -15025,12 +14343,6 @@ impl View for TerminalView {
                 .finish(),
                 positioning,
             );
-        }
-
-        if let Some(sharer) = self.shared_session_sharer()
-            && sharer.is_inactivity_warning_modal_open()
-        {
-            stack.add_child(ChildView::new(sharer.inactivity_modal()).finish())
         }
 
         if self.ssh_file_upload.as_ref(app).has_upload() {
@@ -15151,10 +14463,6 @@ impl View for TerminalView {
             context.set.insert("InsideRepository");
         }
 
-        context
-            .set
-            .insert(model_lock.shared_session_status().as_keymap_context());
-
         #[cfg(feature = "local_fs")]
         {
             let imported_config_model = ImportedConfigModel::as_ref(app);
@@ -15178,17 +14486,6 @@ impl View for TerminalView {
                 position,
                 font_size,
             })
-    }
-
-    fn self_or_child_interacted_with(&self, _ctx: &mut ViewContext<Self>) {
-        if let Some(sharer) = self.shared_session_sharer() {
-            // If warning modal is open, sharer must continue share through the modal
-            if !sharer.is_inactivity_warning_modal_open()
-                && let Err(e) = sharer.activity_tx().try_send(())
-            {
-                log::warn!("Failed to send sharer activity over activity_tx channel {e:?}");
-            }
-        }
     }
 
     fn accessibility_data(&self, ctx: &mut ViewContext<Self>) -> Option<AccessibilityData> {
@@ -15484,71 +14781,27 @@ fn command_first_word_and_suffix(command: &str) -> Option<(&str, &str)> {
 #[allow(clippy::too_many_arguments)]
 fn maybe_wrap_terminal_element_in_scrollable(
     is_scrollable_vertical: bool,
-    is_scrollable_horizontal: bool,
     vertical_scroll_handle: ScrollStateHandle,
-    horizontal_scroll_handle: ClippedScrollStateHandle,
-    required_terminal_width: f32,
     theme: &WarpTheme,
     element: impl NewScrollableElement + 'static,
 ) -> Box<dyn Element> {
+    if !is_scrollable_vertical {
+        return element.finish();
+    }
     let nonactive_thumb_background = theme.disabled_text_color(theme.background()).into();
     let active_thumb_background = theme.main_text_color(theme.background()).into();
-    let track_background = Fill::None;
-    let scrollbar_appearance = ScrollableAppearance::new(SCROLLBAR_WIDTH, true);
-    match (is_scrollable_vertical, is_scrollable_horizontal) {
-        (true, true) => {
-            let config = DualAxisConfig::Manual {
-                horizontal: AxisConfiguration::Clipped(ClippedAxisConfiguration {
-                    handle: horizontal_scroll_handle,
-                    max_size: Some(required_terminal_width),
-                    stretch_child: false,
-                }),
-                vertical: AxisConfiguration::Manual(vertical_scroll_handle),
-                child: NewScrollableElement::finish_scrollable(element),
-            };
-
-            NewScrollable::horizontal_and_vertical(
-                config,
-                nonactive_thumb_background,
-                active_thumb_background,
-                track_background,
-            )
-            .with_horizontal_scrollbar(scrollbar_appearance)
-            .with_vertical_scrollbar(scrollbar_appearance)
-            .finish()
-        }
-        (true, false) => {
-            let config = SingleAxisConfig::Manual {
-                handle: vertical_scroll_handle,
-                child: NewScrollableElement::finish_scrollable(element),
-            };
-            NewScrollable::vertical(
-                config,
-                nonactive_thumb_background,
-                active_thumb_background,
-                track_background,
-            )
-            .with_vertical_scrollbar(scrollbar_appearance)
-            .finish()
-        }
-        (false, true) => {
-            let config = SingleAxisConfig::Clipped {
-                handle: horizontal_scroll_handle,
-                child: ConstrainedBox::new(element.finish())
-                    .with_max_width(required_terminal_width)
-                    .finish(),
-            };
-            NewScrollable::horizontal(
-                config,
-                nonactive_thumb_background,
-                active_thumb_background,
-                track_background,
-            )
-            .with_horizontal_scrollbar(scrollbar_appearance)
-            .finish()
-        }
-        (false, false) => element.finish(),
-    }
+    let config = SingleAxisConfig::Manual {
+        handle: vertical_scroll_handle,
+        child: NewScrollableElement::finish_scrollable(element),
+    };
+    NewScrollable::vertical(
+        config,
+        nonactive_thumb_background,
+        active_thumb_background,
+        Fill::None,
+    )
+    .with_vertical_scrollbar(ScrollableAppearance::new(SCROLLBAR_WIDTH, true))
+    .finish()
 }
 
 #[cfg(test)]

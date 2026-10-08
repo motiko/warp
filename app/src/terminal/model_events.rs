@@ -264,7 +264,6 @@ impl ModelEventDispatcher {
             Event::ExternalShellWidgetSelection(data) => {
                 ModelEvent::ExternalShellWidgetSelection(data)
             }
-            Event::TextSelectionChanged => ModelEvent::SelectedTextChanged,
             Event::ShellSpawned(shell_type) => ModelEvent::ShellSpawned(shell_type),
             Event::ImageReceived {
                 image_id,
@@ -442,7 +441,6 @@ pub enum ModelEvent {
     Handler(AnsiHandlerEvent),
     FinishUpdate(FinishUpdateValue),
     ExternalShellWidgetSelection(ExternalShellWidgetSelectionValue),
-    SelectedTextChanged,
     ShellSpawned(ShellType),
     CompletionsFinished(Vec<ShellCompletion>, Option<warp_completer::meta::Span>),
     ImageReceived {

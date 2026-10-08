@@ -22,7 +22,6 @@ use crate::settings::{
     CRASH_REPORTING_ENABLED_DEFAULTS_KEY, CloudPreferencesSettings, PrivacySettings,
     TELEMETRY_ENABLED_DEFAULTS_KEY,
 };
-use crate::terminal::shared_session::manager::Manager as SharedSessionManager;
 use crate::workflows::manager::WorkflowManager;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::{GlobalResourceHandlesProvider, persistence, send_telemetry_sync_from_app_ctx};
@@ -60,12 +59,6 @@ pub fn log_out(app: &mut AppContext) {
     NotebookManager::handle(app).update(app, |manager, _| manager.reset());
     EnvVarCollectionManager::handle(app).update(app, |manager, _| manager.reset());
     WorkflowManager::handle(app).update(app, |manager, _| manager.reset());
-
-    // Stop and leave all shared sessions
-    SharedSessionManager::handle(app).update(app, |manager, ctx| {
-        manager.stop_all_shared_sessions(ctx);
-        manager.clear_joined();
-    });
 
     // Dispatch the GUI root-view action on every open GUI window so its state can be updated
     // correctly. Other front-ends, such as the TUI, manage their logout transition separately.

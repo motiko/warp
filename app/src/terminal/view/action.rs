@@ -4,8 +4,6 @@ use std::path::PathBuf;
 
 use command_corrections::Correction;
 use pathfinder_geometry::vector::Vector2F;
-use session_sharing_protocol::common::Role;
-use session_sharing_protocol::sharer::RoleUpdateReason;
 use warp_util::user_input::UserInput;
 use warpui::elements::HyperlinkUrl;
 use warpui::event::ModifiersState;
@@ -30,7 +28,6 @@ use crate::terminal::model::index::Point;
 use crate::terminal::model::mouse::MouseState;
 use crate::terminal::model::selection::{SelectAction, SelectionDirection};
 use crate::terminal::model::terminal_model::{BlockIndex, WithinModel};
-use crate::terminal::shared_session::SharedSessionActionSource;
 use crate::workflows::workflow::Workflow;
 
 /// This represents whether entering a subshell for a particular command should become automatic in
@@ -72,9 +69,6 @@ pub enum TerminalAction {
     AltScroll {
         delta: i32,
         point: Point,
-    },
-    SharedSessionViewerAltScroll {
-        new_scroll_top: Lines,
     },
     ScrollToTopOfBlock {
         topmost_block: BlockIndex,
@@ -130,7 +124,6 @@ pub enum TerminalAction {
     CopyOutputs,
     CopyCommands,
     CopyGitBranch,
-    OpenShareModal,
     ReinputCommands,
     ReinputCommandsWithSudo,
     ClearBuffer,
@@ -219,26 +212,9 @@ pub enum TerminalAction {
     OpenInWarpBanner(OpenInWarpBannerAction),
     OpenBlockFilterEditor(BlockIndex),
     ImportSettings,
-    StopSharingCurrentSession {
-        source: SharedSessionActionSource,
-    },
-    OpenSharedSessionOnDesktop {
-        source: SharedSessionActionSource,
-    },
     ToggleBlockFilterOnSelectedOrLastBlock(ToggleBlockFilterSource),
-    OpenShareSessionModal {
-        source: SharedSessionActionSource,
-    },
-    CopySharedSessionLink {
-        source: SharedSessionActionSource,
-    },
     VimModeBanner(VimModeBannerAction),
     ToggleSnackbarInActivePane,
-    MakeAllParticipantsReaders {
-        reason: RoleUpdateReason,
-    },
-    OpenSharedSessionViewerRoleMenu,
-    RequestSharedSessionRole(Role),
     DragAndDropFiles(Vec<String>),
 
     HyperlinkClick(HyperlinkUrl),
@@ -276,10 +252,6 @@ impl fmt::Debug for TerminalAction {
         match self {
             Scroll { delta } => write!(f, "Scroll {{ delta: {delta} }}"),
             AltScroll { delta, .. } => write!(f, "AltScroll {{ delta: {delta} }}"),
-            SharedSessionViewerAltScroll { new_scroll_top } => write!(
-                f,
-                "SharedSessionViewerAltScroll {{ new_scroll_top: {new_scroll_top} }}"
-            ),
             ScrollToTopOfBlock { topmost_block } => write!(
                 f,
                 "JumpToPreviousCommand {{ topmost_block: {topmost_block} }}"
@@ -332,7 +304,6 @@ impl fmt::Debug for TerminalAction {
             CopyOutputs => f.write_str("CopyOutputs"),
             CopyCommands => f.write_str("CopyCommands"),
             CopyGitBranch => f.write_str("CopyGitBranch"),
-            OpenShareModal => f.write_str("OpenShareModal"),
             ReinputCommands => f.write_str("ReinputCommands"),
             ReinputCommandsWithSudo => f.write_str("ReinputCommandsWithSudo"),
             ClearBuffer => f.write_str("ClearBuffer"),
@@ -419,24 +390,11 @@ impl fmt::Debug for TerminalAction {
                 write!(f, "OpenBlockFilterEditor({block_index:?})")
             }
             ImportSettings => write!(f, "ImportSettings"),
-            StopSharingCurrentSession { source } => {
-                write!(f, "StopSharingCurrentSession({source:?})")
-            }
-            OpenSharedSessionOnDesktop { source } => {
-                write!(f, "OpenSharedSessionOnDesktop({source:?})")
-            }
             ToggleBlockFilterOnSelectedOrLastBlock(_) => {
                 f.write_str("ToggleBlockFilterOnSelectedOrLastBlock")
             }
-            OpenShareSessionModal { source } => write!(f, "OpenShareSessionModal({source:?})"),
-            CopySharedSessionLink { .. } => f.write_str("CopySharedSessionLink"),
             VimModeBanner(action) => write!(f, "VimModeBanner({action:?})"),
             ToggleSnackbarInActivePane => write!(f, "ToggleSnackbarInActivePane"),
-            MakeAllParticipantsReaders { reason } => {
-                write!(f, "MakeAllParticipantsReaders {{ reason: {reason:?} }}")
-            }
-            OpenSharedSessionViewerRoleMenu => write!(f, "OpenSharedSessionViewerRoleMenu"),
-            RequestSharedSessionRole(role) => write!(f, "RequestSharedSessionRole({role:?})"),
             MiddleClickOnGrid { position } => {
                 write!(f, "MiddleClickonGrid {{ position: {position:?} }}")
             }

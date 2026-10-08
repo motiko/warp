@@ -14569,7 +14569,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
- "session-sharing-protocol",
  "shellexpand",
  "signal-hook",
  "signal-hook-mio",

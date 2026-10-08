@@ -3041,9 +3041,7 @@ fn test_prompt_context_menu_items_for_context_chips() {
         terminal.update(&mut app, |view, ctx| {
             let model = view.model.lock();
             view.current_prompt.update(ctx, |prompt, ctx| {
-                let PromptType::Dynamic { prompt } = prompt else {
-                    return;
-                };
+                let PromptType::Dynamic { prompt } = prompt;
                 prompt.update(ctx, |prompt, ctx| {
                     prompt.update_context(model.block_list().active_block(), ctx)
                 });
@@ -3102,9 +3100,7 @@ fn test_prompt_context_menu_items_for_no_context_chips() {
         terminal.update(&mut app, |view, ctx| {
             let model = view.model.lock();
             view.current_prompt.update(ctx, |prompt, ctx| {
-                let PromptType::Dynamic { prompt } = prompt else {
-                    return;
-                };
+                let PromptType::Dynamic { prompt } = prompt;
                 prompt.update(ctx, |prompt, ctx| {
                     prompt.update_context(model.block_list().active_block(), ctx)
                 });

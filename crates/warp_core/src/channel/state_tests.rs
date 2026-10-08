@@ -23,6 +23,5 @@ fn default_channel_state_is_offline() {
     assert!(ChannelState::is_offline());
     assert!(ChannelState::server_root_url().is_empty());
     assert!(ChannelState::ws_server_url().is_empty());
-    assert!(ChannelState::session_sharing_server_url().is_none());
     assert!(!ChannelState::server_root_domain().is_tuple());
 }

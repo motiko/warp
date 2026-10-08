@@ -2,8 +2,6 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use session_sharing_protocol::common::{ParticipantId, Role, SessionId as SharedSessionId};
-use session_sharing_protocol::sharer::{SessionEndedReason, SessionSourceType};
 use strum_macros::{EnumDiscriminants, EnumIter};
 use warp_completer::completer::MatchType;
 use warp_core::command::ExitCode;
@@ -31,18 +29,15 @@ use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::rich_text::telemetry::NotebookTelemetryAction;
 use crate::search::QueryFilter;
 use crate::search::command_search::searcher::CommandSearchItemAction;
-use crate::server::block::DisplaySetting;
 use crate::server::ids::ServerId;
 use crate::settings::import::config::ParsedTerminalSetting;
 use crate::settings::import::model::TerminalType;
 use crate::tab::TabTelemetryAction;
-use crate::terminal::ShareBlockType;
 use crate::terminal::block_list_viewport::InputMode;
 use crate::terminal::input::TelemetryInputSuggestionsMode;
 use crate::terminal::model::session::SessionId;
 use crate::terminal::model::terminal_model::BlockSelectionCardinality;
 use crate::terminal::settings::AltScreenPaddingMode;
-use crate::terminal::shared_session::SharedSessionActionSource;
 use crate::terminal::shell::ShellType;
 use crate::terminal::view::{
     BlockEntity, BlockSelectionDetails, NotificationsDiscoveryBannerAction,
@@ -250,9 +245,6 @@ pub struct OpenedSharingDialogEvent {
     /// Metadata for the object being shared, if it's a Warp Drive object.
     #[serde(flatten)]
     pub object_metadata: Option<CloudObjectTelemetryMetadata>,
-
-    /// Metadata for the session being shared, if there is one.
-    pub session_id: Option<SharedSessionId>,
 }
 
 /// How the user opened the Warp Drive sharing dialog.
@@ -531,7 +523,6 @@ pub enum TelemetryEvent {
     },
     /// Copy command, output or both for some number of blocks.
     ContextMenuCopy(BlockEntity, BlockSelectionCardinality),
-    ContextMenuOpenShareModal(BlockSelectionCardinality),
     ContextMenuFindWithinBlocks(BlockSelectionCardinality),
     ContextMenuCopyPrompt {
         part: PromptPart,
@@ -551,13 +542,6 @@ pub enum TelemetryEvent {
     },
     ReinputCommands(BlockSelectionCardinality),
     JumpToPreviousCommand,
-    CopyBlockSharingLink(ShareBlockType),
-    GenerateBlockSharingLink {
-        share_type: ShareBlockType,
-        display_setting: DisplaySetting,
-        show_prompt: bool,
-        redact_secrets: bool,
-    },
     BlockSelection(BlockSelectionDetails),
     BootstrappingSlow(BootstrappingInfo),
     BootstrappingSlowContents(SlowBootstrapInfo),
@@ -768,7 +752,6 @@ pub enum TelemetryEvent {
     },
     QuitModalShown {
         running_processes: u32,
-        shared_sessions: u32,
         modal_for: CloseTarget,
     },
     QuitModalCancel {
@@ -897,36 +880,6 @@ pub enum TelemetryEvent {
         is_empty_editor: bool,
         // Is PageDown. Otherwise is PageUp
         is_down: bool,
-    },
-    /// Emitted on start share attempt, not on success.
-    StartedSharingCurrentSession {
-        includes_scrollback: bool,
-        source: SharedSessionActionSource,
-    },
-    StoppedSharingCurrentSession {
-        source: SharedSessionActionSource,
-        reason: SessionEndedReason,
-    },
-    JoinedSharedSession {
-        session_id: SharedSessionId,
-        source_type: SessionSourceType,
-    },
-    /// Emitted when a shared session sharer cancels granting a role
-    /// (currently only applies when granting executor mode).
-    SharerCancelledGrantRole {
-        role: Role,
-    },
-    /// Emitted when a shared session sharer checks "dont show again"
-    /// in confirmation modal when granting a role.
-    SharerGrantModalDontShowAgain,
-    JumpToSharedSessionParticipant {
-        jumped_to: ParticipantId,
-    },
-    CopiedSharedSessionLink {
-        source: SharedSessionActionSource,
-    },
-    WebSessionOpenedOnDesktop {
-        source: SharedSessionActionSource,
     },
     WebCloudObjectOpenedOnDesktop {
         object_metadata: CloudObjectTelemetryMetadata,
@@ -1334,9 +1287,6 @@ impl TelemetryEvent {
             TelemetryEvent::ContextMenuFindWithinBlocks(cardinality) => {
                 Some(json!({ "cardinality": cardinality }))
             }
-            TelemetryEvent::ContextMenuOpenShareModal(cardinality) => {
-                Some(json!({ "cardinality": cardinality }))
-            }
             TelemetryEvent::ContextMenuCopyPrompt { part } => Some(json!({ "part": part })),
             TelemetryEvent::ReinputCommands(cardinality) => {
                 Some(json!({ "cardinality": cardinality }))
@@ -1467,10 +1417,9 @@ impl TelemetryEvent {
             }
             TelemetryEvent::QuitModalShown {
                 running_processes,
-                shared_sessions,
                 modal_for,
             } => Some(
-                json!({ "running_processes": running_processes, "shared_sessions": shared_sessions, "modal_for": modal_for }),
+                json!({ "running_processes": running_processes, "modal_for": modal_for }),
             ),
             TelemetryEvent::QuitModalCancel {
                 nav_palette,
@@ -1575,28 +1524,10 @@ impl TelemetryEvent {
             } => Some(json!({
                 "max_bytes_per_second": max_bytes_per_second,
             })),
-            TelemetryEvent::GenerateBlockSharingLink {
-                share_type,
-                display_setting,
-                show_prompt,
-                redact_secrets,
-            } => Some(
-                json!({"share_type": share_type, "display_setting": display_setting, "show_prompt": show_prompt, "redact_secrets": redact_secrets}),
-            ),
-            TelemetryEvent::CopyBlockSharingLink(share_type) => {
-                Some(json!({ "share_type": share_type }))
-            }
             TelemetryEvent::PageUpDownInEditorPressed {
                 is_empty_editor,
                 is_down,
             } => Some(json!({"is_empty_editor": is_empty_editor, "is_down": is_down})),
-            TelemetryEvent::StartedSharingCurrentSession {
-                includes_scrollback,
-                source,
-            } => Some(json!({ "includes_scrollback": includes_scrollback, "source": source })),
-            TelemetryEvent::StoppedSharingCurrentSession { source, reason } => {
-                Some(json!({ "source": source, "reason": reason }))
-            }
             TelemetryEvent::UnsupportedShell { shell } => Some(json!({ "shell": shell })),
             TelemetryEvent::OpenAndWarpifyDockerSubshell { shell_type } => {
                 Some(json!({ "shell_type": shell_type }))
@@ -1626,21 +1557,6 @@ impl TelemetryEvent {
             TelemetryEvent::SetSshExtensionInstallMode { mode } => Some(json!({"mode": mode})),
             TelemetryEvent::SshRemoteServerChoiceDoNotAskAgainToggled { checked } => {
                 Some(json!({"checked": checked}))
-            }
-            TelemetryEvent::JoinedSharedSession {
-                session_id,
-                source_type,
-            } => Some(json!({
-                "session_id": session_id,
-                "source_type": source_type,
-            })),
-            TelemetryEvent::SharerCancelledGrantRole { role } => Some(json!({ "role": role })),
-            TelemetryEvent::JumpToSharedSessionParticipant { jumped_to } => {
-                Some(json!({ "jumped_to": jumped_to }))
-            }
-            TelemetryEvent::CopiedSharedSessionLink { source } => Some(json!({ "source": source })),
-            TelemetryEvent::WebSessionOpenedOnDesktop { source } => {
-                Some(json!({ "source": source}))
             }
             TelemetryEvent::WebCloudObjectOpenedOnDesktop { object_metadata } => Some(json!({
                 "object": object_metadata,
@@ -1851,7 +1767,6 @@ impl TelemetryEvent {
             | TelemetryEvent::CustomSecretRegexAdded
             | TelemetryEvent::CopySecret
             | TelemetryEvent::CommandFileRun
-            | TelemetryEvent::SharerGrantModalDontShowAgain
             | TelemetryEvent::LogOut
             | TelemetryEvent::UpdateBlockFilterQuery
             | TelemetryEvent::BlockFilterToolbeltButtonClicked
@@ -2058,7 +1973,6 @@ impl TelemetryEvent {
             | TelemetryEvent::Login
             | TelemetryEvent::ConfirmSuggestion { .. }
             | TelemetryEvent::ContextMenuCopy(_, _)
-            | TelemetryEvent::ContextMenuOpenShareModal(_)
             | TelemetryEvent::ContextMenuFindWithinBlocks(_)
             | TelemetryEvent::ContextMenuCopyPrompt { .. }
             | TelemetryEvent::ContextMenuToggleGitPromptDirtyIndicator { .. }
@@ -2067,8 +1981,6 @@ impl TelemetryEvent {
             | TelemetryEvent::PromptEdited { .. }
             | TelemetryEvent::ReinputCommands(_)
             | TelemetryEvent::JumpToPreviousCommand
-            | TelemetryEvent::CopyBlockSharingLink(_)
-            | TelemetryEvent::GenerateBlockSharingLink { .. }
             | TelemetryEvent::BlockSelection(_)
             | TelemetryEvent::BootstrappingSlow(_)
             | TelemetryEvent::SessionAbandonedBeforeBootstrap { .. }
@@ -2214,14 +2126,6 @@ impl TelemetryEvent {
             | TelemetryEvent::PtyThroughput { .. }
             | TelemetryEvent::CommandFileRun
             | TelemetryEvent::PageUpDownInEditorPressed { .. }
-            | TelemetryEvent::StartedSharingCurrentSession { .. }
-            | TelemetryEvent::StoppedSharingCurrentSession { .. }
-            | TelemetryEvent::JoinedSharedSession { .. }
-            | TelemetryEvent::SharerCancelledGrantRole { .. }
-            | TelemetryEvent::SharerGrantModalDontShowAgain
-            | TelemetryEvent::JumpToSharedSessionParticipant { .. }
-            | TelemetryEvent::CopiedSharedSessionLink { .. }
-            | TelemetryEvent::WebSessionOpenedOnDesktop { .. }
             | TelemetryEvent::WebCloudObjectOpenedOnDesktop { .. }
             | TelemetryEvent::UnsupportedShell { .. }
             | TelemetryEvent::LogOut
@@ -2345,10 +2249,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
                 EnablementState::Always
             }
 
-            Self::StartedSharingCurrentSession | Self::StoppedSharingCurrentSession => {
-                EnablementState::Flag(FeatureFlag::CreatingSharedSessions)
-            }
-            Self::JoinedSharedSession => EnablementState::Flag(FeatureFlag::ViewingSharedSessions),
             Self::OpenNotebook | Self::EditNotebook | Self::NotebookAction => {
                 EnablementState::Always
             }
@@ -2358,7 +2258,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::Login => EnablementState::Always,
             Self::ConfirmSuggestion => EnablementState::Always,
             Self::ContextMenuCopy => EnablementState::Always,
-            Self::ContextMenuOpenShareModal => EnablementState::Always,
             Self::ContextMenuFindWithinBlocks => EnablementState::Always,
             Self::ContextMenuCopyPrompt => EnablementState::Always,
             Self::ContextMenuToggleGitPromptDirtyIndicator => EnablementState::Always,
@@ -2367,8 +2266,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::PromptEdited => EnablementState::Always,
             Self::ReinputCommands => EnablementState::Always,
             Self::JumpToPreviousCommand => EnablementState::Always,
-            Self::CopyBlockSharingLink => EnablementState::Always,
-            Self::GenerateBlockSharingLink => EnablementState::Always,
             Self::BlockSelection => EnablementState::Always,
             Self::BootstrappingSlow => EnablementState::Always,
             Self::BootstrappingSlowContents => EnablementState::Always,
@@ -2527,11 +2424,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::ToggleSnackbarInActivePane => EnablementState::Always,
             Self::PaneDragInitiated => EnablementState::Always,
             Self::PaneDropped => EnablementState::Always,
-            Self::SharerCancelledGrantRole => EnablementState::Always,
-            Self::SharerGrantModalDontShowAgain => EnablementState::Always,
-            Self::JumpToSharedSessionParticipant => EnablementState::Always,
-            Self::CopiedSharedSessionLink => EnablementState::Always,
-            Self::WebSessionOpenedOnDesktop => EnablementState::Always,
             Self::WebCloudObjectOpenedOnDesktop => EnablementState::Always,
             Self::ToggleShowBlockDividers => EnablementState::Flag(FeatureFlag::MinimalistUI),
             Self::ResourceUsageStats => EnablementState::Always,
@@ -2607,10 +2499,7 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::ToggleFocusPaneOnHover => "Toggle Focus Pane On Hover",
             Self::JumpToPreviousCommand => "Jumped to Previous Command",
             Self::ContextMenuFindWithinBlocks => "Context Menu: Find Within Blocks",
-            Self::ContextMenuOpenShareModal => "Context Menu: Initiate Block Sharing",
             Self::ContextMenuCopy => "Context Menu Copy",
-            Self::CopyBlockSharingLink => "Copy Block Sharing Link",
-            Self::GenerateBlockSharingLink => "Generate Block Sharing Link",
             Self::BlockSelection => "Block Selection",
             Self::BootstrappingSlow => "Bootstrapping Slow",
             Self::BootstrappingSlowContents => "Bootstrap Slow Contents",
@@ -2774,14 +2663,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::PtyThroughput => "PTY Throughput",
             Self::CommandFileRun => "Command File Run",
             Self::PageUpDownInEditorPressed => "Page Up/Down In Editor Pressed",
-            Self::StartedSharingCurrentSession => "Started Sharing Current Session",
-            Self::StoppedSharingCurrentSession => "Stopped Sharing Current Session",
-            Self::JoinedSharedSession => "Joined Shared Session",
-            Self::SharerCancelledGrantRole => "Sharer Cancelled Grant Role",
-            Self::SharerGrantModalDontShowAgain => "Don't Show Sharer Grant Modal Again",
-            Self::JumpToSharedSessionParticipant { .. } => "Jumped to Shared Session Participant",
-            Self::CopiedSharedSessionLink { .. } => "Copied Shared Session Link",
-            Self::WebSessionOpenedOnDesktop { .. } => "Web session opened on desktop",
             Self::WebCloudObjectOpenedOnDesktop { .. } => "Warp Drive object opened on desktop",
             Self::UnsupportedShell => "Unsupported Shell",
             Self::SettingsImportInitiated => "Settings Import Initiated",
@@ -2897,7 +2778,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::Login => "Login is successful",
             Self::ConfirmSuggestion => "Accepted tab completion suggestion",
             Self::ContextMenuCopy => "Clicked \"Copy\" in context menu",
-            Self::ContextMenuOpenShareModal => "Opened \"Share\" modal via context menu",
             Self::ContextMenuFindWithinBlocks => "Clicked \"find within blocks\" in context menu",
             Self::ContextMenuCopyPrompt => "Clicked  \"Copy Prompt\" in context menu",
             Self::ContextMenuToggleGitPromptDirtyIndicator => {
@@ -2908,8 +2788,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::PromptEdited => "Edited the prompt using the built-in prompt editor",
             Self::ReinputCommands => "Clicked \"reinput commands\" in context menu",
             Self::JumpToPreviousCommand => "Jumped to a previous command",
-            Self::CopyBlockSharingLink => "Clicked \"Share block...\" in context menu",
-            Self::GenerateBlockSharingLink => "Generated Block sharing link",
             Self::BlockSelection => "Selected Block",
             Self::BootstrappingSlow => "Slow bootstrap on session startup",
             Self::BootstrappingSlowContents => {
@@ -3187,24 +3065,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             }
             Self::PageUpDownInEditorPressed => {
                 "Pressed `PAGE-UP` or `PAGE-DOWN` within the Input Editor"
-            }
-            Self::StartedSharingCurrentSession => "Started sharing the current session",
-            Self::StoppedSharingCurrentSession => "Halted sharing the current session",
-            Self::JoinedSharedSession => {
-                "When you join another instance of Warp using shared sessions"
-            }
-            Self::SharerCancelledGrantRole => {
-                "When you cancel granting a role to a shared session participant"
-            }
-            Self::SharerGrantModalDontShowAgain => {
-                "When you check don't show again on the confirmation modal for granting a role"
-            }
-            Self::JumpToSharedSessionParticipant => {
-                "Clicked on a shared session participant avatar to jump to their location in the session"
-            }
-            Self::CopiedSharedSessionLink => "Copied a shared session link",
-            Self::WebSessionOpenedOnDesktop => {
-                "Shared session viewed on the web was opened on the desktop"
             }
             Self::WebCloudObjectOpenedOnDesktop => {
                 "Warp Drive object on the web was opened on the desktop"

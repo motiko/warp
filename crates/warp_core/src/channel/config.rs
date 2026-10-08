@@ -42,9 +42,6 @@ pub struct WarpServerConfig {
     pub server_root_url: Cow<'static, str>,
     /// The URL for the RTC server, which serves real-time updates for Warp Drive objects.
     pub rtc_server_url: Cow<'static, str>,
-    /// The URL for the session sharing server, or [`None`] if session sharing is not
-    /// supported.
-    pub session_sharing_server_url: Option<Cow<'static, str>>,
     /// The API key to use when making requests to Firebase Authentication endpoints.
     pub firebase_auth_api_key: Cow<'static, str>,
     /// Configuration for GCP Identity-Aware Proxy authentication, present only on
@@ -60,7 +57,6 @@ impl WarpServerConfig {
         Self {
             server_root_url: "".into(),
             rtc_server_url: "".into(),
-            session_sharing_server_url: None,
             firebase_auth_api_key: "".into(),
             iap_config: None,
         }

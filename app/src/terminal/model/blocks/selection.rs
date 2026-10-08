@@ -16,7 +16,6 @@ use super::{
 };
 use crate::env_vars::env_var_collection_block::EnvVarCollectionBlock;
 use crate::terminal::GridType;
-use crate::terminal::event::Event as TerminalEvent;
 use crate::terminal::model::block::BlockSection;
 use crate::terminal::model::index::{Direction, Point, Side};
 use crate::terminal::model::selection::{ExpandedSelectionRange, Selection, SelectionDirection};
@@ -864,8 +863,6 @@ impl BlockList {
     pub fn clear_selection(&mut self) {
         self.selection = None;
         self.rich_content_selections.clear();
-        self.event_proxy
-            .send_app_event(TerminalEvent::TextSelectionChanged);
     }
 
     /// Records that the given rich content (AI) block view currently has an
@@ -890,8 +887,6 @@ impl BlockList {
             self.selection = None;
         }
         self.rich_content_selections = vec![view_id];
-        self.event_proxy
-            .send_app_event(TerminalEvent::TextSelectionChanged);
     }
 
     /// Clears the tracked text selection for the given rich content (AI) block
@@ -903,8 +898,6 @@ impl BlockList {
             .position(|id| *id == view_id)
         {
             self.rich_content_selections.remove(position);
-            self.event_proxy
-                .send_app_event(TerminalEvent::TextSelectionChanged);
         }
     }
 
@@ -1165,8 +1158,6 @@ impl BlockList {
 
     fn set_selection(&mut self, value: BlockListSelection) {
         self.selection = Some(value);
-        self.event_proxy
-            .send_app_event(TerminalEvent::TextSelectionChanged);
     }
 
     /// Return the list of corresponding rich content block view ids contained in the active

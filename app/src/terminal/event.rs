@@ -122,7 +122,6 @@ pub enum Event {
     /// relaunch the app.
     FinishUpdate(FinishUpdateValue),
     ExternalShellWidgetSelection(ExternalShellWidgetSelectionValue),
-    TextSelectionChanged,
     ShellSpawned(ShellType),
     ImageReceived {
         image_id: u32,
@@ -460,7 +459,6 @@ impl Debug for Event {
                     data.buffer.len()
                 )
             }
-            Event::TextSelectionChanged => write!(f, "TextSelectionChanged"),
             Event::ShellSpawned(shell_type) => write!(f, "ShellSpawned({shell_type:?})"),
             Event::ImageReceived { image_id, .. } => {
                 write!(f, "ImageReceived(image_id: {image_id})")

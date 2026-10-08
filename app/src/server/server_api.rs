@@ -1,5 +1,4 @@
 pub mod auth;
-pub mod block;
 pub mod object;
 pub mod team;
 pub mod workspace;
@@ -12,7 +11,6 @@ use std::time::Duration;
 use ::http::header::CONTENT_LENGTH;
 use anyhow::{Result, anyhow};
 use auth::AuthClient;
-use block::BlockClient;
 use channel_versions::ChannelVersions;
 use chrono::{DateTime, FixedOffset};
 use instant::Instant;
@@ -484,10 +482,6 @@ impl ServerApiProvider {
 
     pub fn get_auth_client(&self) -> Arc<dyn AuthClient> {
         self.auth_client.clone()
-    }
-
-    pub fn get_block_client(&self) -> Arc<dyn BlockClient> {
-        self.server_api.clone()
     }
 
     pub fn get_workspace_client(&self) -> Arc<dyn WorkspaceClient> {
