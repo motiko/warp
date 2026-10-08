@@ -9,7 +9,7 @@ use warp_core::channel::ChannelState;
 use warp_core::features::FeatureFlag;
 use warp_errors::{report_error, report_if_error};
 use warp_server_auth::user::persistence::PersistedUser;
-use warpui::{AppContext, Entity, ModelContext, SingletonEntity, UpdateModel};
+use warpui::{Entity, ModelContext, SingletonEntity, UpdateModel};
 
 use super::auth_redirect::AuthRedirectPayload;
 use super::auth_state::{AuthState, PersistAction};

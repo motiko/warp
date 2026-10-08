@@ -1,7 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use dunce::canonicalize;
 use itertools::Itertools;
 use pathfinder_color::ColorU;
 use warp_core::features::FeatureFlag;
@@ -37,9 +36,8 @@ use crate::code_review::diff_state::DiffStateModel;
 use crate::pane_group::pane::view::header::PANE_HEADER_HEIGHT;
 use crate::pane_group::pane::view::header::components::HEADER_EDGE_PADDING;
 use crate::pane_group::{
-    Event as PaneGroupEvent, PaneGroup, WorkingDirectoriesEvent, WorkingDirectoriesModel,
+    PaneGroup, WorkingDirectoriesEvent, WorkingDirectoriesModel,
 };
-use crate::settings::{AISettings, AISettingsChangedEvent};
 use crate::terminal::input::MenuPositioning;
 use crate::terminal::resizable_data::{ModalType, ResizableData};
 use crate::terminal::view::TerminalView;
@@ -1114,7 +1112,7 @@ impl RightPanelView {
             ctx.notify();
         });
 
-        ctx.subscribe_to_view(&code_review_view, |me, code_review, event, ctx| {
+        ctx.subscribe_to_view(&code_review_view, |_me, _code_review, event, ctx| {
             match event {
                 #[cfg(feature = "local_fs")]
                 CodeReviewViewEvent::OpenFileWithTarget {

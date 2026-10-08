@@ -37,7 +37,6 @@ use self::renderer::RendererStyles;
 use crate::appearance::Appearance;
 use crate::features::FeatureFlag;
 use crate::themes::theme::PromptColors;
-use crate::ui_components::blended_colors;
 use crate::ui_components::icons::Icon;
 
 /// The value of a context chip. Most chips produce plain text, but some

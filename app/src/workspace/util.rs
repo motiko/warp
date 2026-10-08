@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use warpui::elements::MouseStateHandle;
-use warpui::{AppContext, EntityId, SingletonEntity, ViewContext, ViewHandle, WindowId};
+use warpui::{AppContext, EntityId, SingletonEntity, ViewContext, WindowId};
 
 use crate::appearance::Appearance;
 use crate::pane_group::PaneId;

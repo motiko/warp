@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
-use ai::project_context::model::ProjectContextModel;
 use pane_group::{NotebookPane, PaneState, SplitPaneState, TerminalPaneId};
 #[cfg(feature = "local_fs")]
 use repo_metadata::CanonicalizedPath;
@@ -23,20 +21,7 @@ use warpui::{AddSingletonModel, App, ViewHandle};
 use watcher::HomeDirectoryWatcher;
 
 use super::*;
-use crate::ai::AIRequestUsageModel;
-use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
-use crate::ai::agent_conversations_model::AgentConversationsModel;
-use crate::ai::blocklist::{BlocklistAIHistoryModel, BlocklistAIPermissions};
-use crate::ai::document::ai_document_model::AIDocumentModel;
-use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
-use crate::ai::facts::manager::AIFactManager;
-use crate::ai::llms::LLMPreferences;
-use crate::ai::mcp::gallery::MCPGalleryManager;
-use crate::ai::mcp::templatable_manager::TemplatableMCPServerManager;
-use crate::ai::mcp::{FileBasedMCPManager, FileMCPWatcher};
-use crate::ai::outline::RepoOutlines;
-use crate::ai::restored_conversations::RestoredAgentConversations;
-use crate::ai::skills::SkillManager;
+use crate::cloud_object::Owner;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::model::view::CloudViewModel;
 use crate::context_chips::prompt::Prompt;
@@ -47,8 +32,6 @@ use crate::notebooks::notebook::NotebookView;
 use crate::pane_group::{Direction, PaneGroupAction, PaneId};
 use crate::pricing::PricingInfoModel;
 use crate::projects::persisted_workspace::PersistedWorkspace;
-#[cfg(not(target_family = "wasm"))]
-use crate::remote_server::codebase_index_model::RemoteCodebaseIndexModel;
 use crate::resource_center::ResourceCenterPage;
 use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::server::cloud_objects::listener::Listener;
@@ -116,7 +99,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     app.add_singleton_model(TeamTesterStatus::mock);
     app.add_singleton_model(TeamUpdateManager::mock);
     app.add_singleton_model(UpdateManager::mock);
-    app.add_singleton_model(MCPGalleryManager::new);
     app.add_singleton_model(CloudViewModel::mock);
     app.add_singleton_model(Listener::mock);
     app.add_singleton_model(|_| Appearance::mock());
@@ -143,33 +125,15 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
             ctx,
         )
     });
-    app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
-    // QueuedQueryModel subscribes to history events; register after the
-    // history model is in place.
-    app.add_singleton_model(crate::ai::blocklist::QueuedQueryModel::new);
-    app.add_singleton_model(|_| ActiveAgentViewsModel::new());
-    app.add_singleton_model(AgentConversationsModel::new);
     app.add_singleton_model(SessionPermissionsManager::new);
-    app.add_singleton_model(LLMPreferences::new);
     app.add_singleton_model(|_| SettingsPaneManager::new());
-    app.add_singleton_model(|_| AIFactManager::new());
 
-    // Initialize file-based MCP dependencies.
     app.add_singleton_model(|_| DetectedRepositories::default());
     app.add_singleton_model(HomeDirectoryWatcher::new_for_test);
     app.add_singleton_model(DirectoryWatcher::new);
     app.add_singleton_model(WarpManagedPathsWatcher::new_for_testing);
-    app.add_singleton_model(FileMCPWatcher::new);
-    app.add_singleton_model(|_| FileBasedMCPManager::default());
-
-    app.add_singleton_model(|_| TemplatableMCPServerManager::default());
     #[cfg(feature = "local_fs")]
     app.add_singleton_model(FileModel::new);
-    app.add_singleton_model(|ctx| {
-        AIExecutionProfilesModel::new(&crate::LaunchMode::new_for_unit_test(), ctx)
-    });
-    app.add_singleton_model(RepoOutlines::new_for_test);
-    app.add_singleton_model(BlocklistAIPermissions::new);
     app.add_singleton_model(|_| GPUState::new());
     // Register IapManager in a disabled state (no IapState). The settings
     // page's `IapManager::as_ref(ctx).is_enabled()` check panics if the
@@ -181,10 +145,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
             ctx,
         )
     });
-    app.add_singleton_model(|_| RestoredAgentConversations::new_seeded(vec![]));
-    app.add_singleton_model(|ctx| {
-        AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client())
-    });
     // Register GlobalResourceHandlesProvider before ServerExperiments which depends on it
     let global_resource_handles = GlobalResourceHandles::mock(app);
     app.add_singleton_model(|_| GlobalResourceHandlesProvider::new(global_resource_handles));
@@ -193,8 +153,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     app.add_singleton_model(|_| IgnoredSuggestionsModel::new(vec![]));
     app.add_singleton_model(|_| crate::code_review::git_repo_model::GitRepoModels::new());
     app.add_singleton_model(remote_server::manager::RemoteServerManager::new);
-    #[cfg(not(target_family = "wasm"))]
-    app.add_singleton_model(RemoteCodebaseIndexModel::new);
 
     #[cfg(feature = "local_fs")]
     app.add_singleton_model(RepoMetadataModel::new);
@@ -214,20 +172,9 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
 
     app.update(experiments::init);
 
-    app.add_singleton_model(|ctx| {
-        CodebaseIndexManager::new_for_test(ServerApiProvider::as_ref(ctx).get(), ctx)
-    });
     app.add_singleton_model(PersistedWorkspace::new_for_test);
-    app.add_singleton_model(|_| ProjectContextModel::default());
     app.add_singleton_model(|_| PricingInfoModel::new());
-    app.add_singleton_model(crate::ai::pricing_promotion::PricingPromotionState::new);
-    app.add_singleton_model(AIDocumentModel::new);
     app.add_singleton_model(|_| History::new(vec![]));
-
-    // SkillManager is registered after `HomeDirectoryWatcher`, `DirectoryWatcher`,
-    // `WarpManagedPathsWatcher`, `DetectedRepositories`, and `RepoMetadataModel`
-    // because `SkillWatcher::new` subscribes to all of them.
-    app.add_singleton_model(SkillManager::new);
 
     // Make sure to initialize the keybindings so that they are available for subviews
     app.update(workspace::init);
@@ -518,97 +465,6 @@ fn test_tools_panel_does_not_suppress_vertical_tab_bar_traffic_light_padding() {
         assert_vertical_tabs_tools_panel_preserves_padding(config);
     }
 }
-/// Regression test for the handoff model carry-over: the copy must preserve
-/// the source pane's explicit selection M even when M equals the destination
-/// pane's current profile default — the case where re-normalizing the resolved
-/// id against the destination's default (instead of copying the raw override)
-/// would drop the override and let the source profile's default D win.
-#[test]
-fn copy_model_and_profile_preserves_explicit_model_over_source_profile_default() {
-    use warpui::EntityId;
-
-    use crate::ai::llms::{AvailableLLMs, LLMId, LLMInfo, ModelsByFeature};
-    use crate::workspaces::user_workspaces::TeamlessScopeForTest;
-
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let m = LLMId::from("auto-genius");
-        let d = LLMId::from("auto");
-
-        let source_id = EntityId::new();
-        let new_id = EntityId::new();
-
-        app.update(|ctx| {
-            // Catalog containing both slugs so profile/override ids resolve.
-            LLMPreferences::handle(ctx).update(ctx, |prefs, ctx| {
-                let models = ModelsByFeature {
-                    agent_mode: AvailableLLMs::new(
-                        "auto".into(),
-                        vec![
-                            LLMInfo::new_for_test("auto"),
-                            LLMInfo::new_for_test("auto-genius"),
-                        ],
-                        None,
-                    )
-                    .expect("valid available llms"),
-                    ..Default::default()
-                };
-                prefs.update_feature_model_choices(Ok(models), ctx);
-            });
-
-            // Default profile default = M (the destination pane's current profile).
-            // Source uses a second profile whose default = D.
-            let profiles = AIExecutionProfilesModel::handle(ctx);
-            let default_profile_id = profiles.read(ctx, |p, _| p.default_profile_id());
-            profiles.update(ctx, |p, ctx| {
-                p.set_base_model(&default_profile_id, Some(m.clone()), ctx);
-                let source_profile_id = p.create_profile(ctx).expect("create source profile");
-                p.set_base_model(&source_profile_id, Some(d.clone()), ctx);
-                p.set_active_profile(source_id, source_profile_id, ctx);
-            });
-
-            // Source's explicit selection = M (differs from its profile default D).
-            let scope = TeamlessScopeForTest;
-            LLMPreferences::handle(ctx).update(ctx, |prefs, ctx| {
-                prefs.update_preferred_agent_mode_llm(&scope, &m, source_id, ctx);
-            });
-        });
-
-        // Preconditions: source resolves to M; destination's current default is M.
-        app.update(|ctx| {
-            let scope = TeamlessScopeForTest;
-            let prefs = LLMPreferences::as_ref(ctx);
-            assert_eq!(
-                prefs.get_active_base_model(&scope, ctx, Some(source_id)).id,
-                m,
-                "source pane should resolve to its explicit selection"
-            );
-            assert_eq!(
-                prefs.get_active_base_model(&scope, ctx, Some(new_id)).id,
-                m,
-                "destination pane's current profile default should be M"
-            );
-        });
-
-        // Carry source -> new via the production helper.
-        app.update(|ctx| {
-            Workspace::copy_model_and_profile_to_terminal_view(source_id, new_id, ctx);
-        });
-
-        app.update(|ctx| {
-            let scope = TeamlessScopeForTest;
-            assert_eq!(
-                LLMPreferences::as_ref(ctx)
-                    .get_active_base_model(&scope, ctx, Some(new_id))
-                    .id,
-                m,
-                "destination pane must retain the source's explicit selection, not the source profile default"
-            );
-        });
-    });
-}
-
 #[cfg(feature = "local_fs")]
 fn open_worktree_sidecar(workspace: &ViewHandle<Workspace>, app: &mut App) {
     workspace.update(app, |workspace, ctx| {
@@ -1171,44 +1027,6 @@ fn active_session_state(
     }
 }
 
-#[test]
-fn restore_conversation_in_active_pane_enters_existing_live_conversation_without_loading() {
-    let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let workspace = mock_workspace(&mut app);
-        let terminal_view = workspace.read(&app, |workspace, ctx| {
-            workspace
-                .active_tab_pane_group()
-                .as_ref(ctx)
-                .focused_session_view(ctx)
-                .expect("workspace should start with a terminal view")
-        });
-        let terminal_view_id = terminal_view.read(&app, |view, _| view.view_id());
-        let conversation_id = BlocklistAIHistoryModel::handle(&app)
-            .update(&mut app, |history, ctx| {
-                history.start_new_conversation(terminal_view_id, false, false, ctx)
-            });
-
-        workspace.update(&mut app, |workspace, ctx| {
-            assert_eq!(workspace.tab_count(), 1);
-
-            workspace.restore_conversation_in_active_pane(conversation_id, ctx);
-
-            assert_eq!(workspace.tab_count(), 1);
-        });
-
-        terminal_view.read(&app, |view, ctx| {
-            assert_eq!(view.active_conversation_id(ctx), Some(conversation_id));
-            assert_eq!(
-                view.model.lock().conversation_transcript_viewer_status(),
-                None
-            );
-        });
-    });
-}
 fn new_session_menu_label(item: &MenuItem<WorkspaceAction>) -> String {
     match item {
         MenuItem::Item(fields) => fields.label().to_string(),
@@ -4706,284 +4524,6 @@ fn test_pin_tab_on_grouped_tab_extracts_then_pins() {
             assert!(!workspace.tabs[2].pinned);
         });
     });
-}
-
-#[cfg(target_family = "wasm")]
-mod simplified_wasm_tab_bar {
-    use chrono::Utc;
-    use uuid::Uuid;
-    use warpui::{AppContext, View, ViewContext};
-
-    use super::*;
-    use crate::ai::agent::api::ServerConversationToken;
-    use crate::ai::agent::conversation::{
-        AIAgentHarness, AIConversation, ServerAIConversationMetadata,
-    };
-    use crate::ai::blocklist::history_model::CloudConversationData;
-    use crate::auth::user::TEST_USER_UID;
-    use crate::cloud_object::{Owner, Revision, ServerMetadata, ServerPermissions};
-    use crate::persistence::model::ConversationUsageMetadata;
-    use crate::server::ids::ServerId;
-
-    fn mock_workspace_from_cloud_conversation(app: &mut App) -> ViewHandle<Workspace> {
-        let global_resource_handles = GlobalResourceHandles::mock(app);
-        let (_, workspace) = app.add_window(WindowStyle::NotStealFocus, |ctx| {
-            Workspace::new(
-                global_resource_handles,
-                None,
-                NewWorkspaceSource::FromCloudConversationId {
-                    conversation_id: ServerConversationToken::new("test-server-token".to_string()),
-                },
-                ctx,
-            )
-        });
-        workspace
-    }
-
-    fn new_ambient_agent_task_id() -> AmbientAgentTaskId {
-        Uuid::new_v4().to_string().parse().unwrap()
-    }
-
-    fn ambient_agent_task_for_current_user(task_id: AmbientAgentTaskId) -> AmbientAgentTask {
-        let now = Utc::now();
-        AmbientAgentTask {
-            task_id,
-            parent_run_id: None,
-            title: "Owned task".to_string(),
-            state: AmbientAgentTaskState::Succeeded,
-            prompt: "test".to_string(),
-            created_at: now,
-            started_at: Some(now),
-            updated_at: now,
-            run_time: Some("PT1S".parse().unwrap()),
-            status_message: None,
-            source: Some(AgentSource::CloudMode),
-            execution_location: None,
-            session_id: None,
-            session_link: None,
-            executor: None,
-            creator: Some(TaskPrincipalInfo {
-                creator_type: "USER".to_string(),
-                uid: TEST_USER_UID.to_string(),
-                display_name: None,
-            }),
-            conversation_id: None,
-            request_usage: None,
-            is_sandbox_running: false,
-            agent_config_snapshot: None,
-            artifacts: vec![],
-            last_event_sequence: None,
-            children: vec![],
-            debug_agent_available: false,
-            scope: None,
-        }
-    }
-
-    fn mock_server_metadata() -> ServerMetadata {
-        ServerMetadata {
-            uid: ServerId::default(),
-            revision: Revision::now(),
-            metadata_last_updated_ts: Utc::now().into(),
-            trashed_ts: None,
-            folder_id: None,
-            is_welcome_object: false,
-            creator_uid: None,
-            last_editor_uid: None,
-            current_editor_uid: None,
-        }
-    }
-
-    fn mock_server_permissions() -> ServerPermissions {
-        ServerPermissions {
-            space: Owner::mock_current_user(),
-            guests: Vec::new(),
-            anyone_link_sharing: None,
-            permissions_last_updated_ts: Utc::now().into(),
-        }
-    }
-
-    fn test_server_conversation_metadata(
-        task_id: Option<AmbientAgentTaskId>,
-    ) -> ServerAIConversationMetadata {
-        ServerAIConversationMetadata {
-            title: "Restored cloud conversation".to_string(),
-            working_directory: None,
-            harness: AIAgentHarness::Oz,
-            usage: ConversationUsageMetadata {
-                was_summarized: false,
-                context_window_usage: 0.0,
-                credits_spent: 0.0,
-                platform_credits_spent: 0.0,
-                total_provider_cost_in_cents: None,
-                credits_spent_for_last_block: None,
-                charged_usage_for_last_block: None,
-                total_charged_usage: None,
-                token_usage: vec![],
-                tool_usage_metadata: Default::default(),
-                context_window_segments: Vec::new(),
-            },
-            metadata: mock_server_metadata(),
-            creator: None,
-            permissions: mock_server_permissions(),
-            ambient_agent_task_id: task_id,
-            server_conversation_token: ServerConversationToken::new(
-                "test-server-token".to_string(),
-            ),
-            artifacts: Vec::new(),
-        }
-    }
-
-    fn cloud_conversation_with_ambient_task(task_id: AmbientAgentTaskId) -> CloudConversationData {
-        let mut conversation = AIConversation::new(false);
-        conversation.set_task_id(task_id);
-        conversation.set_server_metadata(test_server_conversation_metadata(Some(task_id)));
-        CloudConversationData::Oz(Box::new(conversation))
-    }
-
-    fn restore_owned_handoff_cloud_cloud_pane(
-        workspace: &mut Workspace,
-        ctx: &mut ViewContext<Workspace>,
-    ) -> AmbientAgentTaskId {
-        let task_id = new_ambient_agent_task_id();
-        AgentConversationsModel::handle(ctx).update(ctx, |model, _| {
-            model.insert_task_for_test(ambient_agent_task_for_current_user(task_id));
-        });
-        workspace.active_tab_pane_group().update(ctx, |panes, ctx| {
-            panes.load_data_into_conversation_transcript_viewer(
-                cloud_conversation_with_ambient_task(task_id),
-                Some(task_id),
-                ctx,
-            );
-        });
-        task_id
-    }
-
-    fn assert_owned_handoff_restore_is_chrome_hostile(workspace: &Workspace, ctx: &AppContext) {
-        let terminal_view = workspace
-            .active_tab_pane_group()
-            .as_ref(ctx)
-            .focused_session_view(ctx)
-            .expect("restored pane should have an active terminal view");
-        let model = terminal_view.as_ref(ctx).model.lock();
-        assert!(!model.is_conversation_transcript_viewer());
-        assert!(matches!(
-            model.shared_session_status(),
-            SharedSessionStatus::NotShared
-        ));
-    }
-
-    #[test]
-    fn simplified_wasm_tab_bar_is_none_for_empty_workspace() {
-        App::test((), |mut app| async move {
-            initialize_app(&mut app);
-            let workspace = mock_workspace(&mut app);
-            workspace.read(&app, |workspace, ctx| {
-                assert!(!workspace.opened_from_content_deep_link);
-                assert_eq!(workspace.get_simplified_wasm_tab_bar_content(ctx), None);
-            });
-        });
-    }
-
-    #[test]
-    fn simplified_wasm_tab_bar_is_some_for_shared_session_viewer() {
-        App::test((), |mut app| async move {
-            initialize_app(&mut app);
-            let workspace = mock_workspace_viewing_shared_session(&mut app);
-            workspace.read(&app, |workspace, ctx| {
-                assert!(workspace.opened_from_content_deep_link);
-                assert!(matches!(
-                    workspace.get_simplified_wasm_tab_bar_content(ctx),
-                    Some(SimplifiedWasmTabBarContent::SharedSession { .. })
-                ));
-            });
-        });
-    }
-
-    #[test]
-    fn simplified_wasm_tab_bar_is_some_for_drive_object_without_deep_link() {
-        App::test((), |mut app| async move {
-            initialize_app(&mut app);
-            let workspace = mock_workspace(&mut app);
-            workspace.update(&mut app, |workspace, ctx| {
-                assert!(!workspace.opened_from_content_deep_link);
-                workspace.active_tab_pane_group().update(ctx, |panes, ctx| {
-                    panes.add_pane_with_direction(
-                        Direction::Right,
-                        NotebookPane::new(ctx.add_typed_action_view(NotebookView::new), ctx),
-                        true,
-                        ctx,
-                    );
-                });
-                assert!(
-                    workspace
-                        .active_tab_pane_group()
-                        .as_ref(ctx)
-                        .focused_pane_id(ctx)
-                        .is_warp_drive_object_pane()
-                );
-                assert_eq!(
-                    workspace.get_simplified_wasm_tab_bar_content(ctx),
-                    Some(SimplifiedWasmTabBarContent::WarpDriveObject)
-                );
-            });
-        });
-    }
-
-    #[test]
-    fn simplified_wasm_tab_bar_is_none_after_owned_handoff_restore_without_deep_link() {
-        let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-        let _cloud_mode = FeatureFlag::CloudMode.override_enabled(true);
-        let _setup_v2 = FeatureFlag::CloudModeSetupV2.override_enabled(true);
-        let _handoff = FeatureFlag::HandoffCloudCloud.override_enabled(true);
-
-        App::test((), |mut app| async move {
-            initialize_app(&mut app);
-            let workspace = mock_workspace(&mut app);
-            workspace.update(&mut app, |workspace, ctx| {
-                restore_owned_handoff_cloud_cloud_pane(workspace, ctx);
-                assert!(!workspace.opened_from_content_deep_link);
-                assert_owned_handoff_restore_is_chrome_hostile(workspace, ctx);
-                assert_eq!(workspace.get_simplified_wasm_tab_bar_content(ctx), None);
-                assert!(
-                    !workspace
-                        .keymap_context(ctx)
-                        .set
-                        .contains("Workspace_CloudConversationWebViewer")
-                );
-            });
-        });
-    }
-
-    #[test]
-    fn simplified_wasm_tab_bar_stays_some_after_owned_handoff_cloud_cloud_restore() {
-        let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-        let _cloud_mode = FeatureFlag::CloudMode.override_enabled(true);
-        let _setup_v2 = FeatureFlag::CloudModeSetupV2.override_enabled(true);
-        let _handoff = FeatureFlag::HandoffCloudCloud.override_enabled(true);
-
-        App::test((), |mut app| async move {
-            initialize_app(&mut app);
-            let workspace = mock_workspace_from_cloud_conversation(&mut app);
-            workspace.update(&mut app, |workspace, ctx| {
-            let task_id = restore_owned_handoff_cloud_cloud_pane(workspace, ctx);
-            assert!(workspace.opened_from_content_deep_link);
-            assert_owned_handoff_restore_is_chrome_hostile(workspace, ctx);
-            assert_eq!(
-                workspace.get_simplified_wasm_tab_bar_content(ctx),
-                Some(SimplifiedWasmTabBarContent::ConversationTranscript {
-                    task_id: Some(task_id),
-                })
-            );
-            assert!(
-                workspace
-                    .keymap_context(ctx)
-                    .set
-                    .contains("Workspace_CloudConversationWebViewer"),
-                "deep-linked conversation viewers must keep the web-viewer context so the command palette stays disabled"
-            );
-        });
-        });
-    }
 }
 
 /// Regression test for #14241.

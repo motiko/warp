@@ -9,7 +9,6 @@ fn make_workspace(policy: Option<UsageVisibilityPolicy>) -> Workspace {
         ServerId::from_string_lossy(TEST_WORKSPACE_UID).into(),
         "Test Workspace".to_string(),
         None,
-        None,
     );
     workspace.billing_metadata.tier.usage_visibility_policy = policy;
     workspace

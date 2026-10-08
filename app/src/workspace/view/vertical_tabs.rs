@@ -226,7 +226,7 @@ where
 fn pane_ids_for_detail_target(
     pane_group: &PaneGroup,
     target: VerticalTabsDetailTarget,
-    app: &AppContext,
+    _app: &AppContext,
 ) -> Option<Vec<PaneId>> {
     let visible_pane_ids = pane_group.visible_pane_ids();
     visible_pane_ids_for_detail_target(
@@ -6484,7 +6484,7 @@ fn render_code_detail_section(
 fn render_warp_drive_object_detail_section(
     props: &PaneProps<'_>,
     appearance: &Appearance,
-    app: &AppContext,
+    _app: &AppContext,
 ) -> Box<dyn Element> {
     let theme = appearance.theme();
     let text_colors = detail_sidecar_text_colors(theme);

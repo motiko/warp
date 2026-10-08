@@ -11,7 +11,7 @@ use crate::auth::AuthStateProvider;
 use crate::channel::ChannelState;
 use crate::workspaces::team::Team;
 use crate::workspaces::workspace::{
-    BillingMetadata, CustomerType, PurchaseAddOnCreditsPolicy, Workspace,
+    BillingMetadata, CustomerType, PurchaseAddOnCreditsPolicy,
 };
 
 impl UserWorkspaces {

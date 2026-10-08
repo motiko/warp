@@ -1,12 +1,12 @@
 use warp_core::context_flag::ContextFlag;
 use warpui::AppContext;
 use warpui::keymap::{
-    BindingDescription, EditableBinding, FixedBinding, PerPlatformKeystroke,
+    EditableBinding, FixedBinding, PerPlatformKeystroke,
 };
 use warpui::platform::OperatingSystem;
 use warpui::units::IntoLines;
 
-use super::{ContextMenuAction, TerminalAction};
+use super::TerminalAction;
 use crate::channel::{Channel, ChannelState};
 use crate::features::FeatureFlag;
 use crate::server::telemetry::ToggleBlockFilterSource;
@@ -15,7 +15,6 @@ use crate::terminal::TerminalView;
 use crate::terminal::model::escape_sequences::{self, EscCodes};
 use crate::terminal::model::selection::SelectionDirection;
 use crate::terminal::shared_session::{SharedSessionActionSource, SharedSessionStatus};
-use crate::util::bindings;
 use crate::util::bindings::{CustomAction, cmd_or_ctrl_shift, is_binding_pty_compliant};
 
 pub const TOGGLE_BLOCK_FILTER_KEYBINDING: &str =

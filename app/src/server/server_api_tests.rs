@@ -70,41 +70,6 @@ fn transient_5xx_still_retries() {
 }
 
 #[test]
-fn at_capacity_header_wraps_capacity_error_and_still_carries_status() {
-    let err = error_from_mock_response(
-        403,
-        &[(WARP_ERROR_CODE_HEADER, WARP_ERROR_CODE_AT_CAPACITY)],
-        r#"{"error": "at capacity", "running_agents": 5}"#,
-    );
-
-    assert_eq!(status_in_chain(&err), Some(403));
-    assert_eq!(
-        err.downcast_ref::<CloudAgentCapacityError>()
-            .unwrap()
-            .running_agents,
-        5
-    );
-}
-
-#[test]
-fn out_of_credits_429_wraps_quota_limit_and_stays_transient() {
-    let err = error_from_mock_response(
-        429,
-        &[(WARP_ERROR_CODE_HEADER, WARP_ERROR_CODE_OUT_OF_CREDITS)],
-        r#"{"userDisplayMessage": "You're out of credits"}"#,
-    );
-
-    // 429 always retries regardless of error code, matching every other public-API caller.
-    assert_eq!(status_in_chain(&err), Some(429));
-    assert!(matches!(
-        err.downcast_ref::<AIApiError>().unwrap(),
-        AIApiError::QuotaLimit {
-            user_display_message: Some(message)
-        } if message == "You're out of credits"
-    ));
-}
-
-#[test]
 fn team_uid_header_value_includes_only_resolved_team_scope() {
     let team_uid = 7.into();
     let team_scope = RequestTeamScope::from_scope(&TeamContextForOperation::new_for_test(team_uid));

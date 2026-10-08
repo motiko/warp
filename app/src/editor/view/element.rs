@@ -15,9 +15,8 @@ use warp_core::ui::appearance::DEFAULT_UI_FONT_SIZE;
 use warp_errors::report_error;
 use warp_util::user_input::UserInput;
 use warpui::elements::{
-    AfterLayoutContext, ChildView, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
-    DEFAULT_UI_LINE_HEIGHT_RATIO, Element, Event, EventContext, Flex, LayoutContext, PaintContext,
-    ParentElement, Point, Radius, SizeConstraint, Text,
+    AfterLayoutContext, ChildView, CornerRadius,
+    DEFAULT_UI_LINE_HEIGHT_RATIO, Element, Event, EventContext, LayoutContext, PaintContext, Point, Radius, SizeConstraint,
 };
 use warpui::event::{DispatchedEvent, ModifiersState};
 use warpui::keymap::Keystroke;
@@ -49,8 +48,6 @@ use crate::editor::position_id_for_first_cursor;
 use crate::editor::view::AutosuggestionLocation;
 use crate::settings::CursorDisplayType;
 use crate::themes::theme::Fill;
-use crate::ui_components::blended_colors;
-use crate::ui_components::icons::Icon;
 
 // Similar to the terminal::model::ansi::CursorShape, this Editor Element has different cursor
 // shapes. However, this element doesn't implement all the same variants, so we don't share that

@@ -697,7 +697,7 @@ impl AsyncFindController {
     pub fn process_message(
         &mut self,
         msg: FindTaskMessage,
-        ctx: &mut ModelContext<TerminalFindModel>,
+        _ctx: &mut ModelContext<TerminalFindModel>,
     ) {
         match msg {
             FindTaskMessage::BlockGridMatches {

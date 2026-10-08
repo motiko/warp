@@ -61,7 +61,7 @@ pub fn initialize_settings_for_tests_with_mode(
     });
 
     AccessibilitySettings::register(app);
-    app.update(AISettings::register_and_subscribe_to_events);
+    AISettings::register(app);
     AliasExpansionSettings::register(app);
     AppEditorSettings::register(app);
     BlockVisibilitySettings::register(app);
@@ -119,7 +119,7 @@ pub fn initialize_settings_for_tests_with_mode(
 
     app.update(|ctx| {
         // Add settings models that are backed by secure storage, not user preferences.
-        ctx.add_singleton_model(ai::api_keys::ApiKeyManager::new);
+        ctx.add_singleton_model(ai_config::api_keys::ApiKeyManager::new);
     });
 }
 

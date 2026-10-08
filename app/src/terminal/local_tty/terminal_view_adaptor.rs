@@ -7,7 +7,7 @@ use std::sync::mpsc::SyncSender;
 use parking_lot::FairMutex;
 use session_sharing_protocol::common::{
     ActivePrompt, AgentPromptFailureReason, CommandExecutionFailureReason,
-    ControlActionFailureReason, ParticipantId, WriteToPtyFailureReason,
+    ControlActionFailureReason, WriteToPtyFailureReason,
 };
 use session_sharing_protocol::sharer::{
     AddGuestsResponse, Lifetime, LinkAccessLevelUpdateResponse, RemoveGuestResponse,
@@ -15,7 +15,6 @@ use session_sharing_protocol::sharer::{
     UpdatePendingUserRoleResponse,
 };
 use warp_core::execution_mode::AppExecutionMode;
-use warp_core::send_telemetry_from_ctx;
 use warp_errors::report_error;
 use warpui::{AppContext, ModelHandle, SingletonEntity, ViewContext, ViewHandle, WindowId};
 
@@ -29,7 +28,6 @@ use crate::features::FeatureFlag;
 use crate::network::{NetworkStatusEvent, NetworkStatusKind};
 use crate::pane_group::TerminalViewResources;
 use crate::persistence::ModelEvent;
-use crate::server::telemetry::TelemetryEvent;
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};
 use crate::terminal::shared_session::manager::Manager;

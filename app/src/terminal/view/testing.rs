@@ -9,7 +9,8 @@ cfg_if::cfg_if! {
         use parking_lot::FairMutex;
         use warpui::{ViewContext};
 
-        use crate::{ai::blocklist::SerializedBlock, pane_group::TerminalViewResources};
+        use crate::pane_group::TerminalViewResources;
+        use crate::terminal::model::block::SerializedBlock;
         use crate::terminal::model::session::Sessions;
         use crate::terminal::model_events::ModelEventDispatcher;
         use crate::terminal::view::WARP_PROMPT_HEIGHT_LINES;
@@ -100,8 +101,6 @@ impl TerminalView {
             colors,
             None,
             prompt_type,
-            None,
-            None, // conversation_restoration - not used for test
             None, // inactive_pty_reads_rx - not used for test
             ctx,
         )

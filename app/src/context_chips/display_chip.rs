@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use pathfinder_color::ColorU;
-use pathfinder_geometry::vector::{Vector2F, vec2f};
+use pathfinder_geometry::vector::vec2f;
 use warp_core::features::FeatureFlag;
 use warp_core::ui::theme::Fill;
 use warp_core::ui::theme::color::internal_colors;
@@ -17,7 +17,7 @@ use warpui::keymap::Keystroke;
 use warpui::platform::Cursor;
 use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::{
-    AppContext, Element, Entity, EntityId, Gradient, ModelHandle, SingletonEntity, TypedActionView,
+    AppContext, Element, Entity, EntityId, ModelHandle, SingletonEntity, TypedActionView,
     View, ViewContext, ViewHandle,
 };
 
@@ -41,7 +41,6 @@ use crate::context_chips::git_branch_on_click::{
 };
 use crate::context_chips::node_version_popup::{NodeVersionPopupEvent, NodeVersionPopupView};
 use crate::context_chips::spacing;
-use crate::settings::{AISettings, AISettingsChangedEvent};
 use crate::settings_view::keybindings::{KeybindingChangedEvent, KeybindingChangedNotifier};
 use crate::terminal::input::{MenuPositioning, MenuPositioningProvider};
 use crate::terminal::model::session::SessionType;
@@ -51,7 +50,6 @@ use crate::ui_components::icons::Icon;
 use crate::util::bindings::keybinding_name_to_display_string;
 use crate::util::truncation::truncate_from_beginning;
 use crate::view_components::action_button::{ActionButtonTheme, NakedTheme};
-use crate::view_components::{FeaturePopup, NewFeaturePopupEvent, NewFeaturePopupLabel};
 use crate::workspace::view::TOGGLE_RIGHT_PANEL_BINDING_NAME;
 
 /// Helper function to render git diff stats content (file icon or +- icons, file count, bullet, +/- counts)
@@ -1248,7 +1246,7 @@ impl DisplayChip {
         row.finish()
     }
 
-    pub fn should_render(&self, app: &AppContext) -> bool {
+    pub fn should_render(&self, _app: &AppContext) -> bool {
         match &self.display_chip_kind {
             _ => true,
         }
@@ -1267,7 +1265,7 @@ impl DisplayChip {
         let chip_text = self.text.clone();
         let hover = Hoverable::new(self.mouse_state.clone(), move |state| {
             let hovered = state.is_hovered() && is_interactive;
-            let mut config =
+            let config =
                 UdiChipConfig::new_with_icon(Icon::GitBranch, font_color, chip_text.clone())
                     .with_hovered(hovered);
             let chip_element = render_udi_chip(config, appearance);
@@ -1326,7 +1324,7 @@ impl DisplayChip {
         let url = self.text.clone();
 
         let hover = Hoverable::new(self.mouse_state.clone(), move |state| {
-            let mut config =
+            let config =
                 UdiChipConfig::new_with_icon(Icon::Github, font_color, chip_text.clone())
                     .with_hovered(state.is_hovered());
             let chip_element = render_udi_chip(config, appearance);
@@ -1627,7 +1625,7 @@ impl DisplayChip {
 
             Hoverable::new(self.mouse_state.clone(), move |state| {
                 let hovered = !menu_open && state.is_hovered();
-                let mut config =
+                let config =
                     UdiChipConfig::new_with_icon(Icon::Folder, font_color, chip_text.clone())
                         .with_hovered(hovered);
 
@@ -1658,7 +1656,7 @@ impl DisplayChip {
             let chip_text = self.text.clone();
 
             Hoverable::new(self.mouse_state.clone(), move |state| {
-                let mut config =
+                let config =
                     UdiChipConfig::new_with_icon(Icon::Folder, font_color, chip_text.clone());
 
                 let chip_element = render_udi_chip(config, appearance);
@@ -1708,14 +1706,14 @@ impl DisplayChip {
         let appearance = Appearance::as_ref(app);
         let color = appearance.theme().ansi_fg_blue();
 
-        let mut config = UdiChipConfig::new_with_icon(Icon::User, color, self.text.clone());
+        let config = UdiChipConfig::new_with_icon(Icon::User, color, self.text.clone());
         render_udi_chip(config, appearance)
     }
 
     fn subshell_chip(&self, app: &AppContext) -> Box<dyn Element> {
         let appearance = Appearance::as_ref(app);
         let color = appearance.theme().ansi_fg_blue();
-        let mut config = UdiChipConfig::new_with_icon(Icon::Terminal, color, self.text.clone());
+        let config = UdiChipConfig::new_with_icon(Icon::Terminal, color, self.text.clone());
 
         render_udi_chip(config, appearance)
     }
@@ -1723,7 +1721,7 @@ impl DisplayChip {
     fn virtual_environment_chip(&self, app: &AppContext) -> Box<dyn Element> {
         let appearance = Appearance::as_ref(app);
         let color = appearance.theme().ansi_fg_yellow();
-        let mut config = UdiChipConfig::new_with_icon(Icon::Terminal, color, self.text.clone());
+        let config = UdiChipConfig::new_with_icon(Icon::Terminal, color, self.text.clone());
 
         render_udi_chip(config, appearance)
     }
@@ -1731,7 +1729,7 @@ impl DisplayChip {
     fn conda_environment_chip(&self, app: &AppContext) -> Box<dyn Element> {
         let appearance = Appearance::as_ref(app);
         let color = appearance.theme().ansi_fg_yellow();
-        let mut config = UdiChipConfig::new_with_icon(Icon::Terminal, color, self.text.clone());
+        let config = UdiChipConfig::new_with_icon(Icon::Terminal, color, self.text.clone());
 
         render_udi_chip(config, appearance)
     }
@@ -1748,7 +1746,7 @@ impl DisplayChip {
         let hoverable = Hoverable::new(self.mouse_state.clone(), move |state| {
             let color = appearance.theme().ansi_fg_green();
             let hovered = state.is_hovered() && !popup_open;
-            let mut config = UdiChipConfig::new_with_icon(Icon::NodeJS, color, chip_text.clone())
+            let config = UdiChipConfig::new_with_icon(Icon::NodeJS, color, chip_text.clone())
                 .with_hovered(hovered);
             render_udi_chip(config, appearance)
         })

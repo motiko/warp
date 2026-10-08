@@ -4089,7 +4089,7 @@ impl CodeReviewView {
         &self,
         state: &LoadedState,
         appearance: &Appearance,
-        app: &AppContext,
+        _app: &AppContext,
     ) -> Box<dyn Element> {
         if state.file_states.is_empty() {
             return self.render_no_changes_state(appearance);

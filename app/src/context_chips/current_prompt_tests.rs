@@ -13,8 +13,7 @@ use warp_core::command::ExitCode;
 use warpui::{App, SingletonEntity};
 use warpui_extras::user_preferences;
 
-use super::{ActiveChipSurfaces, ChipUpdateStatus, CurrentPrompt, PromptContext};
-use crate::ai::blocklist::agent_view::toolbar_item::AgentToolbarItemKind;
+use super::{ChipUpdateStatus, CurrentPrompt, PromptContext};
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::AuthManager;
 #[cfg(feature = "local_fs")]
@@ -40,7 +39,7 @@ use crate::terminal::model::block::BlockMetadata;
 use crate::terminal::model::session::{
     CommandExecutor, ExecuteCommandOptions, SessionId, SessionInfo, Sessions,
 };
-use crate::terminal::session_settings::{AgentToolbarChipSelection, SessionSettings};
+use crate::terminal::session_settings::SessionSettings;
 use crate::terminal::shell::Shell;
 use crate::terminal::view::PromptPosition;
 #[cfg(feature = "local_fs")]
@@ -261,7 +260,7 @@ fn test_shell_chip_is_disabled_when_required_executable_is_missing() {
         app.add_singleton_model(AuthManager::new_for_test);
         app.add_singleton_model(|_| crate::settings::manager::SettingsManager::default());
         crate::settings::InputSettings::register(&mut app);
-        app.update(crate::settings::AISettings::register_and_subscribe_to_events);
+        crate::settings::AISettings::register(&mut app);
         app.add_singleton_model(crate::workspaces::user_workspaces::UserWorkspaces::default_mock);
         #[cfg(windows)]
         app.add_singleton_model(SystemInfo::new);
@@ -413,7 +412,7 @@ fn test_disabling_chips() {
         // Register required singleton models to fix the singleton model error
         app.add_singleton_model(|_| crate::settings::manager::SettingsManager::default());
         crate::settings::InputSettings::register(&mut app);
-        app.update(crate::settings::AISettings::register_and_subscribe_to_events);
+        crate::settings::AISettings::register(&mut app);
         app.add_singleton_model(crate::workspaces::user_workspaces::UserWorkspaces::default_mock);
         #[cfg(windows)]
         app.add_singleton_model(SystemInfo::new);
@@ -498,142 +497,6 @@ fn test_disabling_chips() {
     });
 }
 
-#[test]
-fn test_chips_to_run_only_includes_active_surface_configurations() {
-    App::test((), |mut app| async move {
-        app.add_singleton_model(|_| {
-            Prompt::mock_with(
-                [ContextChipKind::Username],
-                false,
-                WarpPromptSeparator::None,
-            )
-        });
-        app.add_singleton_model(SessionSettings::new_with_defaults);
-        app.add_singleton_model(|_ctx| {
-            settings::PublicPreferences::new(
-                Box::<user_preferences::in_memory::InMemoryPreferences>::default(),
-            )
-        });
-        app.add_singleton_model(|_| {
-            settings::PrivatePreferences::new(
-                Box::<user_preferences::in_memory::InMemoryPreferences>::default(),
-            )
-        });
-        app.update(|ctx| {
-            SessionSettings::handle(ctx).update(ctx, |settings, ctx| {
-                settings
-                    .agent_footer_chip_selection
-                    .set_value(
-                        AgentToolbarChipSelection::Custom {
-                            left: vec![AgentToolbarItemKind::ContextChip(
-                                ContextChipKind::WorkingDirectory,
-                            )],
-                            right: vec![],
-                        },
-                        ctx,
-                    )
-                    .unwrap();
-            });
-        });
-
-        let sessions = app.add_model(|_| Sessions::new_for_test());
-        let current_prompt = app.add_model(move |ctx| CurrentPrompt::new(sessions, ctx));
-
-        app.read(|ctx| {
-            let current_prompt = current_prompt.as_ref(ctx);
-            let chips_for = |surfaces| current_prompt.chips_to_run_for_surfaces(surfaces, ctx);
-
-            assert!(chips_for(ActiveChipSurfaces::default()).is_empty());
-            assert_eq!(
-                chips_for(ActiveChipSurfaces {
-                    prompt: true,
-                    ..Default::default()
-                }),
-                vec![ContextChipKind::Username]
-            );
-            assert_eq!(
-                chips_for(ActiveChipSurfaces {
-                    agent_footer: true,
-                    ..Default::default()
-                }),
-                vec![ContextChipKind::WorkingDirectory]
-            );
-            assert_eq!(
-                chips_for(ActiveChipSurfaces {
-                    prompt: true,
-                    agent_footer: true,
-                }),
-                vec![ContextChipKind::Username, ContextChipKind::WorkingDirectory]
-            );
-        });
-    });
-}
-
-#[test]
-fn test_ps1_without_active_agent_surface_runs_no_footer_generators() {
-    let _flag_guard = FeatureFlag::AgentView.override_enabled(true);
-    App::test((), |mut app| async move {
-        let session_id = SessionId::from(321);
-        app.add_singleton_model(|_| Prompt::mock());
-        app.add_singleton_model(SessionSettings::new_with_defaults);
-        app.add_singleton_model(|_| History::new(vec![]));
-        app.add_singleton_model(|_ctx| {
-            settings::PublicPreferences::new(
-                Box::<user_preferences::in_memory::InMemoryPreferences>::default(),
-            )
-        });
-        app.add_singleton_model(|_| {
-            settings::PrivatePreferences::new(
-                Box::<user_preferences::in_memory::InMemoryPreferences>::default(),
-            )
-        });
-        app.update(|ctx| {
-            SessionSettings::handle(ctx).update(ctx, |settings, ctx| {
-                settings.honor_ps1.set_value(true, ctx).unwrap();
-            });
-        });
-        app.add_singleton_model(|_| ServerApiProvider::new_for_test());
-        app.add_singleton_model(|_| AuthStateProvider::new_for_test());
-        app.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
-        app.add_singleton_model(AuthManager::new_for_test);
-        app.add_singleton_model(|_| crate::settings::manager::SettingsManager::default());
-        crate::settings::InputSettings::register(&mut app);
-        app.update(crate::settings::AISettings::register_and_subscribe_to_events);
-        app.add_singleton_model(crate::workspaces::user_workspaces::UserWorkspaces::default_mock);
-        #[cfg(windows)]
-        app.add_singleton_model(SystemInfo::new);
-
-        let executor = Arc::new(RecordingCommandExecutor::default());
-        let sessions = app.add_model(|ctx| {
-            let mut sessions = Sessions::new_for_test().with_command_executor(executor.clone());
-            sessions.initialize_bootstrapped_session(
-                SessionInfo::new_for_test().with_id(session_id),
-                "test command".to_string(),
-                vec![],
-                None,
-                ctx,
-            );
-            sessions
-        });
-        let current_prompt = app.add_model(move |ctx| CurrentPrompt::new(sessions, ctx));
-
-        current_prompt
-            .update(&mut app, |current_prompt, ctx| {
-                current_prompt.latest_context = Some(PromptContext {
-                    active_block_metadata: BlockMetadata::new(Some(session_id), None),
-                    environment: Environment::default(),
-                });
-                current_prompt.update_states_with_new_context(ctx);
-                current_prompt.await_generators(ctx)
-            })
-            .await;
-
-        assert!(executor.commands.lock().is_empty());
-        app.read(|ctx| {
-            assert!(current_prompt.as_ref(ctx).states.is_empty());
-        });
-    });
-}
 #[cfg(feature = "local_fs")]
 #[test]
 fn test_externally_driven_chip_skips_periodic_timer() {

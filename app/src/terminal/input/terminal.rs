@@ -1,6 +1,6 @@
 use warp_core::settings::Setting;
 use warpui::elements::{
-    Border, Clipped, Container, DropTarget, Element, Flex, Hoverable, ParentElement, SavePosition,
+    Border, Container, DropTarget, Element, Flex, Hoverable, ParentElement, SavePosition,
     Stack,
 };
 use warpui::presenter::ChildView;
@@ -10,11 +10,10 @@ use super::common::{
     add_command_xray_overlay, add_input_suggestions_overlays, add_voltron_overlay,
     add_workflow_info_overlay, wrap_input_with_terminal_padding_and_focus_handler,
 };
-use super::{Input, InputAction, InputDropTargetData};
+use super::{Input, InputDropTargetData};
 use crate::appearance::Appearance;
 use crate::context_chips::spacing;
-use crate::features::FeatureFlag;
-use crate::settings::{AppEditorSettings, InputModeSettings};
+use crate::settings::InputModeSettings;
 use crate::terminal::block_list_settings::BlockListSettings;
 use crate::terminal::block_list_viewport::InputMode;
 use crate::terminal::settings::TerminalSettings;

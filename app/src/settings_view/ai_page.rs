@@ -34,7 +34,7 @@ use crate::ui_components::icons::Icon;
 use crate::util::bindings;
 use crate::view_components::DismissibleToast;
 use crate::view_components::action_button::{ActionButton, ButtonSize, SecondaryTheme};
-use crate::{TelemetryEvent, ToastStack, send_telemetry_from_ctx};
+use crate::ToastStack;
 
 const PAGE_TITLE: &str = "AI (optional)";
 const AI_DESCRIPTION: &str = "AI features stay off unless you turn them on. Add your own model \

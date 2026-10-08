@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use warpui::elements::{
-    ChildView, Clipped, Container, CrossAxisAlignment, Element, Flex, MainAxisAlignment,
+    ChildView, Clipped, Container, CrossAxisAlignment, Element, MainAxisAlignment,
     MainAxisSize, ParentElement, Wrap,
 };
 use warpui::{
@@ -12,7 +12,7 @@ use warpui::{
 
 use super::display_chip::{DisplayChip, DisplayChipConfig, PromptDisplayChipEvent};
 use super::prompt_type::PromptType;
-use super::{ChipResult, ContextChipKind, git_line_changes_from_chips};
+use super::{ChipResult, git_line_changes_from_chips};
 use crate::completer::SessionContext;
 use crate::context_chips::display_chip::{DisplayChipAction, PromptChipShellCommand};
 use crate::terminal::input::MenuPositioningProvider;
@@ -236,7 +236,7 @@ impl PromptDisplay {
             prompt
                 .chips(ctx)
                 .iter()
-                .find(|chip_result| matches!(chip_result.kind, ContextChipKind::ShellGitBranch))
+                .find(|chip_result| matches!(chip_result.kind, super::ContextChipKind::ShellGitBranch))
                 .and_then(|chip_result| chip_result.value.as_ref().map(|v| v.to_string()))
         })
     }

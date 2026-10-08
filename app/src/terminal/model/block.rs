@@ -1,7 +1,7 @@
 mod serialized_block;
 
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io;
 use std::iter::DoubleEndedIterator;
 use std::num::NonZeroUsize;
@@ -18,7 +18,6 @@ use pathfinder_geometry::vector::Vector2F;
 use secret_redaction::redact_secrets;
 pub use serialized_block::*;
 use warp_core::command::ExitCode;
-use warp_core::features::FeatureFlag;
 use warp_errors::report_error;
 use warp_terminal::model::grid::Dimensions as _;
 use warp_terminal::model::{KeyboardModes, KeyboardModesApplyBehavior};

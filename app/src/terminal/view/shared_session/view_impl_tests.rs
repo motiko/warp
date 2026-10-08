@@ -335,7 +335,6 @@ fn test_copy_shared_session_link_does_not_write_clipboard_when_session_pending()
                 SharedSessionScrollbackType::None,
                 None,
                 SharedSessionSource::user(None),
-                false,
                 ctx,
             );
         });

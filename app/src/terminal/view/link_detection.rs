@@ -16,7 +16,6 @@ cfg_if::cfg_if! {
             terminal::model::grid::grid_handler,
             terminal::ShellLaunchData,
             util::file::{FileLink, absolute_path_if_valid, ShellPathType},
-            util::openable_file_type::FileTarget,
         };
         use std::path::PathBuf;
         use unicode_general_category::{get_general_category, GeneralCategory};

@@ -31,7 +31,6 @@ fn line_comment(file_path: &str, line_number: usize, content: &str) -> AttachedR
         base: None,
         head: None,
         outdated: false,
-        origin: CommentOrigin::Native,
     }
 }
 
@@ -137,7 +136,6 @@ fn editor_comments_for_file_includes_only_line_comments() {
             base: None,
             head: None,
             outdated: false,
-            origin: CommentOrigin::Native,
         };
 
         model.update(&mut app, |batch, ctx| {

@@ -38,9 +38,8 @@ use crate::cloud_object::{
     CloudObjectSyncStatus, GenericCloudObject, GenericServerObject, GenericStringObjectFormat,
     JsonObjectType, NumInFlightRequests, ObjectDeleteResult, ObjectIdType,
     ObjectMetadataUpdateResult, ObjectPermissionsUpdateData, Owner, Revision,
-    RevisionAndLastEditor, ServerAIExecutionProfile, ServerAIFact, ServerCloudObject,
-    ServerEnvVarCollection, ServerMCPServer, ServerMetadata, ServerPermissions, ServerPreference,
-    ServerTemplatableMCPServer, ServerWorkflowEnum, Space,
+    RevisionAndLastEditor, ServerCloudObject,
+    ServerEnvVarCollection, ServerMetadata, ServerPermissions, ServerPreference, ServerWorkflowEnum, Space,
 };
 use crate::drive::CloudObjectTypeAndId;
 use crate::drive::drive_helpers::{

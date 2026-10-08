@@ -9,12 +9,10 @@ use string_offset::{ByteOffset, CharOffset};
 pub use warp_completer::completer::SuggestionTypeName;
 pub use warp_completer::util::parse_current_commands_and_tokens;
 pub use warp_completer::{ParsedTokenData, ParsedTokensSnapshot};
-use warp_core::features::FeatureFlag;
-use warpui::{AppContext, SingletonEntity, ViewContext};
+use warpui::{SingletonEntity, ViewContext};
 
 use super::Input;
 use crate::appearance::Appearance;
-use crate::completer::{EmptyCompletionContext, SessionContext};
 use crate::editor::TextStyleOperation;
 use crate::settings::InputSettings;
 use crate::themes::theme::{AnsiColorIdentifier, AnsiColors};

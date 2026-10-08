@@ -574,7 +574,7 @@ impl DiffModel {
         let Some(base_text) = self.base.clone() else {
             return;
         };
-        let new = AnyMultilineString::infer(new);
+        let new = warp_editor::multiline::AnyMultilineString::infer(new);
 
         let (change_mapping, deletion_mapping) =
             Self::compute_diff_internal(&base_text, new.to_format().as_ref()).await;

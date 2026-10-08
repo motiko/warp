@@ -5,7 +5,6 @@ use warpui::platform::WindowStyle;
 use warpui::{AddSingletonModel, App, EntityId, ModelHandle, ViewContext, ViewHandle};
 
 use super::NotebookManager;
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::AuthManager;
 use crate::cloud_object::Owner;
@@ -92,7 +91,6 @@ fn initialize_app(app: &mut App) -> TestState {
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
     app.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
     app.add_singleton_model(AuthManager::new_for_test);
-    app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
 
     let (sender, receiver) = mpsc::sync_channel(10);
     let objects_client = ServerApiProvider::new_for_test().get_cloud_objects_client();
