@@ -23,9 +23,9 @@ use lazy_static::lazy_static;
 pub use login_layer::LOGIN_LAYER;
 use warp_core::user_preferences::GetUserPreferences as _;
 use warp_errors::report_error;
-use warpui::{AppContext, SingletonEntity};
+use warpui::AppContext;
 
-use crate::auth::auth_state::AuthStateProvider;
+use crate::anonymous_id::get_or_create_anonymous_id;
 use crate::channel::{Channel, ChannelState};
 use crate::send_telemetry_sync_from_app_ctx;
 
@@ -328,7 +328,7 @@ pub trait Experiment<T: Experiment<T>>: FromStr {
 
         // If there was no override, derive the assignment from the user's anonymous id.
         if assigned_group.is_none() {
-            let anonymous_id = AuthStateProvider::as_ref(ctx).get().anonymous_id();
+            let anonymous_id = get_or_create_anonymous_id(ctx).to_string();
             assigned_group = Self::layer().get_assigned_group(&anonymous_id);
 
             if let Some(group) = assigned_group.as_ref() {

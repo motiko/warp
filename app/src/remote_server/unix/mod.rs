@@ -78,7 +78,7 @@ pub(crate) fn launch_daemon(identity_key: &str, ctx: &mut warpui::AppContext) {
     // (logging, SQLite, singleton models, etc.).
     //
     // All telemetry dependencies are ready at this point:
-    // `AppTelemetryContextProvider` and `AuthStateProvider` are
+    // `AppTelemetryContextProvider` is
     // registered during `initialize_app` (before `launch` calls us).
     let timing_data =
         warp_core::interval_timer::IntervalTimer::handle(ctx).update(ctx, |timer, _| {

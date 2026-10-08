@@ -5,7 +5,6 @@ use warpui::App;
 use warpui::platform::WindowStyle;
 
 use super::FileNotebookView;
-use crate::auth::AuthStateProvider;
 use crate::editor::InteractionState;
 use crate::network::NetworkStatus;
 use crate::pane_group::focus_state::{PaneFocusHandle, PaneGroupFocusState};
@@ -16,7 +15,6 @@ use crate::search::files::model::FileSearchModel;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::test_util::settings::initialize_settings_for_tests;
 use crate::workspace::ActiveSession;
-use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::{GlobalResourceHandles, GlobalResourceHandlesProvider};
 
 fn initialize_app(app: &mut App) {
@@ -27,7 +25,6 @@ fn initialize_app(app: &mut App) {
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(|_| Appearance::mock());
 
-    app.add_singleton_model(UserWorkspaces::default_mock);
     app.add_singleton_model(|_| ActiveSession::default());
     app.add_singleton_model(|_| KeybindingChangedNotifier::new());
     app.add_singleton_model(|_| repo_metadata::repositories::DetectedRepositories::default());
@@ -35,7 +32,6 @@ fn initialize_app(app: &mut App) {
     app.add_singleton_model(repo_metadata::RepoMetadataModel::new);
     app.add_singleton_model(FileSearchModel::new);
     app.add_singleton_model(NotebookKeybindings::new);
-    app.add_singleton_model(|_| AuthStateProvider::new_for_test());
 }
 
 /// Builds a list of the standard notebook context-menu items by appending the set of split-pane

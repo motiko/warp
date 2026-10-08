@@ -6,7 +6,6 @@ use warpui::{App, Element, Entity, TypedActionView, View, ViewHandle, WindowId};
 
 use super::{create_editable_comment_markdown_editor, create_readonly_comment_markdown_editor};
 use crate::appearance::Appearance;
-use crate::auth::AuthStateProvider;
 use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::rich_text::editor::view::RichTextEditorView;
 use crate::rich_text::link::{NotebookLinks, SessionSource};
@@ -14,7 +13,7 @@ use crate::search::files::model::FileSearchModel;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::test_util::settings::initialize_settings_for_tests;
 use crate::workspace::ActiveSession;
-use crate::{GlobalResourceHandles, GlobalResourceHandlesProvider, UserWorkspaces};
+use crate::{GlobalResourceHandles, GlobalResourceHandlesProvider};
 
 struct TestView {
     editor: ViewHandle<RichTextEditorView>,
@@ -62,9 +61,7 @@ fn initialize_editor(
     app.add_singleton_model(RepoMetadataModel::new);
     app.add_singleton_model(FileSearchModel::new);
     app.add_singleton_model(NotebookKeybindings::new);
-    app.add_singleton_model(|_| AuthStateProvider::new_for_test());
 
-    app.add_singleton_model(|ctx| UserWorkspaces::mock(vec![], ctx));
 
     let (window, test_view) = app.add_window(WindowStyle::NotStealFocus, |ctx| {
         let window_id = ctx.window_id();

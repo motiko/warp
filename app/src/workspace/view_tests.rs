@@ -44,21 +44,18 @@ use crate::user_config::tab_configs_dir;
 use crate::util::traffic_lights::windows::RendererState;
 use crate::warp_managed_paths_watcher::WarpManagedPathsWatcher;
 use crate::workflows::local_workflows::LocalWorkflows;
-use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::{GlobalResourceHandlesProvider, experiments, workspace};
 
 pub(crate) fn initialize_app(app: &mut App) {
     initialize_settings_for_tests(app);
 
     // Add the necessary singleton models to the App
-    app.add_singleton_model(|_| AuthStateProvider::new_for_test());
     app.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
     app.add_singleton_model(|_ctx| PtySpawner::new_for_test());
     app.add_singleton_model(|_| Prompt::mock());
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(|_| SystemStats::new());
     app.add_singleton_model(|_| crate::tab::TabShortcutModifierState::new());
-    app.add_singleton_model(|ctx| UserWorkspaces::mock(vec![], ctx));
     app.add_singleton_model(|_| Appearance::mock());
     app.add_singleton_model(AppearanceManager::new);
     app.add_singleton_model(|_| DisplayCount::mock());
@@ -126,123 +123,6 @@ pub(crate) fn mock_workspace(app: &mut App) -> ViewHandle<Workspace> {
         )
     });
     workspace
-}
-
-#[cfg(target_family = "wasm")]
-fn register_window_team(app: &mut App, window_id: WindowId, team_uid: ServerId) {
-    app.update(|ctx| {
-        UserWorkspaces::handle(ctx).update(ctx, |user_workspaces, ctx| {
-            user_workspaces.register_window(window_id, Some(team_uid), ctx);
-        });
-    });
-}
-
-#[cfg(target_family = "wasm")]
-fn pane_group_ids(workspace: &ViewHandle<Workspace>, app: &App) -> Vec<EntityId> {
-    workspace.read(app, |workspace, _| {
-        workspace
-            .tabs
-            .iter()
-            .map(|tab| tab.pane_group.id())
-            .collect()
-    })
-}
-
-#[cfg(target_family = "wasm")]
-#[test]
-fn test_open_new_window_for_team_rebinds_current_window_without_creating() {
-    use std::cell::Cell;
-    use std::rc::Rc;
-
-    use crate::workspaces::user_workspaces::UserWorkspacesEvent;
-
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let workspace = mock_workspace(&mut app);
-        let window_id = workspace.update(&mut app, |_, ctx| ctx.window_id());
-        let current_team_uid: ServerId = 123.into();
-        let next_team_uid: ServerId = 456.into();
-        register_window_team(&mut app, window_id, current_team_uid);
-
-        let team_changes = Rc::new(Cell::new(0));
-        let team_changes_for_subscription = team_changes.clone();
-        app.update(|ctx| {
-            ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), move |_, event, _| {
-                if matches!(event, UserWorkspacesEvent::WindowTeamChanged) {
-                    team_changes_for_subscription.set(team_changes_for_subscription.get() + 1);
-                }
-            });
-        });
-
-        let initial_window_count = app.window_ids().len();
-        let initial_pane_group_ids = pane_group_ids(&workspace, &app);
-        assert!(!initial_pane_group_ids.is_empty());
-
-        workspace.update(&mut app, |workspace, ctx| {
-            workspace.handle_action(
-                &WorkspaceAction::OpenNewWindowForTeam {
-                    team_uid: next_team_uid,
-                },
-                ctx,
-            );
-        });
-
-        assert_eq!(app.window_ids().len(), initial_window_count);
-        assert_eq!(pane_group_ids(&workspace, &app), initial_pane_group_ids);
-        app.read(|ctx| {
-            assert_eq!(
-                UserWorkspaces::as_ref(ctx).team_uid_for_window(window_id),
-                Some(next_team_uid)
-            );
-        });
-        assert_eq!(team_changes.get(), 1);
-    });
-}
-
-#[cfg(target_family = "wasm")]
-#[test]
-fn test_open_new_window_for_team_same_team_is_noop() {
-    use std::cell::Cell;
-    use std::rc::Rc;
-
-    use crate::workspaces::user_workspaces::UserWorkspacesEvent;
-
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let workspace = mock_workspace(&mut app);
-        let window_id = workspace.update(&mut app, |_, ctx| ctx.window_id());
-        let team_uid: ServerId = 123.into();
-        register_window_team(&mut app, window_id, team_uid);
-
-        let team_changes = Rc::new(Cell::new(0));
-        let team_changes_for_subscription = team_changes.clone();
-        app.update(|ctx| {
-            ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), move |_, event, _| {
-                if matches!(event, UserWorkspacesEvent::WindowTeamChanged) {
-                    team_changes_for_subscription.set(team_changes_for_subscription.get() + 1);
-                }
-            });
-        });
-
-        let initial_window_count = app.window_ids().len();
-        let initial_pane_group_ids = pane_group_ids(&workspace, &app);
-
-        workspace.update(&mut app, |workspace, ctx| {
-            workspace.handle_action(&WorkspaceAction::OpenNewWindowForTeam { team_uid }, ctx);
-        });
-
-        assert_eq!(app.window_ids().len(), initial_window_count);
-        assert_eq!(pane_group_ids(&workspace, &app), initial_pane_group_ids);
-        app.read(|ctx| {
-            assert_eq!(
-                UserWorkspaces::as_ref(ctx).team_uid_for_window(window_id),
-                Some(team_uid)
-            );
-        });
-        assert_eq!(team_changes.get(), 0);
-    });
 }
 
 fn restored_workspace(

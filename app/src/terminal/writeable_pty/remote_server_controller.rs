@@ -12,7 +12,6 @@ use warp_core::SessionId;
 use warpui::{Entity, ModelContext, ModelHandle, SingletonEntity, WeakModelHandle};
 
 use super::pty_controller::{EventLoopSender, PtyController};
-use crate::auth::auth_state::AuthStateProvider;
 use crate::remote_server::auth_context::local_auth_context;
 use crate::remote_server::manager::{RemoteServerManager, RemoteServerManagerEvent};
 use crate::remote_server::ssh_transport::SshTransport;
@@ -540,11 +539,10 @@ impl<T: EventLoopSender> RemoteServerController<T> {
     /// connection attempt uses the latest value without requiring a
     /// long-lived cache or subscription.
     fn build_auth_context(&self, ctx: &ModelContext<Self>) -> Arc<RemoteServerAuthContext> {
-        let auth_state = AuthStateProvider::as_ref(ctx).get().clone();
         let crash_reporting_enabled = PrivacySettings::handle(ctx)
             .as_ref(ctx)
             .is_crash_reporting_enabled;
-        Arc::new(local_auth_context(auth_state, crash_reporting_enabled))
+        Arc::new(local_auth_context(crash_reporting_enabled, ctx))
     }
 
     fn connect_session_for_current_identity(

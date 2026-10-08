@@ -62,7 +62,6 @@ crc.workspace = true
 content_inspector = "0.2.4"
 concat-idents.workspace = true
 csv = "1.3.1"
-cynic.workspace = true
 dashmap.workspace = true
 deltae = "0.3.1"
 derivative.workspace = true
@@ -200,9 +199,7 @@ warp_completer.workspace = true
 warp_core.workspace = true
 warp_errors = { workspace = true, features = ["reqwest-errors"] }
 warp_editor.workspace = true
-warp_graphql.workspace = true
 warp_search_core.workspace = true
-warp_server_auth.workspace = true
 warp_util.workspace = true
 warpui = { workspace = true, features = ["schema_gen", "settings_value"] }
 warpui_core.workspace = true
@@ -388,7 +385,6 @@ virtual-fs.workspace = true
 warp_completer = { workspace = true, features = ["test-util"] }
 warp_core = { workspace = true, features = ["test-util"] }
 warp_editor = { workspace = true, features = ["test-util"] }
-warp_server_auth = { workspace = true, features = ["test-util"] }
 warp_terminal = { workspace = true, features = ["test-util"] }
 warpui = { workspace = true, features = ["test-util"] }
 warpui_core = { workspace = true, features = ["test-util"] }
@@ -595,7 +591,6 @@ default = [
 # substantially slow down program execution.
 dhat_heap_profiling = ["dep:dhat"]
 editable_markdown_mermaid = []
-default_adeberry_theme = []
 drag_tabs_to_windows = []
 embedded_code_review_comments = []
 interactive_conversation_management_view = []
@@ -702,7 +697,6 @@ standalone = ["warp_assets/standalone", "warp_core/standalone"]
 prompt_suggestions_via_maa = []
 tab_close_button_on_left = []
 test-util = [
-    "warp_server_auth/test-util",
     "http_client/test-util",
     "warp_core/test-util",
     "warp_terminal/test-util",
