@@ -64,7 +64,7 @@ fn test_workspace_metadata_piggyback_feeds_ai_credit_availability() {
             app.update(crate::settings::init_and_register_user_preferences);
         }
         app.add_singleton_model(|ctx| {
-            AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client(), ctx)
+            AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client())
         });
         let team_update_manager =
             app.add_singleton_model(|ctx| TeamUpdateManager::new(team_client, None, ctx));

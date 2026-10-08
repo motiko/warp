@@ -3,7 +3,6 @@
 //! to be run.
 
 mod agent_mode;
-mod ai_assistant;
 mod ai_document;
 mod block_filtering;
 mod bootstrapping;
@@ -18,13 +17,11 @@ mod keyboard_protocol;
 mod launch_configs;
 mod native_shell_completions;
 mod notebooks;
-mod orchestration_navigation;
 mod osc8_hyperlinks;
 mod pane_restoration;
 #[cfg(target_os = "macos")]
 mod preview_config_migration;
 mod remote_server;
-mod rich_input_ctrl_enter;
 mod rules;
 mod secrets;
 mod session_restoration;
@@ -50,7 +47,6 @@ use std::rc::Rc;
 use std::time::Duration;
 
 pub use agent_mode::*;
-pub use ai_assistant::*;
 pub use ai_document::*;
 use anyhow::{Result, anyhow};
 pub use block_filtering::*;
@@ -67,7 +63,6 @@ pub use keyboard_protocol::*;
 pub use launch_configs::*;
 pub use native_shell_completions::*;
 pub use notebooks::*;
-pub use orchestration_navigation::*;
 pub use osc8_hyperlinks::*;
 pub use pane_restoration::*;
 use parking_lot::Mutex;
@@ -76,7 +71,6 @@ use pathfinder_geometry::vector::Vector2F;
 #[cfg(target_os = "macos")]
 pub use preview_config_migration::*;
 pub use remote_server::*;
-pub use rich_input_ctrl_enter::*;
 pub use rules::*;
 use rust_embed::RustEmbed;
 pub use secrets::*;

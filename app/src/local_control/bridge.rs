@@ -106,7 +106,6 @@ impl LocalControlBridge {
             | ActionKind::SurfaceThemePickerOpen
             | ActionKind::SurfaceKeybindingsOpen
             | ActionKind::SurfaceResourceCenterToggle
-            | ActionKind::SurfaceAiAssistantToggle
             | ActionKind::SurfaceCodeReviewOpen
             | ActionKind::SurfaceCodeReviewToggle
             | ActionKind::SurfaceProjectExplorerOpen
@@ -115,7 +114,6 @@ impl LocalControlBridge {
             | ActionKind::SurfaceRightPanelToggle
             | ActionKind::SurfaceVerticalTabsOpen
             | ActionKind::SurfaceVerticalTabsToggle
-            | ActionKind::SurfaceAgentManagementOpen
             | ActionKind::FileOpen => app_state::handle(
                 &self.instance_id,
                 request.action.kind,

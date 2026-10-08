@@ -6,10 +6,10 @@ use ai::api_keys::{
     ApiKeyManager, AwsCredentials, AwsCredentialsState, CustomEndpointParams, GeapCredentials,
     GeapCredentialsState,
 };
+use ai_types::AmbientAgentTaskId;
 use chrono::Local;
 use uuid::Uuid;
 use warp_core::features::FeatureFlag;
-use warp_graphql::ai::{AgentTaskState, PlatformErrorCode};
 use warp_multi_agent_api::{AgentType, response_event};
 use warpui::{App, ModelHandle, SingletonEntity, ViewHandle};
 
@@ -20,11 +20,6 @@ use crate::ai::agent::{
     AIAgentAttachment, AIAgentContext, AIAgentInput, BaseUserQuery, CancellationReason,
     ImageContext, PassiveSuggestionTrigger, UserQueryMode,
 };
-use crate::ai::ambient_agents::AmbientAgentTaskId;
-use crate::ai::blocklist::local_agent_task_sync_model::map_conversation_status_for_test;
-use crate::ai::blocklist::orchestration_events::{
-    OrchestrationEventService, PendingEvent, PendingEventDetail,
-};
 use crate::ai::blocklist::{
     BlocklistAIHistoryEvent, BlocklistAIHistoryModel, PendingAttachment, PendingFile, RequestInput,
     ResponseStream, ResponseStreamId,
@@ -32,7 +27,6 @@ use crate::ai::blocklist::{
 use crate::ai::geap_credentials::{GeapPolicy, current_geap_policy_for_any_team};
 use crate::ai::llms::{LLMId, LLMModelHost, LLMProvider};
 use crate::server::ids::ServerId;
-use crate::server::server_api::AIApiError;
 use crate::terminal::TerminalView;
 use crate::test_util::terminal::{
     add_window_with_id_and_terminal, add_window_with_terminal, initialize_app_for_terminal_view,
@@ -79,7 +73,7 @@ fn register_mock_response_stream(
         let stream_id = ResponseStreamId::new_for_test();
         let conversation_id = BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, ctx| {
             let conversation_id =
-                history.start_new_conversation(terminal_surface_id, false, false, false, ctx);
+                history.start_new_conversation(terminal_surface_id, false, false, ctx);
             let task_id = history
                 .conversation(&conversation_id)
                 .unwrap()
@@ -129,73 +123,6 @@ fn stream_init_event(request_id: &str) -> warp_multi_agent_api::ResponseEvent {
     }
 }
 
-fn stream_client_actions_event() -> warp_multi_agent_api::ResponseEvent {
-    warp_multi_agent_api::ResponseEvent {
-        r#type: Some(response_event::Type::ClientActions(
-            response_event::ClientActions { actions: vec![] },
-        )),
-    }
-}
-
-fn assert_terminal_stream_task_update(
-    app: &App,
-    conversation_id: AIConversationId,
-    expected_state: AgentTaskState,
-    expected_code: PlatformErrorCode,
-) {
-    BlocklistAIHistoryModel::handle(app).read(app, |history, _| {
-        let conversation = history
-            .conversation(&conversation_id)
-            .expect("test conversation must exist");
-        let (state, update) = map_conversation_status_for_test(conversation);
-        assert_eq!(state, expected_state);
-
-        let update = update.expect("terminal stream error must include a task status update");
-        assert_eq!(update.error_code, Some(expected_code));
-        let platform_error = update
-            .platform_error
-            .expect("terminal stream error must include structured platform error data");
-        assert_eq!(platform_error.code, expected_code);
-        assert!(!platform_error.retryable);
-    });
-}
-
-#[test]
-fn transport_failure_classification_is_independent_of_stream_start() {
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-        let terminal = add_window_with_terminal(&mut app, None);
-
-        let (started_conversation_id, started_stream) =
-            register_mock_response_stream(&terminal, &mut app);
-        started_stream.update(&mut app, |stream, ctx| {
-            stream.exhaust_recovery_budget_for_test(ctx);
-            stream.emit_response_event_for_test(stream_client_actions_event(), ctx);
-            stream.emit_error_event_for_test(Arc::new(AIApiError::UnexpectedEof), ctx);
-        });
-        assert_terminal_stream_task_update(
-            &app,
-            started_conversation_id,
-            AgentTaskState::Error,
-            PlatformErrorCode::AgentStreamNetworkError,
-        );
-
-        let (retried_conversation_id, retried_stream) =
-            register_mock_response_stream(&terminal, &mut app);
-        retried_stream.update(&mut app, |stream, ctx| {
-            stream.emit_response_event_for_test(stream_init_event("previous-attempt"), ctx);
-            stream.exhaust_recovery_budget_for_test(ctx);
-            stream.emit_error_event_for_test(Arc::new(AIApiError::UnexpectedEof), ctx);
-        });
-        assert_terminal_stream_task_update(
-            &app,
-            retried_conversation_id,
-            AgentTaskState::Error,
-            PlatformErrorCode::AgentStreamNetworkError,
-        );
-    });
-}
-
 #[test]
 fn passive_suggestions_request_params_omit_ambient_agent_task_id() {
     App::test((), |mut app| async move {
@@ -206,7 +133,7 @@ fn passive_suggestions_request_params_omit_ambient_agent_task_id() {
             let task_id = new_ambient_agent_task_id();
             let conversation_id =
                 BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, ctx| {
-                    history_model.start_new_conversation(terminal.id(), false, false, false, ctx)
+                    history_model.start_new_conversation(terminal.id(), false, false, ctx)
                 });
 
             terminal.ai_controller().update(ctx, |controller, ctx| {
@@ -256,7 +183,7 @@ fn input_for_query_converts_prompt_attachments_and_ignores_live_staging() {
         terminal.update(&mut app, |terminal, ctx| {
             let conversation_id =
                 BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, ctx| {
-                    history_model.start_new_conversation(terminal.id(), false, false, false, ctx)
+                    history_model.start_new_conversation(terminal.id(), false, false, ctx)
                 });
 
             let controller = terminal.ai_controller();
@@ -349,7 +276,7 @@ fn input_for_query_seeds_query_mode_and_agent_from_the_base() {
         terminal.update(&mut app, |terminal, ctx| {
             let conversation_id =
                 BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, ctx| {
-                    history_model.start_new_conversation(terminal.id(), false, false, false, ctx)
+                    history_model.start_new_conversation(terminal.id(), false, false, ctx)
                 });
             let controller = terminal.ai_controller();
             let context_model = controller.as_ref(ctx).context_model.clone();
@@ -501,73 +428,6 @@ fn mock_response_stream_updates_history_through_controller() {
     });
 }
 
-#[test]
-fn explicit_stream_finished_failures_are_classified_without_init() {
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-        let terminal = add_window_with_terminal(&mut app, None);
-
-        let cases = [
-            (
-                response_event::stream_finished::Reason::Other(Default::default()),
-                AgentTaskState::Error,
-                PlatformErrorCode::AgentStreamFailure,
-            ),
-            (
-                response_event::stream_finished::Reason::LlmUnavailable(Default::default()),
-                AgentTaskState::Error,
-                PlatformErrorCode::AgentStreamFailure,
-            ),
-            (
-                response_event::stream_finished::Reason::ChatgptSubscriptionError(
-                    response_event::stream_finished::ChatGptSubscriptionError {
-                        message: "subscription limit reached".to_owned(),
-                        ..Default::default()
-                    },
-                ),
-                AgentTaskState::Failed,
-                PlatformErrorCode::InvalidRequest,
-            ),
-            (
-                response_event::stream_finished::Reason::InternalError(
-                    response_event::stream_finished::InternalError {
-                        message: "server stream failure".to_owned(),
-                    },
-                ),
-                AgentTaskState::Error,
-                PlatformErrorCode::AgentStreamFailure,
-            ),
-        ];
-        for (reason, expected_state, expected_code) in cases {
-            let (conversation_id, stream) = register_mock_response_stream(&terminal, &mut app);
-            stream.update(&mut app, |stream, ctx| {
-                stream.emit_response_event_for_test(
-                    warp_multi_agent_api::ResponseEvent {
-                        r#type: Some(response_event::Type::Finished(
-                            response_event::StreamFinished {
-                                reason: Some(reason),
-                                conversation_usage_metadata: None,
-                                token_usage: vec![],
-                                should_refresh_model_config: false,
-                                #[allow(deprecated)]
-                                request_cost: None,
-                                request_charges: None,
-                            },
-                        )),
-                    },
-                    ctx,
-                );
-            });
-            assert_terminal_stream_task_update(
-                &app,
-                conversation_id,
-                expected_state,
-                expected_code,
-            );
-        }
-    });
-}
-
 /// When an agent command exits the shell, the conversation must be finalized as
 /// `Error` (not `Cancelled`), and a subsequent `ManuallyCancelled` (as fired by
 /// the pane-close path) must not overwrite that failure.
@@ -582,13 +442,8 @@ fn fail_conversation_due_to_shell_exit_reports_error_and_survives_manual_cancel(
             let stream_id = ResponseStreamId::new_for_test();
             let conversation_id =
                 BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, ctx| {
-                    let conversation_id = history.start_new_conversation(
-                        terminal_surface_id,
-                        false,
-                        false,
-                        false,
-                        ctx,
-                    );
+                    let conversation_id =
+                        history.start_new_conversation(terminal_surface_id, false, false, ctx);
                     let task_id = history
                         .conversation(&conversation_id)
                         .unwrap()
@@ -671,13 +526,8 @@ fn optimistic_cli_subagent_completion_with_in_flight_stream_reports_success() {
             let stream_id = ResponseStreamId::new_for_test();
             let conversation_id =
                 BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, ctx| {
-                    let conversation_id = history.start_new_conversation(
-                        terminal_surface_id,
-                        false,
-                        false,
-                        false,
-                        ctx,
-                    );
+                    let conversation_id =
+                        history.start_new_conversation(terminal_surface_id, false, false, ctx);
                     let task_id = history
                         .conversation(&conversation_id)
                         .unwrap()
@@ -723,52 +573,6 @@ fn optimistic_cli_subagent_completion_with_in_flight_stream_reports_success() {
                 history.conversation(&conversation_id).map(|c| c.status()),
                 Some(&crate::ai::agent::conversation::ConversationStatus::Success)
             );
-        });
-    });
-}
-
-/// `drop_pending_events_for_exiting_conversation` drops any orchestration events still
-/// queued for the conversation at the moment it's called, since they arrived too late to
-/// ever be delivered once the run is exiting. Complements the controller-level guard above.
-/// The exiting flag itself is a separate mechanism
-/// ([`OrchestrationEventService::exit_commit_handle`]) this method doesn't touch.
-#[test]
-fn drop_pending_events_for_exiting_conversation_drops_pending_events() {
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-        let terminal = add_window_with_terminal(&mut app, None);
-
-        let conversation_id = terminal.update(&mut app, |view, ctx| {
-            let conversation_id = BlocklistAIHistoryModel::handle(ctx)
-                .update(ctx, |history, ctx| {
-                    history.start_new_conversation(view.id(), false, false, false, ctx)
-                });
-            OrchestrationEventService::handle(ctx).update(ctx, |service, ctx| {
-                service.enqueue_event_batch(
-                    conversation_id,
-                    vec![PendingEvent {
-                        event_id: "event-1".to_string(),
-                        source_agent_id: "child".to_string(),
-                        attempt_count: 0,
-                        detail: PendingEventDetail::Message {
-                            message_id: "message-1".to_string(),
-                            addresses: vec!["target".to_string()],
-                            subject: "subject".to_string(),
-                            message_body: "body".to_string(),
-                        },
-                    }],
-                    ctx,
-                );
-            });
-            conversation_id
-        });
-
-        terminal.update(&mut app, |_, ctx| {
-            OrchestrationEventService::handle(ctx).update(ctx, |service, _| {
-                assert!(service.has_pending_events(conversation_id));
-                service.drop_pending_events_for_exiting_conversation(conversation_id);
-                assert!(!service.has_pending_events(conversation_id));
-            });
         });
     });
 }

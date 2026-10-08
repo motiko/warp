@@ -42,9 +42,6 @@ pub(crate) fn redact_inputs(inputs: &mut [AIAgentInput]) {
                 }
                 redact_context(Arc::make_mut(context));
             }
-            AIAgentInput::CreateEnvironment { context, .. } => {
-                redact_context(Arc::make_mut(context));
-            }
             AIAgentInput::TriggerPassiveSuggestion {
                 context,
                 attachments,
@@ -90,7 +87,6 @@ pub(crate) fn redact_inputs(inputs: &mut [AIAgentInput]) {
             // No user-provided text to redact in inter-agent relay inputs.
             AIAgentInput::MessagesReceivedFromAgents { .. }
             | AIAgentInput::EventsFromAgents { .. }
-            | AIAgentInput::OrchestrationConfigUpdate { .. }
             | AIAgentInput::AgentWake => {}
             AIAgentInput::ActionResult { result, context } => {
                 redact_context(Arc::make_mut(context));
@@ -230,7 +226,6 @@ pub(crate) fn redact_inputs(inputs: &mut [AIAgentInput]) {
                     AIAgentActionResultType::FetchConversation(_) => {}
 
                     // SendMessageToAgent results contain only a message ID or error string, no secrets
-                    AIAgentActionResultType::SendMessageToAgent(_) => {}
                     // TransferShellCommandControlToUser result - similar to WriteToLongRunningShellCommand
                     AIAgentActionResultType::TransferShellCommandControlToUser(result) => {
                         match result {
@@ -249,11 +244,6 @@ pub(crate) fn redact_inputs(inputs: &mut [AIAgentInput]) {
                     AIAgentActionResultType::AskUserQuestion(result) => {
                         redact_ask_user_question_result(result);
                     }
-                    // Orchestrate results contain agent IDs / canonical error
-                    // strings only; no user-provided text to redact.
-                    AIAgentActionResultType::RunAgents(_)
-                    | AIAgentActionResultType::WaitForEvents(_) => {}
-
                     // Recording results carry an artifact ref and metadata only.
                     AIAgentActionResultType::StartRecording(_)
                     | AIAgentActionResultType::StopRecording(_) => {}

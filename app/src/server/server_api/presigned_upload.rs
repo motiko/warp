@@ -308,22 +308,8 @@ async fn send_upload_request(
     ensure_upload_succeeded(response, error_context).await
 }
 
-pub(crate) async fn upload_to_target(
-    http_client: &http_client::Client,
-    target: &UploadTarget,
-    body: impl UploadBody,
-) -> Result<()> {
-    let normalized = NormalizedUploadTarget::from(target);
-    let error_context = UploadErrorContext {
-        transport: "Failed to upload to presigned URL",
-        failure: "Upload",
-    };
-    send_upload(http_client, &normalized, body, None, error_context).await
-}
-
-/// Internal dispatcher shared between [`upload_to_target`] and
-/// [`upload_file_to_target`]. Routes the request to either a plain body upload
-/// or a multipart form upload based on whether the target has form fields.
+/// Internal dispatcher for [`upload_file_to_target`]. Routes the request to either a plain body
+/// upload or a multipart form upload based on whether the target has form fields.
 async fn send_upload(
     http_client: &http_client::Client,
     target: &NormalizedUploadTarget<'_>,

@@ -21,7 +21,6 @@ use super::view::WorkspaceBanner;
 use crate::ai::agent::AIAgentExchangeId;
 use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::blocklist::PendingAttachment;
 use crate::ai::document::ai_document_model::{AIDocumentId, AIDocumentVersion};
 use crate::palette::PaletteMode;
@@ -245,7 +244,6 @@ pub enum WorkspaceAction {
         source: AddTabWithShellSource,
     },
     AddGetStartedTab,
-    AddAmbientAgentTab,
     /// Add a new tab that immediately enters agent view with a new conversation.
     AddAgentTab,
     /// Add a new tab running a local Docker sandbox via `sbx`.
@@ -321,8 +319,6 @@ pub enum WorkspaceAction {
     SelectTabConfig(TabConfig),
     DispatchToSettingsTab(SettingsTabAction),
     ToggleResourceCenter,
-    ToggleAIAssistant,
-    ClickedAIAssistantIcon,
     ToggleKeybindingsPage,
     ShowCommandSearch(CommandSearchOptions),
     TriggerExternalCtrlTFileSearch,
@@ -386,11 +382,8 @@ pub enum WorkspaceAction {
     Panic,
     /// Writes a heap profile to disk.
     DumpHeapProfile,
-    ShowAIAssistantWarmWelcome,
-    ClickedAIAssistantWarmWelcome,
     /// An action to open a new window with a view hierarchy debugger.
     OpenViewTreeDebugWindow,
-    DismissAIAssistantWarmWelcome,
     /// An action to either upgrade syncing status from none or just in one tab
     /// to syncing all tabs, or downgrade from syncing all tabs to no syncing
     ToggleSyncAllTerminalInputsInAllTabs,
@@ -405,7 +398,6 @@ pub enum WorkspaceAction {
         open_source: PromptEditorOpenSource,
     },
     OpenAgentToolbarEditor,
-    OpenCLIAgentToolbarEditor,
     OpenHeaderToolbarEditor,
     ShowHeaderToolbarContextMenu {
         position: Vector2F,
@@ -472,7 +464,6 @@ pub enum WorkspaceAction {
         /// The entrypoint that triggered this action.
         entrypoint: AgentModeEntrypoint,
     },
-    OpenCloudAgentSetupGuide,
     /// Dismisses the Wayland crash recovery banner and opens a link to our docs page with more
     /// information.
     #[cfg(target_os = "linux")]
@@ -504,8 +495,6 @@ pub enum WorkspaceAction {
     StartNewConversation {
         terminal_view_id: EntityId,
     },
-    /// Jump to the terminal pane of the most recent agent toast
-    JumpToLatestToast,
     /// Open a file in a new tab with a code pane
     OpenFileInNewTab {
         full_path: PathBuf,
@@ -554,30 +543,8 @@ pub enum WorkspaceAction {
         /// Where to open the forked conversation.
         destination: ForkedConversationDestination,
     },
-    /// Fork an existing AI conversation into a new pane and prefill the input with a local
-    /// continuation command (selecting all text).
-    #[cfg(not(target_family = "wasm"))]
-    ContinueConversationLocally {
-        conversation_id: AIConversationId,
-    },
     /// Insert the /fork slash command into the active terminal's input.
     InsertForkSlashCommand,
-    /// Open a local-to-cloud handoff pane next to the active conversation
-    /// (REMOTE-1486). Triggered by the `/move-to-cloud` slash command
-    /// and the footer chip of the same name. The dispatch site reads the
-    /// active conversation's `server_conversation_token` and gates on
-    /// `FeatureFlag::OzHandoff && FeatureFlag::HandoffLocalCloud`.
-    /// Falls through to splitting a fresh cloud-mode pane when the active
-    /// conversation isn't handoff-able (no synced server token, empty, or no
-    /// active conversation at all).
-    OpenLocalToCloudHandoffPane {
-        #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
-        launch: Option<crate::ai::blocklist::handoff::PendingCloudLaunch>,
-        #[cfg(not(all(feature = "local_fs", not(target_family = "wasm"))))]
-        launch: Option<()>,
-        environment_id: Option<crate::server::ids::SyncId>,
-        entry_point: crate::ai::ambient_agents::telemetry::HandoffEntryPoint,
-    },
     /// Summarize the active AI conversation in the focused pane.
     SummarizeAIConversation {
         prompt: Option<String>,
@@ -627,20 +594,9 @@ pub enum WorkspaceAction {
     ToggleGlobalSearch,
     ToggleHiddenFiles,
     OpenGlobalSearch,
-    OpenAgentManagementView,
-    /// Install the opencode-warp plugin from GitHub into the global opencode config.
-    #[cfg(debug_assertions)]
-    InstallOpenCodeWarpPlugin,
-    /// Use a local checkout of the opencode-warp plugin (for testing/development).
-    #[cfg(debug_assertions)]
-    UseLocalOpenCodeWarpPlugin,
     /// Take a process sample of the app (equivalent to Activity Monitor > Sample Process).
     #[cfg(target_os = "macos")]
     SampleProcess,
-    ToggleNotificationMailbox {
-        select_first: bool,
-    },
-    ToggleAgentManagementView,
     /// Show the rewind confirmation dialog before rewinding an AI conversation
     ShowRewindConfirmationDialog {
         ai_block_view_id: EntityId,
@@ -653,20 +609,11 @@ pub enum WorkspaceAction {
         exchange_id: AIAgentExchangeId,
         conversation_id: AIConversationId,
     },
-    /// Open the canonical ambient agent conversation pane and attach it to a live session.
-    OpenOrAttachAmbientAgentConversation {
-        session_id: SessionId,
-        task_id: AmbientAgentTaskId,
-    },
     /// Load cloud conversation data into a transcript viewer.
     /// Used when CloudConversations is enabled and the sandbox is not running.
     OpenConversationTranscriptViewer {
         conversation_id: ServerConversationToken,
-        ambient_agent_task_id: Option<AmbientAgentTaskId>,
     },
-    /// Toggle the conversation transcript details panel (WASM-only).
-    #[cfg(target_family = "wasm")]
-    ToggleConversationTranscriptDetailsPanel,
     /// Open a full-window lightbox displaying the given images.
     OpenLightbox {
         images: Vec<lightbox::LightboxImage>,
@@ -731,8 +678,6 @@ impl WorkspaceAction {
     pub fn should_save_app_state_on_action(&self) -> bool {
         use WorkspaceAction::*;
         match self {
-            #[cfg(not(target_family = "wasm"))]
-            ContinueConversationLocally { .. } => true,
             ActivateTab(_)
             | ActivateTabByNumber(_)
             | SetTabShortcutModifierKey { .. }
@@ -795,7 +740,6 @@ impl WorkspaceAction {
             | AddTabWithShell { .. }
             | AddGetStartedTab
             | AddAgentTab
-            | AddAmbientAgentTab
             | AddDockerSandboxTab
             | AddWindow
             | AddWindowWithShell { .. }
@@ -860,9 +804,6 @@ impl WorkspaceAction {
             | ToggleNotifications
             | DispatchToSettingsTab { .. }
             | ToggleResourceCenter
-            | ClickedAIAssistantIcon
-            | ToggleAIAssistant
-            | OpenCloudAgentSetupGuide
             | ToggleKeybindingsPage
             | ShowCommandSearch(_)
             | TriggerExternalCtrlTFileSearch
@@ -901,9 +842,6 @@ impl WorkspaceAction {
             | Panic
             | DumpHeapProfile
             | OpenViewTreeDebugWindow
-            | ShowAIAssistantWarmWelcome
-            | ClickedAIAssistantWarmWelcome
-            | DismissAIAssistantWarmWelcome
             | DismissWorkspaceBanner(..)
             | ToggleSyncAllTerminalInputsInAllTabs
             | ToggleSyncTerminalInputsInTab
@@ -912,7 +850,6 @@ impl WorkspaceAction {
             | HandleConflictingEnvVarCollection(_)
             | OpenPromptEditor { .. }
             | OpenAgentToolbarEditor
-            | OpenCLIAgentToolbarEditor
             | OpenHeaderToolbarEditor
             | ShowHeaderToolbarContextMenu { .. }
             | OpenLink(_)
@@ -947,7 +884,6 @@ impl WorkspaceAction {
             | CancelActiveRename
             | StartNewConversation { .. }
             | UndoRevertInCodeReviewPane { .. }
-            | JumpToLatestToast
             | NavigatePrevPaneOrPanel
             | NavigateNextPaneOrPanel
             | ToggleProjectExplorer
@@ -955,15 +891,11 @@ impl WorkspaceAction {
             | ToggleGlobalSearch
             | ToggleHiddenFiles
             | OpenGlobalSearch
-            | ToggleNotificationMailbox { .. }
-            | ToggleAgentManagementView
-            | OpenAgentManagementView
             | ToggleAIDocumentPane { .. }
             | HideAIDocumentPanes
             | OpenAIDocumentPane { .. }
             | ShowRewindConfirmationDialog { .. }
             | ExecuteRewindAIConversation { .. }
-            | OpenOrAttachAmbientAgentConversation { .. }
             | OpenConversationTranscriptViewer { .. }
             | OpenLightbox { .. }
             | UpdateLightboxImage { .. }
@@ -976,11 +908,7 @@ impl WorkspaceAction {
             | TabConfigSidecarRemoveConfig { .. }
             | OpenSettingsFile
             | FixSettingsWithOz { .. }
-            | OpenLocalToCloudHandoffPane { .. }
             | OpenNetworkLogPane => false,
-            #[cfg(target_family = "wasm")]
-            ToggleConversationTranscriptDetailsPanel => false,
-            InstallOpenCodeWarpPlugin | UseLocalOpenCodeWarpPlugin => false,
             #[cfg(not(target_family = "wasm"))]
             ViewLogs => false,
             #[cfg(target_os = "macos")]

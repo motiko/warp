@@ -12,7 +12,9 @@ pub(crate) use remote::bundled_skill_snapshot_protos;
 #[cfg(feature = "local_fs")]
 mod bundled;
 #[cfg(all(not(target_family = "wasm"), feature = "local_fs"))]
-pub(crate) use bundled::{BundledSkill, BundledSkillActivation};
+pub(crate) use bundled::BundledSkill;
+#[cfg(all(test, not(target_family = "wasm"), feature = "local_fs"))]
+pub(crate) use bundled::BundledSkillActivation;
 
 cfg_if::cfg_if! {
     if #[cfg(not(feature = "local_fs"))] {
@@ -53,9 +55,6 @@ impl ActiveSkillLookupError {
 
 pub use ai::skills::SkillDescriptor;
 
-mod skill_spec;
-pub use skill_spec::SkillSpec;
-
 mod skill_utils;
 pub use skill_utils::{
     icon_override_for_skill_name, list_skills_if_changed, render_skill_button,
@@ -82,11 +81,6 @@ impl SkillPathQuery for PathBuf {
         LocalOrRemotePath::Local(self.clone())
     }
 }
-
-#[cfg(not(target_family = "wasm"))]
-mod resolve_skill_spec;
-#[cfg(not(target_family = "wasm"))]
-pub use resolve_skill_spec::resolve_skill_spec;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "local_fs")] {

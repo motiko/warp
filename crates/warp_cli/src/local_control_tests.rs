@@ -526,10 +526,6 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
             vec!["warpctrl", "surface", "resource-center", "toggle"],
         ),
         (
-            ActionKind::SurfaceAiAssistantToggle,
-            vec!["warpctrl", "surface", "ai-assistant", "toggle"],
-        ),
-        (
             ActionKind::SurfaceCodeReviewOpen,
             vec!["warpctrl", "surface", "code-review", "open"],
         ),
@@ -560,10 +556,6 @@ fn retained_action_examples() -> Vec<(ActionKind, Vec<&'static str>)> {
         (
             ActionKind::SurfaceVerticalTabsToggle,
             vec!["warpctrl", "surface", "vertical-tabs", "toggle"],
-        ),
-        (
-            ActionKind::SurfaceAgentManagementOpen,
-            vec!["warpctrl", "surface", "agent-management", "open"],
         ),
         (
             ActionKind::FileOpen,
@@ -688,9 +680,6 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             SurfaceCommand::ResourceCenter(command) => match command {
                 SurfaceToggleCommand::Toggle(_) => Some(ActionKind::SurfaceResourceCenterToggle),
             },
-            SurfaceCommand::AiAssistant(command) => match command {
-                SurfaceToggleCommand::Toggle(_) => Some(ActionKind::SurfaceAiAssistantToggle),
-            },
             SurfaceCommand::CodeReview(command) => match command {
                 SurfaceOpenToggleCommand::Open(_) => Some(ActionKind::SurfaceCodeReviewOpen),
                 SurfaceOpenToggleCommand::Toggle(_) => Some(ActionKind::SurfaceCodeReviewToggle),
@@ -710,9 +699,6 @@ fn parsed_action_kind(command: &ControlCommand) -> Option<ActionKind> {
             SurfaceCommand::VerticalTabs(command) => match command {
                 SurfaceOpenToggleCommand::Open(_) => Some(ActionKind::SurfaceVerticalTabsOpen),
                 SurfaceOpenToggleCommand::Toggle(_) => Some(ActionKind::SurfaceVerticalTabsToggle),
-            },
-            SurfaceCommand::AgentManagement(command) => match command {
-                SurfaceOpenCommand::Open(_) => Some(ActionKind::SurfaceAgentManagementOpen),
             },
         },
         ControlCommand::Completions { .. } => None,

@@ -19,7 +19,7 @@ use crate::features::FeatureFlag;
 use crate::local_control::LocalControlBridge;
 use crate::local_control::resolver::{reject_target_families, require_active_window_id_for_action};
 use crate::pane_group::{PaneGroup, PaneId};
-use crate::settings::{AISettings, CodeSettings};
+use crate::settings::CodeSettings;
 use crate::workspace::Workspace;
 use crate::workspace::tab_settings::TabSettings;
 
@@ -135,14 +135,12 @@ pub(crate) enum SurfaceDestination {
     ThemePicker,
     Keybindings,
     ResourceCenter,
-    AiAssistant,
     CodeReview,
     ProjectExplorer,
     GlobalSearch,
     LeftPanel,
     RightPanel,
     VerticalTabs,
-    AgentManagement,
 }
 
 impl SurfaceDestination {
@@ -153,14 +151,12 @@ impl SurfaceDestination {
         Self::ThemePicker,
         Self::Keybindings,
         Self::ResourceCenter,
-        Self::AiAssistant,
         Self::CodeReview,
         Self::ProjectExplorer,
         Self::GlobalSearch,
         Self::LeftPanel,
         Self::RightPanel,
         Self::VerticalTabs,
-        Self::AgentManagement,
     ];
 
     fn name(self) -> &'static str {
@@ -171,14 +167,12 @@ impl SurfaceDestination {
             Self::ThemePicker => "theme_picker",
             Self::Keybindings => "keybindings",
             Self::ResourceCenter => "resource_center",
-            Self::AiAssistant => "ai_assistant",
             Self::CodeReview => "code_review",
             Self::ProjectExplorer => "project_explorer",
             Self::GlobalSearch => "global_search",
             Self::LeftPanel => "left_panel",
             Self::RightPanel => "right_panel",
             Self::VerticalTabs => "vertical_tabs",
-            Self::AgentManagement => "agent_management",
         }
     }
 }
@@ -305,10 +299,6 @@ pub(crate) fn surface_unavailable_reason(
         | SurfaceDestination::ThemePicker
         | SurfaceDestination::Keybindings
         | SurfaceDestination::ResourceCenter => None,
-        SurfaceDestination::AiAssistant if !AISettings::as_ref(ctx).is_any_ai_enabled(ctx) => {
-            Some("AI features are disabled")
-        }
-        SurfaceDestination::AiAssistant => None,
         SurfaceDestination::CodeReview | SurfaceDestination::RightPanel
             if !cfg!(feature = "local_fs") =>
         {
@@ -344,13 +334,6 @@ pub(crate) fn surface_unavailable_reason(
             Some("vertical tabs are unavailable or disabled")
         }
         SurfaceDestination::VerticalTabs => None,
-        SurfaceDestination::AgentManagement
-            if !FeatureFlag::AgentManagementView.is_enabled()
-                || !AISettings::as_ref(ctx).is_any_ai_enabled(ctx) =>
-        {
-            Some("agent management is unavailable or disabled")
-        }
-        SurfaceDestination::AgentManagement => None,
     }
 }
 

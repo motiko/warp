@@ -1,10 +1,35 @@
 //! Output rendering helpers for `warpctrl`.
+use std::fmt;
 use std::io::Write as _;
 
+use clap::ValueEnum;
 use local_control::protocol::{ControlError, ErrorCode};
 use serde::Serialize;
 
-use crate::agent::OutputFormat;
+/// Output format for `warpctrl` results.
+#[derive(Debug, Copy, Clone, ValueEnum, Eq, PartialEq, Default)]
+pub enum OutputFormat {
+    /// Output as JSON.
+    #[value(name = "json")]
+    Json,
+    /// Output as newline-delimited JSON.
+    #[value(name = "ndjson")]
+    Ndjson,
+    /// Output as human-readable text.
+    #[default]
+    #[value(name = "pretty")]
+    Pretty,
+    /// Output as plain text.
+    #[value(name = "text")]
+    Text,
+}
+
+impl fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = self.to_possible_value().expect("no values are skipped");
+        f.write_str(value.get_name())
+    }
+}
 
 /// JSON/NDJSON error payload emitted by `warpctrl`.
 #[derive(Serialize)]

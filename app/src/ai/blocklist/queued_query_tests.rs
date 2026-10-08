@@ -231,43 +231,6 @@ fn pop_front_no_ops_when_head_is_locked() {
 }
 
 #[test]
-fn remove_initial_cloud_mode_row_only_removes_the_locked_head() {
-    with_model(|mut app, model, events| {
-        let conv = AIConversationId::new();
-        let initial_id = model.update(&mut app, |model, ctx| {
-            model.append(conv, initial_cloud_mode_query("initial"), ctx)
-        });
-        append_user(&model, &mut app, conv, "follow up");
-        events.borrow_mut().clear();
-
-        let removed = model.update(&mut app, |model, ctx| {
-            model.remove_initial_cloud_mode_row(conv, ctx)
-        });
-        assert_eq!(
-            removed.map(|query| query.text().to_owned()),
-            Some("initial".to_owned())
-        );
-
-        let removed_again = model.update(&mut app, |model, ctx| {
-            model.remove_initial_cloud_mode_row(conv, ctx)
-        });
-        assert!(removed_again.is_none());
-
-        let action = model.read(&app, |model, _| model.peek_autofire(conv));
-        match action {
-            Some(AutofireAction::Submit { text, .. }) => assert_eq!(text, "follow up"),
-            other => panic!("expected Submit, got {other:?}"),
-        }
-
-        let evts = events.borrow();
-        assert!(matches!(
-            evts.first(),
-            Some(QueuedQueryEvent::Removed { query_id, .. }) if *query_id == initial_id
-        ));
-    });
-}
-
-#[test]
 fn append_preserves_fifo_order() {
     with_model(|mut app, model, _events| {
         let conv = AIConversationId::new();
@@ -524,61 +487,6 @@ fn peek_autofire_leaves_row_until_remove_fired_row_drops_it() {
 }
 
 #[test]
-fn restore_fired_row_reinserts_removed_row_for_retry() {
-    with_model(|mut app, model, events| {
-        let conv = AIConversationId::new();
-        let first_id = model.update(&mut app, |model, ctx| {
-            model.append(
-                conv,
-                QueuedQuery::new_with_attachments(
-                    "first".to_owned(),
-                    QueuedQueryOrigin::QueueSlashCommand,
-                    vec![image_attachment("a.png")],
-                ),
-                ctx,
-            )
-        });
-        append_user(&model, &mut app, conv, "second");
-
-        let (retry_index, retry_query) = model.read(&app, |model, _| {
-            model
-                .queue(conv)
-                .iter()
-                .enumerate()
-                .find(|(_, query)| query.id() == first_id)
-                .map(|(index, query)| (index, query.clone()))
-                .expect("queued row should exist")
-        });
-
-        model.update(&mut app, |model, ctx| {
-            model.remove_fired_row(conv, first_id, ctx);
-        });
-        events.borrow_mut().clear();
-
-        model.update(&mut app, |model, ctx| {
-            model.restore_fired_row(conv, retry_index, retry_query, ctx);
-        });
-
-        model.read(&app, |model, _| {
-            let queue = model.queue(conv);
-            assert_eq!(queue.len(), 2);
-            assert_eq!(queue[0].id(), first_id);
-            assert_eq!(queue[0].text(), "first");
-            assert_eq!(queue[0].attachments()[0].file_name(), "a.png");
-            assert_eq!(queue[1].text(), "second");
-        });
-        let evts = events.borrow();
-        assert!(matches!(
-            evts.as_slice(),
-            [QueuedQueryEvent::Appended {
-                conversation_id,
-                query_id
-            }] if *conversation_id == conv && *query_id == first_id
-        ));
-    });
-}
-
-#[test]
 fn peek_autofire_returns_pop_from_edit_mode_with_committed_text_and_attachments() {
     // Per spec: when the first row is in edit mode, peek_autofire's PopFromEditMode action
     // carries the row's last-committed text and its stored attachments (NOT any uncommitted
@@ -810,10 +718,10 @@ fn delete_conversation_drops_only_that_conversation_state() {
         let history = BlocklistAIHistoryModel::handle(&app);
         let terminal_view_id = warpui::EntityId::new();
         let conv_a = history.update(&mut app, |h, ctx| {
-            h.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            h.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         let conv_b = history.update(&mut app, |h, ctx| {
-            h.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            h.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         append_user(&model, &mut app, conv_a, "a1");
         append_user(&model, &mut app, conv_b, "b1");
@@ -1069,7 +977,7 @@ fn delete_conversation_clears_in_flight_command() {
         let history = BlocklistAIHistoryModel::handle(&app);
         let terminal_view_id = warpui::EntityId::new();
         let conv = history.update(&mut app, |h, ctx| {
-            h.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            h.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         model.update(&mut app, |m, _| m.arm_command_in_flight(conv));
         model.read(&app, |m, _| assert!(m.has_command_in_flight(conv)));
@@ -1088,10 +996,10 @@ fn clear_conversations_for_terminal_surface_drops_every_listed_conversation() {
         let history = BlocklistAIHistoryModel::handle(&app);
         let terminal_view_id = warpui::EntityId::new();
         let conv_a = history.update(&mut app, |h, ctx| {
-            h.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            h.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         let conv_b = history.update(&mut app, |h, ctx| {
-            h.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            h.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         append_user(&model, &mut app, conv_a, "a1");
         append_user(&model, &mut app, conv_b, "b1");

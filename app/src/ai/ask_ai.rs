@@ -1,4 +1,3 @@
-//! AI Assistant has since been renamed to "Warp AI" in the product.
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -14,25 +13,9 @@ use warp_graphql::ai::{
 use warp_graphql::mutations::generate_commands::{GenerateCommandsFailureType, GeneratedCommand};
 
 use crate::ai::{RequestLimitInfo, RequestLimitRefreshDuration};
-use crate::server::telemetry::OpenedWarpAISource;
 use crate::terminal::model::terminal_model::BlockIndex;
 use crate::workflows::workflow::{Argument, Workflow};
 
-pub mod execution_context;
-pub mod panel;
-pub mod requests;
-pub mod transcript;
-pub mod utils;
-
-#[cfg(test)]
-mod test_util;
-
-/// We want to make sure the user doesn't send a prompt too large.s
-/// Since a token is ~ 4 chars, the limit we impose here is 250 tokens.
-/// This is also roughly the limit at which the editor starts degrading.
-pub const PROMPT_CHARACTER_LIMIT: usize = 1000;
-
-pub const AI_ASSISTANT_FEATURE_NAME: &str = "Warp AI";
 pub const ASK_AI_ASSISTANT_TEXT: &str = "Ask Warp AI";
 
 pub const AI_ASSISTANT_SVG_PATH: &str = "bundled/svg/ai-assistant.svg";
@@ -47,36 +30,24 @@ pub enum AskAIType {
     /// the alt-screen terminal, and the input area. Not all instances will require
     /// `populate_input_box`, which determines whether we should automatically render
     /// something like "Explain the following" within the user's input box.
-    FromTextSelection {
+    TextSelection {
         text: Arc<String>,
         populate_input_box: bool,
     },
     /// Data about a block to inform Agent Mode.
-    FromBlock {
+    Block {
         input: Arc<String>,
         output: Arc<String>,
         exit_code: ExitCode,
         block_index: BlockIndex,
     },
     /// Which blocks to attach to a block list AI query.
-    FromBlocks {
+    Blocks {
         block_indices: HashSet<BlockIndex>,
     },
-    FromAICommandSearch {
+    AICommandSearch {
         query: Arc<String>,
     },
-}
-
-impl From<&AskAIType> for OpenedWarpAISource {
-    fn from(value: &AskAIType) -> Self {
-        match value {
-            AskAIType::FromAICommandSearch { .. } => OpenedWarpAISource::FromAICommandSearch,
-            AskAIType::FromBlock { .. } | AskAIType::FromBlocks { .. } => {
-                OpenedWarpAISource::HelpWithBlock
-            }
-            AskAIType::FromTextSelection { .. } => OpenedWarpAISource::HelpWithTextSelection,
-        }
-    }
 }
 
 pub struct AIGeneratedCommand {

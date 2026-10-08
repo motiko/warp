@@ -87,7 +87,7 @@ fn execute_lazily_hydrates_missing_plan_for_remote_child_without_local_parent() 
         let child_conversation_id =
             BlocklistAIHistoryModel::handle(&app).update(&mut app, |history, ctx| {
                 let child_conversation_id =
-                    history.start_new_conversation(EntityId::new(), false, false, false, ctx);
+                    history.start_new_conversation(EntityId::new(), false, false, ctx);
                 history
                     .conversation_mut(&child_conversation_id)
                     .expect("child conversation should exist")

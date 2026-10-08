@@ -4,7 +4,6 @@ use std::ops::{Range, RangeInclusive};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ai_types::AmbientAgentTaskId;
 use async_channel::Sender;
 use base64::Engine;
 use itertools::Either;
@@ -98,8 +97,6 @@ pub enum ConversationTranscriptViewerStatus {
     Loading,
     /// Viewing a local conversation (not from ambient agent).
     ViewingLocalConversation,
-    /// Viewing an ambient agent conversation with the associated task ID.
-    ViewingAmbientConversation(AmbientAgentTaskId),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -484,10 +481,6 @@ pub struct TerminalModel {
     /// `SessionSourceType` paired with `source_task_id`, or `None` when
     /// this is not a shared session.
     shared_session_source: Option<SharedSessionSource>,
-
-    /// Whether this terminal model was created as a cloud mode dummy session
-    /// (no local shell process, deferred shared-session viewer backing).
-    is_dummy_cloud_mode_session: bool,
 
     /// If Some, this terminal is displaying a read-only conversation transcript.
     /// Tracks both the loading state and the type of conversation being viewed.
@@ -1058,7 +1051,6 @@ impl TerminalModel {
         session_startup_path: Option<PathBuf>,
         shell_state: ShellLaunchState,
         shared_session_status: SharedSessionStatus,
-        is_dummy_cloud_mode_session: bool,
     ) -> Self {
         let alt_screen = AltScreen::new(
             sizes.size,
@@ -1112,7 +1104,6 @@ impl TerminalModel {
             obfuscate_secrets,
             shared_session_status,
             shared_session_source: None,
-            is_dummy_cloud_mode_session,
             conversation_transcript_viewer_status: None,
             ordered_terminal_events_for_shared_session_tx: None,
             write_to_pty_events_for_shared_session_tx: None,
@@ -1161,44 +1152,6 @@ impl TerminalModel {
             session_startup_path,
             shell_state,
             SharedSessionStatus::NotShared,
-            false,
-        )
-    }
-
-    /// Creates a terminal model for a cloud mode pane before it has connected to a shared session.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_for_cloud_mode_shared_session_viewer(
-        sizes: BlockSize,
-        colors: color::List,
-        event_proxy: ChannelEventListener,
-        background_executor: Arc<Background>,
-        show_memory_stats: bool,
-        honor_ps1: bool,
-        is_inverted: bool,
-        obfuscate_secrets: ObfuscateSecrets,
-    ) -> Self {
-        Self::new_internal(
-            None,
-            sizes,
-            colors,
-            event_proxy,
-            background_executor,
-            false,
-            false,
-            show_memory_stats,
-            honor_ps1,
-            is_inverted,
-            obfuscate_secrets,
-            false,
-            None,
-            // TODO: use the same shell type as the sharer
-            ShellLaunchState::ShellSpawned {
-                available_shell: None,
-                display_name: ShellName::blank(),
-                shell_type: ShellType::Zsh,
-            },
-            SharedSessionStatus::ViewPending,
-            true,
         )
     }
 
@@ -1234,7 +1187,6 @@ impl TerminalModel {
                 shell_type: ShellType::Zsh,
             },
             SharedSessionStatus::ViewPending,
-            false,
         )
     }
 
@@ -1363,20 +1315,6 @@ impl TerminalModel {
         }
     }
 
-    /// Signal to viewers that the Cloud Mode Setup V2 phase is complete and no
-    /// follow-up `AppendedExchange` is coming (e.g. because the AgentDriver is
-    /// short-circuiting an empty-prompt handoff via `skip_initial_turn`).
-    /// Viewers use this to clear `BlockList::is_executing_oz_environment_startup_commands`
-    /// and tear down the "Running setup commands…" chip.
-    pub fn send_cloud_mode_setup_phase_ended_for_shared_session(&mut self) {
-        if self.shared_session_status().is_sharer()
-            && let Some(tx) = &self.ordered_terminal_events_for_shared_session_tx
-            && let Err(e) = tx.try_send(OrderedTerminalEventType::CloudModeSetupPhaseEnded)
-        {
-            log::warn!("Failed to send OrderedTerminalEventType::CloudModeSetupPhaseEnded: {e}");
-        }
-    }
-
     /// Whether the session sharing server is currently replaying
     /// conversation events (for conversation reconstruction).
     pub fn is_receiving_agent_conversation_replay(&self) -> bool {
@@ -1407,50 +1345,11 @@ impl TerminalModel {
         }
     }
 
-    pub fn is_dummy_cloud_mode_session(&self) -> bool {
-        self.is_dummy_cloud_mode_session
-    }
-
-    #[cfg(test)]
-    pub fn set_is_dummy_cloud_mode_session(&mut self, value: bool) {
-        self.is_dummy_cloud_mode_session = value;
-    }
-
     pub fn is_shared_ambient_agent_session(&self) -> bool {
         matches!(
             self.shared_session_source.as_ref().map(|s| &s.source_type),
             Some(SessionSourceType::AmbientAgent { .. })
         )
-    }
-
-    pub fn ambient_agent_task_id(&self) -> Option<AmbientAgentTaskId> {
-        if let Some(ConversationTranscriptViewerStatus::ViewingAmbientConversation(task_id)) =
-            &self.conversation_transcript_viewer_status
-        {
-            return Some(*task_id);
-        }
-        self.shared_session_source
-            .as_ref()
-            .and_then(|s| s.orchestrator_task_id())
-            .and_then(|s| s.parse().ok())
-    }
-
-    /// Model-only portion of the "is this a cloud agent conversation?" check used for display
-    /// purposes (e.g. the cloud agent icon). Callers holding a [`TerminalView`] should use
-    /// [`TerminalView::is_cloud_agent_session`], which also accounts for the ambient agent view
-    /// model.
-    ///
-    /// This intentionally keys off cloud-execution (ambient agent) semantics — a shared
-    /// *ambient* session or viewing an ambient conversation — NOT the mere presence of an
-    /// orchestrator task id. A manually shared *local* (`User`) session carries a
-    /// `source_task_id` sidecar but is not a cloud agent conversation, so it must fall through
-    /// here (see QUALITY-726).
-    pub fn is_cloud_agent_conversation(&self) -> bool {
-        self.is_shared_ambient_agent_session()
-            || matches!(
-                self.conversation_transcript_viewer_status.as_ref(),
-                Some(ConversationTranscriptViewerStatus::ViewingAmbientConversation(_))
-            )
     }
 
     /// Loads the provided scrollback into the model.
@@ -1465,16 +1364,6 @@ impl TerminalModel {
         self.lifecycle_coordinator.reset_unknown();
 
         // The scrollback contains the prompt for the active block, and the terminal view needs to be notified to render it.
-        self.event_proxy.send_wakeup_event();
-    }
-
-    pub fn append_followup_shared_session_scrollback(&mut self, scrollback: &[SerializedBlock]) {
-        debug_assert!(self.shared_session_status().is_viewer());
-
-        self.block_list_mut()
-            .append_followup_shared_session_scrollback(scrollback);
-        self.lifecycle_coordinator.reset_unknown();
-
         self.event_proxy.send_wakeup_event();
     }
 

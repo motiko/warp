@@ -4,10 +4,7 @@ use std::os::windows::ffi::{OsStrExt, OsStringExt};
 
 use itertools::Itertools;
 use warp_core::channel::ChannelState;
-use warp_core::cli_agent_protocol::{
-    CLI_AGENT_PROTOCOL_VERSION, WARP_CLI_AGENT_PROTOCOL_VERSION_ENV, WARP_CLIENT_VERSION_ENV,
-};
-use warp_core::features::FeatureFlag;
+use warp_core::client_env::WARP_CLIENT_VERSION_ENV;
 use warp_core::safe_info;
 use windows::Win32::System::Environment::ExpandEnvironmentStringsW;
 use windows::core::{HSTRING, PCWSTR};
@@ -135,16 +132,6 @@ pub(super) fn get_shell_environment_variables(options: &PtyOptions) -> Vec<u16> 
         },
     );
 
-    if FeatureFlag::HOANotifications.is_enabled() {
-        env.insert(
-            map_key(WARP_CLI_AGENT_PROTOCOL_VERSION_ENV.into()),
-            EnvEntry {
-                preferred_key: WARP_CLI_AGENT_PROTOCOL_VERSION_ENV.into(),
-                value: CLI_AGENT_PROTOCOL_VERSION.to_string().into(),
-            },
-        );
-    }
-
     let ssh_socket_dir = ssh_socket_dir();
     env.insert(
         map_key(SSH_SOCKET_DIR.into()),
@@ -228,10 +215,6 @@ fn wsl_env_allowlist(include_initial_working_dir: bool) -> OsString {
         format!("{FOCUS_URL_ENV}/u"),
         format!("{PROMPT_NODE_VERSION_ENABLED_NAME}/u"),
     ];
-
-    if FeatureFlag::HOANotifications.is_enabled() {
-        entries.push(format!("{WARP_CLI_AGENT_PROTOCOL_VERSION_ENV}/u"));
-    }
 
     if include_initial_working_dir {
         entries.push(format!("{INITIAL_WORKING_DIR_NAME}/pu"));

@@ -126,8 +126,6 @@ impl TeamScope for TeamlessScopeForTest {
 /// Resolves a [`TeamContext`] on demand from a view captured up front. See
 /// [`UserWorkspaces::team_context_resolver`].
 pub type TeamContextResolver = Rc<dyn for<'a> Fn(&'a AppContext) -> TeamContext<'a>>;
-pub(crate) type TeamContextForOperationResolver =
-    Rc<dyn Fn(&AppContext) -> TeamContextForOperation>;
 
 /// What windowless Gemini Enterprise credential minting should mint from. See
 /// [`UserWorkspaces::gemini_enterprise_host_for_any_enabling_team`].
@@ -207,14 +205,6 @@ impl UserWorkspaces {
     /// a view at the boundaries where they need one.
     pub fn team_context_resolver<T: Entity>(view: WeakViewHandle<T>) -> TeamContextResolver {
         Rc::new(move |app| Self::as_ref(app).team_context(&view, app))
-    }
-
-    pub(crate) fn team_context_for_operation_resolver(
-        resolver: TeamContextResolver,
-    ) -> TeamContextForOperationResolver {
-        Rc::new(move |app| TeamContextForOperation {
-            team_uid: resolver(app).team_uid(),
-        })
     }
 
     /// A resolver for tests that build a model without a window to resolve against.
@@ -372,17 +362,6 @@ impl UserWorkspaces {
             scope,
             |team| team.settings.team_byo.as_ref(),
             |workspace| workspace.settings.team_byo.as_ref(),
-            None,
-        )
-    }
-
-    /// The self-hosted worker host slug configured as the default for `scope`'s team. See
-    /// [`Self::scoped_or_workspace_setting`] for the no-team fallback.
-    pub(crate) fn default_host_slug<S: TeamScope + ?Sized>(&self, scope: &S) -> Option<&str> {
-        self.scoped_or_workspace_setting(
-            scope,
-            |team| team.settings.default_host_slug.as_deref(),
-            |workspace| workspace.settings.default_host_slug.as_deref(),
             None,
         )
     }

@@ -18,7 +18,7 @@ use crate::ai::agent::{
     TransientNetworkErrorKind,
 };
 use crate::ai::block_context::BlockContext;
-use crate::ai_assistant::execution_context::{WarpAiExecutionContext, WarpAiOsContext};
+use crate::ai::execution_context::{WarpAiExecutionContext, WarpAiOsContext};
 use crate::server::server_api::AIApiError;
 use crate::terminal::shell::ShellType;
 

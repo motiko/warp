@@ -26,7 +26,6 @@ pub(super) struct WorkspaceMouseStates {
     pub(super) banner_secondary_button: MouseStateHandle,
     pub(super) more_info_banner_button: MouseStateHandle,
     pub(super) resource_center_icon: MouseStateHandle,
-    pub(super) ai_tab_bar_button: MouseStateHandle,
     pub(super) left_panel_icon: MouseStateHandle,
     pub(super) settings_icon: MouseStateHandle,
     pub(super) dismiss_banner_button: MouseStateHandle,
@@ -52,8 +51,6 @@ pub struct WorkspaceState {
     pub is_launch_config_save_modal_open: bool,
     pub is_resource_center_open: bool,
     pub is_command_search_open: bool,
-    pub is_ai_assistant_panel_open: bool,
-    pub is_agent_management_popup_open: bool,
     pub is_workflow_modal_open: bool,
     pub is_prompt_editor_open: bool,
     pub is_agent_toolbar_editor_open: bool,
@@ -64,14 +61,10 @@ pub struct WorkspaceState {
     pub is_native_quit_modal_open: bool,
     pub is_suggested_agent_mode_workflow_modal_open: bool,
     pub is_suggested_rule_modal_open: bool,
-    pub is_notification_mailbox_open: bool,
-    pub is_agent_management_view_open: bool,
     pub is_tab_config_params_modal_open: bool,
     pub is_session_config_modal_open: bool,
     pub is_new_worktree_modal_open: bool,
     pub is_remove_tab_config_dialog_open: bool,
-    /// Whether the transcript details panel is open (WASM only, for conversation transcript viewing).
-    pub is_transcript_details_panel_open: bool,
     tab_being_renamed: Option<usize>, // The index of the tab being renamed
     pane_being_renamed: Option<PaneViewLocator>,
     /// The tab group whose header is currently being renamed inline.
@@ -80,10 +73,7 @@ pub struct WorkspaceState {
 
 impl WorkspaceState {
     pub fn is_any_non_terminal_view_open(&self) -> bool {
-        self.is_any_modal_open()
-            || self.is_theme_chooser_open
-            || self.is_ai_assistant_panel_open
-            || self.is_workflow_modal_open
+        self.is_any_modal_open() || self.is_theme_chooser_open || self.is_workflow_modal_open
     }
 
     pub fn is_any_non_palette_modal_open(&self) -> bool {
@@ -98,7 +88,6 @@ impl WorkspaceState {
             || self.is_prompt_editor_open
             || self.is_agent_toolbar_editor_open
             || self.is_header_toolbar_editor_open
-            || self.is_agent_management_popup_open
             || self.is_import_modal_open
             || self.is_suggested_rule_modal_open
             || self.is_suggested_agent_mode_workflow_modal_open
@@ -140,7 +129,7 @@ impl WorkspaceState {
     }
 
     pub fn is_right_panel_open(&self) -> bool {
-        self.is_resource_center_open || self.is_ai_assistant_panel_open
+        self.is_resource_center_open
     }
 
     pub fn is_left_panel_open(&self) -> bool {

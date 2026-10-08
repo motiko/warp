@@ -360,7 +360,6 @@ pub mod flags {
     pub const AGENT_TASK_COMPLETED_NOTIFICATIONS_FLAG: &str = "Agent_Task_Completed_Notifications";
     pub const NEEDS_ATTENTION_NOTIFICATIONS_FLAG: &str = "Needs_Attention_Notifications";
     pub const NOTIFICATION_SOUND_FLAG: &str = "Notification_Sound";
-    pub const AGENT_IN_APP_NOTIFICATIONS_FLAG: &str = "Agent_In_App_Notifications";
     pub const LINK_TOOLTIP_CONTEXT_FLAG: &str = "Link_Tooltip";
     pub const COMPACT_MODE_CONTEXT_FLAG: &str = "Compact_Mode_Enabled";
     pub const CURSOR_BLINK_CONTEXT_FLAG: &str = "Cursor_Blink_Enabled";
@@ -503,13 +502,6 @@ pub mod flags {
     pub const LOCKED_INPUT: &str = "LockedInput";
     pub const OPEN_INLINE_CONVERSATION_MENU: &str = "OpenInlineConversationMenu";
     pub const EMPTY_INPUT_BUFFER: &str = "EmptyInputBuffer";
-    pub const CLI_AGENT_RICH_INPUT_OPEN: &str = "CLIAgentRichInputOpen";
-    pub const CLI_AGENT_FOOTER_ENABLED: &str = "CLIAgentFooterEnabled";
-    pub const CLI_AGENT_RICH_INPUT_CHIP_ENABLED: &str = "CLIAgentRichInputChipEnabled";
-    pub const AUTO_TOGGLE_RICH_INPUT_FLAG: &str = "AutoToggleRichInput";
-    pub const AUTO_OPEN_RICH_INPUT_ON_CLI_AGENT_START_FLAG: &str =
-        "AutoOpenRichInputOnCLIAgentStart";
-    pub const AUTO_DISMISS_RICH_INPUT_AFTER_SUBMIT_FLAG: &str = "AutoDismissRichInputAfterSubmit";
     pub const ENABLE_WARP_DRIVE: &str = "EnableWarpDrive";
     // Tools panel settings
     pub const SHOW_CONVERSATION_HISTORY: &str = "ShowConversationHistory";

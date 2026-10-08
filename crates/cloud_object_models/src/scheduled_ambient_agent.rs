@@ -4,8 +4,7 @@ use cloud_objects::cloud_object::{
     GenericCloudObject, GenericServerObject, GenericStringModel, JsonObjectType,
 };
 use cloud_objects::ids::GenericStringObjectId;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use warp_cli::agent::Harness;
+use serde::{Deserialize, Serialize};
 
 use crate::cloud_environment::SourceRepo;
 use crate::{JsonModel, JsonSerializer};
@@ -54,85 +53,10 @@ pub struct AgentConfigSnapshot {
     /// If None, the default behavior is used.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub computer_use_enabled: Option<bool>,
-    /// Execution harness for the agent run.
-    /// If None, we use Warp's default ("oz").
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub harness: Option<HarnessConfig>,
-    /// Authentication secrets for third-party harnesses.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub harness_auth_secrets: Option<HarnessAuthSecretsConfig>,
     /// Extra repositories the worker should clone in addition to the environment's repos.
     /// This is server-populated for per-task sources such as a GitHub webhook's origin repo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub additional_source_repos: Option<Vec<SourceRepo>>,
-}
-
-/// Configuration for a third-party execution harness.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
-pub struct HarnessConfig {
-    /// The harness type, e.g. [`Harness::Claude`].
-    #[serde(
-        rename = "type",
-        serialize_with = "serialize_harness",
-        deserialize_with = "deserialize_harness"
-    )]
-    pub harness_type: Harness,
-    /// The model to use with this harness. None means use the harness default.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model_id: Option<String>,
-    /// Optional reasoning level for harnesses that support it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_level: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct HarnessModelConfig {
-    pub model_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_level: Option<String>,
-}
-
-impl HarnessConfig {
-    /// Builds a harness config from just the harness type.
-    pub fn from_harness_type(harness_type: Harness) -> Self {
-        Self {
-            harness_type,
-            model_id: None,
-            reasoning_level: None,
-        }
-    }
-
-    pub fn model_config(&self) -> Option<HarnessModelConfig> {
-        self.model_id
-            .as_ref()
-            .filter(|id| !id.is_empty())
-            .map(|model_id| HarnessModelConfig {
-                model_id: model_id.clone(),
-                reasoning_level: self.reasoning_level.clone(),
-            })
-    }
-}
-
-fn serialize_harness<S: Serializer>(harness: &Harness, serializer: S) -> Result<S::Ok, S::Error> {
-    serializer.serialize_str(harness.config_name())
-}
-
-fn deserialize_harness<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Harness, D::Error> {
-    let name = String::deserialize(deserializer)?;
-    Ok(Harness::from_config_name(&name).unwrap_or_else(|| {
-        log::warn!("Unknown harness config name: {name:?}; treating as Unknown");
-        Harness::Unknown
-    }))
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct HarnessAuthSecretsConfig {
-    /// Name of a managed secret for Claude Code harness authentication.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub claude_auth_secret_name: Option<String>,
-    /// Name of a managed secret for Codex harness authentication.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub codex_auth_secret_name: Option<String>,
 }
 
 impl AgentConfigSnapshot {
@@ -150,8 +74,6 @@ impl AgentConfigSnapshot {
             worker_host,
             skill_spec,
             computer_use_enabled,
-            harness,
-            harness_auth_secrets,
             additional_source_repos,
         } = self;
 
@@ -166,8 +88,6 @@ impl AgentConfigSnapshot {
             && worker_host.is_none()
             && skill_spec.is_none()
             && computer_use_enabled.is_none()
-            && harness.is_none()
-            && harness_auth_secrets.is_none()
             && additional_source_repos.is_none()
     }
 }

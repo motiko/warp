@@ -279,7 +279,6 @@ pub fn model_leading_icon(llm: &LLMInfo, flags: ModelIconFlags) -> Icon {
 /// but was migrated to store a full [`ModelsByFeature`].
 pub const MODELS_BY_FEATURE_CACHE_KEY: &str = "AvailableLLMs";
 const CUSTOM_ENDPOINT_USAGE_FALLBACK_LABEL: &str = "Custom endpoint";
-const CLOUD_FALLBACK_OZ_MODEL_ID: &str = "auto";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct LLMUsageMetadata {
@@ -1369,31 +1368,6 @@ impl LLMPreferences {
             || custom_model_routers::is_local_custom_router_id(id.as_str()))
     }
 
-    /// Returns a cloud-runnable Oz model id, falling back to server-side
-    /// automatic model selection when the requested model is local-only.
-    pub(crate) fn cloud_runnable_oz_model_id_or_fallback(&self, id: &LLMId) -> String {
-        if self.is_cloud_runnable_oz_model_id(id) {
-            id.to_string()
-        } else {
-            CLOUD_FALLBACK_OZ_MODEL_ID.to_owned()
-        }
-    }
-
-    /// True when the pane's active Agent Mode model can run in a Warp cloud
-    /// (Oz) agent (see [`Self::is_cloud_runnable_oz_model_id`]).
-    pub(crate) fn is_active_base_model_cloud_runnable(
-        &self,
-        scope: &(impl TeamScope + ?Sized),
-        terminal_view_id: EntityId,
-        app: &AppContext,
-    ) -> bool {
-        self.is_cloud_runnable_oz_model_id(
-            &self
-                .get_active_base_model(scope, app, Some(terminal_view_id))
-                .id,
-        )
-    }
-
     /// Footer label for custom endpoint usage keyed by the request config_key.
     /// The synthetic custom LLMInfo already owns alias-or-name display semantics.
     pub fn custom_endpoint_usage_display_label(&self, config_key: &str) -> String {
@@ -1841,37 +1815,6 @@ impl LLMPreferences {
             ctx.emit(LLMPreferencesEvent::UpdatedActiveAgentModeLLM);
         }
         persisted
-    }
-
-    /// Pins an explicit child-run model independently of profile defaults.
-    /// Persist the pin whenever it changes, but notify active-model
-    /// subscribers only when the surface's effective selection changes.
-    #[cfg(not(target_family = "wasm"))]
-    pub(crate) fn set_agent_mode_llm_override(
-        &mut self,
-        scope: &(impl TeamScope + ?Sized),
-        terminal_view_id: EntityId,
-        model_id: LLMId,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let previous_effective_model_id = self
-            .get_active_base_model(scope, ctx, Some(terminal_view_id))
-            .id
-            .clone();
-        let stored_selection_changed = self
-            .base_llm_for_terminal_view
-            .insert(terminal_view_id, model_id.clone())
-            != Some(model_id);
-        if stored_selection_changed {
-            self.trigger_snapshot_save(ctx);
-            if self
-                .get_active_base_model(scope, ctx, Some(terminal_view_id))
-                .id
-                != previous_effective_model_id
-            {
-                ctx.emit(LLMPreferencesEvent::UpdatedActiveAgentModeLLM);
-            }
-        }
     }
 
     /// Copies the raw per-pane Agent Mode override from `source_terminal_view_id`

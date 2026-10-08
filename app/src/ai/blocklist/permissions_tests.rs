@@ -25,13 +25,10 @@ use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::ServerId;
 use crate::server::sync_queue::SyncQueue;
 use crate::settings::{AISettings, AgentModeCommandExecutionPredicate, PrivacySettings};
-use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::test_util::settings::initialize_settings_for_tests_with_mode;
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_workspaces::{TeamContextForOperation, UserWorkspaces};
-use crate::{
-    AgentNotificationsModel, GlobalResourceHandles, GlobalResourceHandlesProvider, LaunchMode,
-};
+use crate::{GlobalResourceHandles, GlobalResourceHandlesProvider, LaunchMode};
 
 /// The team [`UserWorkspaces::setup_test_workspace`] puts in the test workspace. Tests that
 /// never create one resolve this scope to no team, which is what a real teamless window does.
@@ -60,9 +57,7 @@ fn initialize_permissions_test_with_mode(
     let global_resource_handles = GlobalResourceHandles::mock(app);
     app.add_singleton_model(|_| GlobalResourceHandlesProvider::new(global_resource_handles));
     let history = app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
-    app.add_singleton_model(|_| CLIAgentSessionsModel::new());
     app.add_singleton_model(|_| ActiveAgentViewsModel::new());
-    app.add_singleton_model(AgentNotificationsModel::new);
     let permissions = app.add_singleton_model(BlocklistAIPermissions::new);
     let terminal_view_id = EntityId::new();
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
@@ -79,7 +74,7 @@ fn initialize_permissions_test_with_mode(
     let user_workspaces = app.add_singleton_model(UserWorkspaces::default_mock);
 
     let conversation_id = history.update(app, |history_model, ctx| {
-        history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+        history_model.start_new_conversation(terminal_view_id, false, false, ctx)
     });
 
     PermissionsTestState {

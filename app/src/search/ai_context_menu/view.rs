@@ -208,10 +208,6 @@ struct AIContextMenuState {
     is_ai_or_autodetect_mode: bool,
     /// Whether this terminal is viewing a shared session
     is_shared_session_viewer: bool,
-    /// Whether this terminal is in an ambient agent session
-    is_in_ambient_agent: bool,
-    /// Whether this is a CLI agent rich input (restricts categories to files/folders + code)
-    is_cli_agent_input: bool,
 }
 
 /// Maximum number of results to display
@@ -241,24 +237,6 @@ impl AIContextMenu {
     pub fn set_is_shared_session_viewer(&mut self, is_viewer: bool, ctx: &mut ViewContext<Self>) {
         if self.state.is_shared_session_viewer != is_viewer {
             self.state.is_shared_session_viewer = is_viewer;
-            self.refresh_categories_state(ctx);
-        }
-    }
-
-    pub fn set_is_in_ambient_agent(&mut self, is_ambient: bool, ctx: &mut ViewContext<Self>) {
-        if self.state.is_in_ambient_agent != is_ambient {
-            self.state.is_in_ambient_agent = is_ambient;
-            self.refresh_categories_state(ctx);
-        }
-    }
-
-    pub fn set_is_cli_agent_input(
-        &mut self,
-        is_cli_agent_input: bool,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if self.state.is_cli_agent_input != is_cli_agent_input {
-            self.state.is_cli_agent_input = is_cli_agent_input;
             self.refresh_categories_state(ctx);
         }
     }
@@ -369,13 +347,11 @@ impl AIContextMenu {
     pub(crate) fn get_categories_for_mode(
         is_ai_or_autodetect_mode: bool,
         is_shared_session_viewer: bool,
-        is_in_ambient_agent: bool,
-        is_cli_agent_input: bool,
         app: &AppContext,
     ) -> Vec<AIContextMenuCategory> {
         let show_warp_drive = WarpDriveSettings::is_warp_drive_enabled(app);
 
-        // Compute once — used by CLI agent, AI-mode, and terminal-mode branches.
+        // Compute once — used by both the AI-mode and terminal-mode branches.
         let is_active_dir_in_git_repo = {
             #[cfg(target_family = "wasm")]
             {
@@ -394,44 +370,6 @@ impl AIContextMenu {
                     })
             }
         };
-
-        // For CLI agent input, use a positive allowlist of categories that CLI agents
-        // can interpret. This is safer than a blocklist because new categories added
-        // to the enum in the future won't accidentally leak into the CLI agent menu.
-        if is_cli_agent_input {
-            let mut categories = vec![];
-            if !is_shared_session_viewer {
-                if is_active_dir_in_git_repo {
-                    categories.push(AIContextMenuCategory::RepoFiles);
-                } else {
-                    categories.push(AIContextMenuCategory::CurrentFolderFiles);
-                }
-            }
-            if FeatureFlag::AIContextMenuCode.is_enabled()
-                && *InputSettings::as_ref(app)
-                    .outline_codebase_symbols_for_at_context_menu
-                    .value()
-                && is_active_dir_in_git_repo
-                && !is_shared_session_viewer
-            {
-                categories.push(AIContextMenuCategory::Code);
-            }
-            return categories;
-        }
-
-        // For ambient agent sessions, only show limited categories
-        if is_in_ambient_agent {
-            let mut categories = vec![];
-            if show_warp_drive {
-                if FeatureFlag::DriveObjectsAsContext.is_enabled() {
-                    categories.push(AIContextMenuCategory::Workflows);
-                    categories.push(AIContextMenuCategory::Notebooks);
-                    categories.push(AIContextMenuCategory::Plans);
-                }
-                categories.push(AIContextMenuCategory::Rules);
-            }
-            return categories;
-        }
 
         if is_ai_or_autodetect_mode {
             let mut categories = vec![];
@@ -515,8 +453,6 @@ impl AIContextMenu {
         let categories = Self::get_categories_for_mode(
             self.state.is_ai_or_autodetect_mode,
             self.state.is_shared_session_viewer,
-            self.state.is_in_ambient_agent,
-            self.state.is_cli_agent_input,
             ctx,
         );
 
@@ -607,7 +543,7 @@ impl AIContextMenu {
         );
 
         // Get initial categories for proper initialization
-        let initial_categories = Self::get_categories_for_mode(true, false, false, false, ctx); // Default to AI mode, not a viewer, not ambient agent, not CLI agent input
+        let initial_categories = Self::get_categories_for_mode(true, false, ctx); // Default to AI mode, not a viewer, not CLI agent input
 
         #[cfg(not(target_family = "wasm"))]
         let code_symbol_cache = ctx.add_model(CodeSymbolCache::new);
@@ -652,8 +588,6 @@ impl AIContextMenu {
                 main_menu_query: String::new(),
                 is_ai_or_autodetect_mode: true,  // Default to AI mode
                 is_shared_session_viewer: false, // Will be updated by set_is_shared_session_viewer if needed
-                is_in_ambient_agent: false, // Will be updated by set_is_in_ambient_agent if needed
-                is_cli_agent_input: false,  // Will be updated by set_is_cli_agent_input if needed
             },
             handle: ctx.handle(),
             search_debounce_tx,
@@ -725,8 +659,6 @@ impl AIContextMenu {
         let categories = Self::get_categories_for_mode(
             self.state.is_ai_or_autodetect_mode,
             self.state.is_shared_session_viewer,
-            self.state.is_in_ambient_agent,
-            self.state.is_cli_agent_input,
             ctx,
         );
         if categories.len() > 1 {
@@ -744,8 +676,6 @@ impl AIContextMenu {
         let categories = Self::get_categories_for_mode(
             self.state.is_ai_or_autodetect_mode,
             self.state.is_shared_session_viewer,
-            self.state.is_in_ambient_agent,
-            self.state.is_cli_agent_input,
             ctx,
         );
         if categories.len() > 1 {
@@ -1064,8 +994,6 @@ impl AIContextMenu {
         let categories = Self::get_categories_for_mode(
             self.state.is_ai_or_autodetect_mode,
             self.state.is_shared_session_viewer,
-            self.state.is_in_ambient_agent,
-            self.state.is_cli_agent_input,
             ctx,
         );
         for category in categories.iter() {
@@ -1182,8 +1110,6 @@ impl AIContextMenu {
         let categories = Self::get_categories_for_mode(
             self.state.is_ai_or_autodetect_mode,
             self.state.is_shared_session_viewer,
-            self.state.is_in_ambient_agent,
-            self.state.is_cli_agent_input,
             ctx,
         );
         for category in categories.iter() {
@@ -1211,8 +1137,6 @@ impl AIContextMenu {
         let categories = Self::get_categories_for_mode(
             self.state.is_ai_or_autodetect_mode,
             self.state.is_shared_session_viewer,
-            self.state.is_in_ambient_agent,
-            self.state.is_cli_agent_input,
             app,
         );
         if self.state.main_menu_query.is_empty() {
@@ -1317,8 +1241,6 @@ impl AIContextMenu {
             let categories = Self::get_categories_for_mode(
                 self.state.is_ai_or_autodetect_mode,
                 self.state.is_shared_session_viewer,
-                self.state.is_in_ambient_agent,
-                self.state.is_cli_agent_input,
                 app,
             );
             let original_index = categories.iter().position(|c| *c == *category).unwrap_or(0);
@@ -1492,8 +1414,6 @@ impl AIContextMenu {
         !Self::get_categories_for_mode(
             self.state.is_ai_or_autodetect_mode,
             self.state.is_shared_session_viewer,
-            self.state.is_in_ambient_agent,
-            self.state.is_cli_agent_input,
             app,
         )
         .is_empty()
@@ -1571,8 +1491,6 @@ impl AIContextMenu {
         let categories = Self::get_categories_for_mode(
             self.state.is_ai_or_autodetect_mode,
             self.state.is_shared_session_viewer,
-            self.state.is_in_ambient_agent,
-            self.state.is_cli_agent_input,
             app,
         );
         if categories.len() > 1 {

@@ -97,7 +97,7 @@ fn add_request_usage_model_without_auth(app: &mut App) -> ModelHandle<AIRequestU
     });
     app.add_singleton_model(|_| PricingInfoModel::new());
     app.add_singleton_model(|ctx| {
-        AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client(), ctx)
+        AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client())
     })
 }
 
@@ -108,7 +108,7 @@ fn add_request_usage_model_with_client(
     ai_client: Arc<dyn AIClient>,
 ) -> ModelHandle<AIRequestUsageModel> {
     register_user_preferences_for_tests(app);
-    app.add_singleton_model(|ctx| AIRequestUsageModel::new_for_test(ai_client, ctx))
+    app.add_singleton_model(|_| AIRequestUsageModel::new_for_test(ai_client))
 }
 
 fn set_addon_credits_pricing_info(app: &mut App) {
@@ -285,44 +285,6 @@ fn test_has_any_ai_remaining_true_with_remaining_requests() {
     });
 }
 
-#[test]
-fn test_ambient_credits_banner_dismissal_is_persisted() {
-    App::test((), |mut app| async move {
-        let request_usage_model = add_request_usage_model(&mut app);
-
-        request_usage_model.update(&mut app, |model, ctx| {
-            assert!(!model.is_ambient_credits_banner_dismissed());
-            model.dismiss_ambient_credits_banner(ctx);
-            assert!(model.is_ambient_credits_banner_dismissed());
-        });
-
-        app.update(|ctx| {
-            let stored_value = ctx
-                .private_user_preferences()
-                .read_value(AMBIENT_CREDITS_BANNER_DISMISSED_KEY)
-                .unwrap();
-            assert_eq!(stored_value, Some("true".to_owned()));
-        });
-    });
-}
-
-#[test]
-fn test_ambient_credits_banner_dismissal_loads_from_preferences() {
-    App::test((), |mut app| async move {
-        register_user_preferences_for_tests(&mut app);
-        app.update(|ctx| {
-            ctx.private_user_preferences()
-                .write_value(AMBIENT_CREDITS_BANNER_DISMISSED_KEY, "true".to_owned())
-                .unwrap();
-        });
-
-        let request_usage_model = add_request_usage_model(&mut app);
-
-        request_usage_model.update(&mut app, |model, _ctx| {
-            assert!(model.is_ambient_credits_banner_dismissed());
-        });
-    });
-}
 #[test]
 fn test_has_any_ai_remaining_false_when_no_requests_or_bonus() {
     App::test((), |mut app| async move {

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -238,12 +238,7 @@ fn random_server_id() -> ServerId {
 
 /// Creates a MockObjectClient with base expectations needed for tests that call mock_initial_load.
 fn mock_object_client_with_base_expectations() -> MockObjectClient {
-    let mut server_api = MockObjectClient::new();
-    // Mock environment timestamps fetch - called during mock_initial_load
-    server_api
-        .expect_fetch_environment_last_task_run_timestamps()
-        .returning(|| Ok(HashMap::new()));
-    server_api
+    MockObjectClient::new()
 }
 
 /// Expects a bulk create request for the given number of settings and returns the client ids
@@ -1232,18 +1227,16 @@ fn test_ensure_no_duplicate_cloud_prefs() {
         )
         .await;
 
-        // After the initial operations complete, expect 3 delete operations for duplicates
-        // plus 1 for the timestamps fetch = 4 total on UpdateManager
+        // After the initial operations complete, expect 3 delete operations for duplicates.
         UpdateManager::handle(&app).read(&app, |update_manager, _ctx| {
             assert_eq!(
-                4,
+                3,
                 update_manager.spawned_futures().len(),
-                "expect three delete operations for duplicate preferences plus timestamps fetch"
+                "expect three delete operations for duplicate preferences"
             );
         });
 
-        for i in 0..4 {
-            // Complete the delete operations and timestamps fetch
+        for i in 0..3 {
             UpdateManager::handle(&app)
                 .update(&mut app, |update_manager, ctx| {
                     ctx.await_spawned_future(update_manager.spawned_futures()[i])

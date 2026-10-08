@@ -275,7 +275,6 @@ define_action_catalog! {
         SurfaceThemePickerOpen => { name: "surface.theme_picker.open", status: Implemented, target: Surface, params: None, result: Acknowledgement },
         SurfaceKeybindingsOpen => { name: "surface.keybindings.open", status: Implemented, target: Surface, params: None, result: Acknowledgement },
         SurfaceResourceCenterToggle => { name: "surface.resource_center.toggle", status: Implemented, target: Surface, params: None, result: Acknowledgement },
-        SurfaceAiAssistantToggle => { name: "surface.ai_assistant.toggle", status: Implemented, target: Surface, params: None, result: Acknowledgement },
         SurfaceCodeReviewOpen => { name: "surface.code_review.open", status: Implemented, target: Surface, params: None, result: Acknowledgement },
         SurfaceCodeReviewToggle => { name: "surface.code_review.toggle", status: Implemented, target: Surface, params: None, result: Acknowledgement },
         SurfaceProjectExplorerOpen => { name: "surface.project_explorer.open", status: Implemented, target: Surface, params: None, result: Acknowledgement },
@@ -284,7 +283,6 @@ define_action_catalog! {
         SurfaceRightPanelToggle => { name: "surface.right_panel.toggle", status: Implemented, target: Surface, params: None, result: Acknowledgement },
         SurfaceVerticalTabsOpen => { name: "surface.vertical_tabs.open", status: Implemented, target: Surface, params: None, result: Acknowledgement },
         SurfaceVerticalTabsToggle => { name: "surface.vertical_tabs.toggle", status: Implemented, target: Surface, params: None, result: Acknowledgement },
-        SurfaceAgentManagementOpen => { name: "surface.agent_management.open", status: Implemented, target: Surface, params: None, result: Acknowledgement },
     }
 
     file {

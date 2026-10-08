@@ -1,12 +1,6 @@
-use std::fmt::Display;
-use std::future::Future;
 use std::time::Duration;
 
-use anyhow::Result;
-use warpui::r#async::Timer;
 use warpui::{RetryOption, duration_with_jitter};
-
-use crate::server::server_api::presigned_upload::HttpStatusError;
 
 /// Common duration for a periodic poll. In our app, we generally have the following to update the same data:
 /// - RTC messages
@@ -44,46 +38,6 @@ pub const LISTENER_RETRY_STRATEGY: RetryOption = RetryOption::linear(
 )
 .with_jitter(0.6 /* max_jitter_multiplier */);
 
-/// Classify an HTTP-backed error as transient (worth retrying) or permanent (fail fast).
-///
-/// Transient: 5xx responses, 408, 429, or any error whose chain does not carry an
-/// [`HttpStatusError`] (connection reset, timeout, DNS failure, etc.).
-/// Permanent: other 4xx responses (bad signature, 404, 403, etc.).
-pub(crate) fn is_transient_http_error(e: &anyhow::Error) -> bool {
-    // Callers typically wrap an `HttpStatusError` cause with a `.context(...)` message for
-    // human-friendly Display, so the typed error sits somewhere in the chain rather than as
-    // the top-level error object — walk the chain.
-    for cause in e.chain() {
-        if let Some(http_err) = cause.downcast_ref::<HttpStatusError>() {
-            return is_transient_status(http_err.status);
-        }
-    }
-    true
-}
-
-fn is_transient_status(status: u16) -> bool {
-    matches!(status, 408 | 429 | 500..=599)
-}
-
-/// Returns `true` if the error chain carries an [`HttpStatusError`] with an
-/// authentication/authorization status (401 or 403).
-///
-/// Used by long-lived listeners to distinguish "credentials are permanently
-/// invalid" (for example, a cloud-agent task whose token stops working once the
-/// task ends) from generic permanent errors, so they can stop retrying instead
-/// of reconnecting forever.
-pub(crate) fn is_auth_error(e: &anyhow::Error) -> bool {
-    for cause in e.chain() {
-        if let Some(http_err) = cause.downcast_ref::<HttpStatusError>() {
-            return matches!(http_err.status, 401 | 403);
-        }
-    }
-    false
-}
-
-/// Maximum total attempts per operation (initial attempt plus retries on transient errors).
-pub(crate) const MAX_ATTEMPTS: usize = 3;
-
 /// Base backoff between retry attempts; each subsequent attempt multiplies by [`BACKOFF_FACTOR`].
 const INITIAL_BACKOFF: Duration = Duration::from_millis(500);
 
@@ -110,114 +64,3 @@ pub(crate) fn backoff_after_attempts(attempts_made: usize) -> Duration {
     let delay = INITIAL_BACKOFF.mul_f32(BACKOFF_FACTOR.powi(exponent));
     duration_with_jitter(delay, BACKOFF_JITTER)
 }
-
-/// Run `attempt_fn` with bounded exponential-backoff retries on transient failures.
-///
-/// `operation` is included in retry logs so concurrent callers can be distinguished.
-///
-/// `attempt_fn` is called repeatedly with a fresh `Future` per attempt, so callers that need
-/// per-attempt state (e.g. cloning a request body) own that inside their closure.
-///
-/// Transient errors (per [`is_transient_http_error`]) are retried up to [`MAX_ATTEMPTS`]
-/// total. Permanent errors return immediately. A warning is logged between attempts so
-/// retries are visible in logs.
-pub(crate) async fn with_bounded_retry<T, F, Fut>(operation: &str, attempt_fn: F) -> Result<T>
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = Result<T>>,
-{
-    with_bounded_retry_using(operation, MAX_ATTEMPTS, is_transient_http_error, attempt_fn).await
-}
-
-/// General form of [`with_bounded_retry`] for callers that need a different transient-error
-/// classifier than [`is_transient_http_error`], a different attempt budget than
-/// [`MAX_ATTEMPTS`], or both.
-///
-/// Otherwise behaves identically: exponential backoff between attempts (see
-/// [`backoff_after_attempts`]), a warning logged before each retry, and the last error
-/// returned once `max_attempts` is reached.
-pub(crate) async fn with_bounded_retry_using<T, F, Fut>(
-    operation: &str,
-    max_attempts: usize,
-    is_transient: impl Fn(&anyhow::Error) -> bool,
-    attempt_fn: F,
-) -> Result<T>
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = Result<T>>,
-{
-    with_retry(
-        operation,
-        attempt_fn,
-        |err| is_transient(err),
-        |delay| async move {
-            Timer::after(delay).await;
-        },
-        |attempts_made| {
-            (attempts_made + 1 < max_attempts).then(|| backoff_after_attempts(attempts_made + 1))
-        },
-    )
-    .await
-}
-
-/// Generalized retry function that gives callers control over retry classification and backoff.
-///
-/// The retry loop calls `attempt_fn` until:
-/// * It succeeds
-/// * It returns a non-retryable error, according to `retryable_fn`
-/// * Attempts are exhausted due to `backoff_fn` returning `None`
-///
-/// `retryable_fn` classifies errors as retryable or not. It should return `true` if the failure
-/// can be retried, `false` if it should abort the operation.
-///
-/// `backoff_fn` returns the backoff delay to use after N attempts.
-pub(crate) async fn with_retry<T, E, F, S, B, R, Fut, SF>(
-    operation: &str,
-    mut attempt_fn: F,
-    mut retryable_fn: R,
-    mut sleep_fn: S,
-    mut backoff_fn: B,
-) -> Result<T, E>
-where
-    F: FnMut() -> Fut,
-    E: Display,
-    R: FnMut(&E) -> bool,
-    B: FnMut(usize) -> Option<Duration>,
-    S: FnMut(Duration) -> SF,
-    Fut: Future<Output = Result<T, E>>,
-    SF: Future<Output = ()>,
-{
-    let mut attempt = 1usize;
-    loop {
-        match attempt_fn().await {
-            Ok(value) => break Ok(value),
-            Err(err) if retryable_fn(&err) => {
-                let delay = backoff_fn(attempt - 1);
-                log::warn!(
-                    "{operation}: transient error on attempt {attempt}, {}: {err:#}",
-                    if delay.is_some() {
-                        "retrying"
-                    } else {
-                        "retries exhausted"
-                    }
-                );
-
-                match delay {
-                    Some(delay) => {
-                        sleep_fn(delay).await;
-                        attempt += 1;
-                    }
-                    None => break Err(err),
-                }
-            }
-            Err(err) => {
-                log::warn!("{operation}: fatal error on attempt {attempt}: {err:#}");
-                break Err(err);
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-#[path = "retry_strategies_tests.rs"]
-mod tests;

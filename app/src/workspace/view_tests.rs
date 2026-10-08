@@ -26,14 +26,10 @@ use super::*;
 use crate::ai::AIRequestUsageModel;
 use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 use crate::ai::agent_conversations_model::AgentConversationsModel;
-use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
-use crate::ai::blocklist::agent_view::orchestration_pill_bar_model::OrchestrationPillBarModel;
 use crate::ai::blocklist::{BlocklistAIHistoryModel, BlocklistAIPermissions};
-use crate::ai::cloud_environments::CloudEnvironmentCatalog;
 use crate::ai::document::ai_document_model::AIDocumentModel;
 use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
 use crate::ai::facts::manager::AIFactManager;
-use crate::ai::harness_availability::HarnessAvailabilityModel;
 use crate::ai::llms::LLMPreferences;
 use crate::ai::mcp::gallery::MCPGalleryManager;
 use crate::ai::mcp::templatable_manager::TemplatableMCPServerManager;
@@ -53,6 +49,7 @@ use crate::pricing::PricingInfoModel;
 use crate::projects::persisted_workspace::PersistedWorkspace;
 #[cfg(not(target_family = "wasm"))]
 use crate::remote_server::codebase_index_model::RemoteCodebaseIndexModel;
+use crate::resource_center::ResourceCenterPage;
 use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::server::cloud_objects::listener::Listener;
 use crate::server::cloud_objects::update_manager::UpdateManager;
@@ -69,14 +66,13 @@ use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::suggestions::ignored_suggestions_model::IgnoredSuggestionsModel;
 use crate::system::SystemStats;
 use crate::tab_configs::tab_config::{TabConfigPaneNode, TabConfigPaneType};
-use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::history::History;
 use crate::terminal::keys::TerminalKeybindings;
 use crate::terminal::local_tty::spawner::PtySpawner;
 use crate::terminal::shared_session::{
     SharedSessionScrollbackType, SharedSessionSource, SharedSessionStatus,
 };
-use crate::test_util::settings::{enable_ai_for_tests, initialize_settings_for_tests};
+use crate::test_util::settings::initialize_settings_for_tests;
 use crate::undo_close::UndoCloseSettings;
 #[cfg(feature = "local_fs")]
 use crate::user_config::tab_configs_dir;
@@ -88,9 +84,7 @@ use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_profiles::UserProfiles;
 use crate::workspaces::user_workspaces::UserWorkspaces;
-use crate::{
-    AgentNotificationsModel, GlobalResourceHandlesProvider, ObjectActions, experiments, workspace,
-};
+use crate::{GlobalResourceHandlesProvider, ObjectActions, experiments, workspace};
 pub(crate) fn initialize_app(app: &mut App) {
     initialize_app_with_team_client(app, Arc::new(MockTeamClient::new()));
 }
@@ -111,7 +105,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     app.add_singleton_model(|_| crate::tab::TabShortcutModifierState::new());
     app.add_singleton_model(SyncQueue::mock);
     app.add_singleton_model(CloudModel::mock);
-    app.add_singleton_model(CloudEnvironmentCatalog::new);
     app.add_singleton_model(|ctx| {
         UserWorkspaces::mock(
             team_client,
@@ -134,7 +127,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     app.add_singleton_model(|_| KeybindingChangedNotifier::new());
     app.add_singleton_model(|_ctx| RelaunchModel::new());
     app.add_singleton_model(|ctx| ChangelogModel::new(ServerApiProvider::as_ref(ctx).get()));
-    app.add_singleton_model(|_| GitHubAuthNotifier::new());
     app.add_singleton_model(|_ctx| SyncedInputState::mock());
     app.add_singleton_model(|_| ResizableData::default());
     app.add_singleton_model(LocalWorkflows::new);
@@ -157,23 +149,10 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     // QueuedQueryModel subscribes to history events; register after the
     // history model is in place.
     app.add_singleton_model(crate::ai::blocklist::QueuedQueryModel::new);
-    app.add_singleton_model(|ctx| OrchestrationPillBarModel::new(Default::default(), ctx));
-    app.add_singleton_model(|_| CLIAgentSessionsModel::new());
-    // The blocklist controller created during terminal bootstrap subscribes to
-    // OrchestrationEventService and OrchestrationEventStreamer unconditionally,
-    // so both singletons must be registered before bootstrap.
-    app.add_singleton_model(
-        crate::ai::blocklist::orchestration_events::OrchestrationEventService::new,
-    );
-    app.add_singleton_model(
-        crate::ai::blocklist::orchestration_event_streamer::OrchestrationEventStreamer::new,
-    );
     app.add_singleton_model(|_| ActiveAgentViewsModel::new());
-    app.add_singleton_model(AgentNotificationsModel::new);
     app.add_singleton_model(AgentConversationsModel::new);
     app.add_singleton_model(SessionPermissionsManager::new);
     app.add_singleton_model(LLMPreferences::new);
-    app.add_singleton_model(HarnessAvailabilityModel::new);
     app.add_singleton_model(|_| SettingsPaneManager::new());
     app.add_singleton_model(|_| AIFactManager::new());
 
@@ -206,7 +185,7 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     });
     app.add_singleton_model(|_| RestoredAgentConversations::new_seeded(vec![]));
     app.add_singleton_model(|ctx| {
-        AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client(), ctx)
+        AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client())
     });
     // Register GlobalResourceHandlesProvider before ServerExperiments which depends on it
     let global_resource_handles = GlobalResourceHandles::mock(app);
@@ -1211,9 +1190,9 @@ fn restore_conversation_in_active_pane_enters_existing_live_conversation_without
                 .expect("workspace should start with a terminal view")
         });
         let terminal_view_id = terminal_view.read(&app, |view, _| view.view_id());
-        let conversation_id =
-            BlocklistAIHistoryModel::handle(&app).update(&mut app, |history, ctx| {
-                history.start_new_conversation(terminal_view_id, false, false, false, ctx)
+        let conversation_id = BlocklistAIHistoryModel::handle(&app)
+            .update(&mut app, |history, ctx| {
+                history.start_new_conversation(terminal_view_id, false, false, ctx)
             });
 
         workspace.update(&mut app, |workspace, ctx| {
@@ -2668,7 +2647,7 @@ fn test_view_only_session() {
 
 #[test]
 // This tests the end-to-end behavior to correctly switch focus among panels.
-// (The only panels that can be focused currently are WD, workspace, & the agent panel.)
+// (The only panels that can be focused currently are the workspace and the resource center.)
 fn test_switch_focus_panels() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
@@ -2684,19 +2663,24 @@ fn test_switch_focus_panels() {
             );
         });
 
-        // Shift focus from terminal to left panel when AI panel is open
+        // Shift focus from terminal to left panel when the resource center is open. Only the
+        // keybindings page keeps focus; the main page hands focus back to the terminal.
         workspace.update(&mut app, |view, ctx| {
-            view.current_workspace_state.is_ai_assistant_panel_open = true;
+            view.resource_center_view
+                .update(ctx, |resource_center, ctx| {
+                    resource_center.set_current_page(ResourceCenterPage::Keybindings, ctx);
+                });
+            view.current_workspace_state.is_resource_center_open = true;
             view.focus_left_panel(ctx);
         });
         workspace.update(&mut app, |view, ctx| {
             assert!(
-                view.ai_assistant_panel.is_self_or_child_focused(ctx),
-                "Expected AI panel to be focused"
+                view.resource_center_view.is_self_or_child_focused(ctx),
+                "Expected resource center to be focused"
             );
         });
 
-        // Shift focus from AI panel to left panel (terminal)
+        // Shift focus from the resource center to left panel (terminal)
         workspace.update(&mut app, |view, ctx| {
             view.focus_left_panel(ctx);
         });
@@ -2707,19 +2691,19 @@ fn test_switch_focus_panels() {
             );
         });
 
-        // Shift focus from workspace to right panel when the agent panel is open
+        // Shift focus from workspace to right panel when the resource center is open
         workspace.update(&mut app, |view, ctx| {
-            view.current_workspace_state.is_ai_assistant_panel_open = true;
+            view.current_workspace_state.is_resource_center_open = true;
             view.focus_right_panel(ctx);
         });
         workspace.update(&mut app, |view, ctx| {
             assert!(
-                view.ai_assistant_panel.is_self_or_child_focused(ctx),
-                "Expected AI panel to be focused"
+                view.resource_center_view.is_self_or_child_focused(ctx),
+                "Expected resource center to be focused"
             );
         });
 
-        // Shift focus from AI panel to right panel (terminal)
+        // Shift focus from the resource center to right panel (terminal)
         workspace.update(&mut app, |view, ctx| {
             view.focus_right_panel(ctx);
         });
@@ -3907,7 +3891,6 @@ fn test_vertical_tabs_context_menu_does_not_show_hover_only_tab_bar() {
                 );
                 report_if_error!(settings.use_vertical_tabs.set_value(true, ctx));
             });
-            workspace.should_show_ai_assistant_warm_welcome = false;
             workspace.vertical_tabs_panel_open = true;
 
             workspace.show_tab_right_click_menu =
@@ -3935,58 +3918,11 @@ fn test_standard_tab_context_menu_shows_hover_only_tab_bar() {
                         .set_value(WorkspaceDecorationVisibility::OnHover, ctx)
                 );
             });
-            workspace.should_show_ai_assistant_warm_welcome = false;
 
             workspace.show_tab_right_click_menu =
                 Some((0, TabContextMenuAnchor::Pointer(Vector2F::zero())));
 
             assert_eq!(workspace.tab_bar_mode(ctx), ShowTabBar::Stacked);
-        });
-    });
-}
-
-#[test]
-fn test_open_cloud_agent_setup_guide_action_opens_management_view_and_is_idempotent() {
-    let _agent_management_guard = FeatureFlag::AgentManagementView.override_enabled(true);
-
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        enable_ai_for_tests(&mut app);
-
-        let workspace = mock_workspace(&mut app);
-
-        workspace.update(&mut app, |workspace, ctx| {
-            assert!(
-                !workspace
-                    .current_workspace_state
-                    .is_agent_management_view_open
-            );
-
-            workspace.handle_action(&WorkspaceAction::OpenCloudAgentSetupGuide, ctx);
-            assert!(
-                workspace
-                    .current_workspace_state
-                    .is_agent_management_view_open
-            );
-            assert!(
-                workspace
-                    .agent_management_view
-                    .as_ref(ctx)
-                    .is_showing_setup_guide()
-            );
-
-            workspace.handle_action(&WorkspaceAction::OpenCloudAgentSetupGuide, ctx);
-            assert!(
-                workspace
-                    .current_workspace_state
-                    .is_agent_management_view_open
-            );
-            assert!(
-                workspace
-                    .agent_management_view
-                    .as_ref(ctx)
-                    .is_showing_setup_guide()
-            );
         });
     });
 }
@@ -4789,10 +4725,6 @@ mod simplified_wasm_tab_bar {
     use crate::ai::agent::conversation::{
         AIAgentHarness, AIConversation, ServerAIConversationMetadata,
     };
-    use crate::ai::ambient_agents::task::TaskPrincipalInfo;
-    use crate::ai::ambient_agents::{
-        AgentSource, AmbientAgentTask, AmbientAgentTaskId, AmbientAgentTaskState,
-    };
     use crate::ai::blocklist::history_model::CloudConversationData;
     use crate::auth::user::TEST_USER_UID;
     use crate::cloud_object::{Owner, Revision, ServerMetadata, ServerPermissions};
@@ -4908,7 +4840,7 @@ mod simplified_wasm_tab_bar {
     }
 
     fn cloud_conversation_with_ambient_task(task_id: AmbientAgentTaskId) -> CloudConversationData {
-        let mut conversation = AIConversation::new(false, false);
+        let mut conversation = AIConversation::new(false);
         conversation.set_task_id(task_id);
         conversation.set_server_metadata(test_server_conversation_metadata(Some(task_id)));
         CloudConversationData::Oz(Box::new(conversation))

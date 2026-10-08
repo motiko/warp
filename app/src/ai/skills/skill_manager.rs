@@ -1,11 +1,8 @@
 #[path = "file_watchers/mod.rs"]
 mod file_watchers;
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
 
-use ai::skills::{
-    ParsedSkill, SkillPathOrigin, SkillProvider, SkillReference, SkillScope, provider_rank,
-};
+use ai::skills::{ParsedSkill, SkillPathOrigin, SkillReference, SkillScope};
 pub use file_watchers::{SkillWatcher, SkillWatcherEvent, extract_skill_parent_directory};
 use warp_core::features::FeatureFlag;
 use warp_util::host_id::HostId;
@@ -194,17 +191,6 @@ impl SkillManager {
         skills
     }
 
-    /// Returns the currently-known home skill file paths.
-    pub fn home_skill_paths(&self) -> Vec<LocalOrRemotePath> {
-        let Some(home_dir) = self.home_directory_for_origin(&SkillPathOrigin::Local) else {
-            return vec![];
-        };
-        self.directory_skills
-            .get(&home_dir)
-            .map(|skills| skills.iter().cloned().collect())
-            .unwrap_or_default()
-    }
-
     /// Returns the parsed home skills currently cached by the local watcher.
     pub fn home_skills(&self) -> impl Iterator<Item = &ParsedSkill> + '_ {
         dirs::home_dir()
@@ -213,118 +199,6 @@ impl SkillManager {
             .filter_map(|home_dir| self.directory_skills.get(&home_dir))
             .flatten()
             .filter_map(|path| self.skills_by_path.get(path))
-    }
-
-    /// Returns the currently-known directories which have skills registered.
-    /// This includes both repo roots and subdirectories with skills.
-    pub fn directories_with_skills(&self) -> Vec<PathBuf> {
-        let mut dirs: Vec<PathBuf> = self
-            .directory_skills
-            .keys()
-            .filter_map(|path| path.to_local_path().map(Path::to_path_buf))
-            .collect();
-        dirs.sort();
-        dirs
-    }
-
-    /// Returns skill file paths that are under `scope_dir`.
-    ///
-    /// This is used for skill resolution when the agent is invoked in a directory
-    /// above a series of repos—we need skills in those repos to be in scope.
-    ///
-    /// Example: If `scope_dir` is `/code` and there are skills at:
-    /// - `/code/repo-a/.agents/skills/deploy/SKILL.md`
-    /// - `/code/repo-b/.agents/skills/test/SKILL.md`
-    /// Both will be returned.
-    pub fn skill_paths_in_scope(&self, scope_dir: &Path) -> Vec<PathBuf> {
-        let mut paths = HashSet::new();
-        let scope_dir = LocalOrRemotePath::Local(scope_dir.to_path_buf());
-
-        for (dir, skill_paths) in &self.directory_skills {
-            // Include skills from directories that are under scope_dir
-            if dir.starts_with(&scope_dir) {
-                paths.extend(
-                    skill_paths
-                        .iter()
-                        .filter_map(|path| path.to_local_path().map(Path::to_path_buf)),
-                );
-            }
-        }
-
-        let mut paths: Vec<PathBuf> = paths.into_iter().collect();
-        paths.sort();
-        paths
-    }
-
-    /// Returns true if the skill (or any of its provider-path variants) exists in
-    /// a folder matching one of the given `providers`. This handles the deduplication
-    /// edge case where a skill is present in multiple provider folders (e.g. both
-    /// `.agents/skills/` and `.claude/skills/`) but deduplication picked a provider
-    /// that the caller doesn't support.
-    pub fn skill_exists_for_any_provider(
-        &self,
-        skill: &SkillDescriptor,
-        providers: &[SkillProvider],
-    ) -> bool {
-        // Fast path: the deduplicated provider already matches.
-        if providers.contains(&skill.provider) {
-            return true;
-        }
-        // Slow path: check all paths for this skill name.
-        self.providers_for_descriptor(skill)
-            .any(|provider| providers.contains(&provider))
-    }
-
-    /// Returns the best supported provider for a skill given a set of supported providers.
-    ///
-    /// When a skill is duplicated across multiple provider folders (e.g. both
-    /// `.agents/skills/` and `.claude/skills/`), the global deduplication picks the
-    /// highest-priority provider per [`SKILL_PROVIDER_DEFINITIONS`]. However, for the
-    /// CLI agent footer `/skills` menu we want the icon to reflect the provider that
-    /// the active CLI agent actually supports.
-    ///
-    /// This method checks all paths for the skill name and returns the supported
-    /// provider with the best (lowest) rank. Falls back to the skill's deduped
-    /// provider if no supported provider is found among its paths.
-    pub fn best_supported_provider(
-        &self,
-        skill: &SkillDescriptor,
-        supported_providers: &[SkillProvider],
-    ) -> SkillProvider {
-        // Fast path: the deduplicated provider is already supported.
-        if supported_providers.contains(&skill.provider) {
-            return skill.provider;
-        }
-        // Find the supported provider with the best (lowest) rank among all paths.
-        self.providers_for_descriptor(skill)
-            .filter(|provider| supported_providers.contains(provider))
-            .min_by_key(|provider| provider_rank(*provider))
-            .unwrap_or(skill.provider)
-    }
-
-    fn providers_for_descriptor<'a>(
-        &'a self,
-        descriptor: &'a SkillDescriptor,
-    ) -> impl Iterator<Item = SkillProvider> + 'a {
-        self.skills_by_name
-            .get(&descriptor.name)
-            .into_iter()
-            .flatten()
-            .filter(|path| path_matches_reference_location(path, &descriptor.reference))
-            .filter_map(|path| self.skills_by_path.get(path).map(|skill| skill.provider))
-    }
-
-    /// Returns skill file paths that have the given skill name.
-    /// A skill's name comes from the `name` field in its SKILL.md front matter.
-    pub fn skill_paths_by_name(&self, name: &str) -> Vec<LocalOrRemotePath> {
-        self.skills_by_name
-            .get(name)
-            .map(|paths| {
-                let mut paths: Vec<LocalOrRemotePath> = paths.iter().cloned().collect();
-                paths.sort_by_key(LocalOrRemotePath::display_path);
-                paths
-            })
-            .unwrap_or_default()
     }
 
     /// Returns a reference to a parsed skill for a specific SKILL.md file path, if it is cached.
@@ -360,21 +234,6 @@ impl SkillManager {
         }
     }
 
-    /// Get the definition of a skill only if it is currently available for invocation.
-    ///
-    /// Path-based user skills are always controlled by normal path scoping. Bundled
-    /// skills (the local catalog's ID-addressed entries and remote catalogs'
-    /// path-addressed entries) additionally respect their runtime activation
-    /// state so stale references cannot invoke disabled bundled skills.
-    pub fn active_skill_by_reference(
-        &self,
-        reference: &SkillReference,
-        ctx: &AppContext,
-    ) -> Option<&ParsedSkill> {
-        self.active_skill_by_reference_with_origin(reference, &SkillPathOrigin::Local, ctx)
-            .ok()
-    }
-
     /// Get the definition of a skill for the selected execution host only if it is active.
     pub fn active_skill_by_reference_with_origin(
         &self,
@@ -406,62 +265,6 @@ impl SkillManager {
             .active_skill(id, &SkillPathOrigin::Local, ctx)
     }
 
-    pub(super) fn set_remote_bundled_skill(
-        &mut self,
-        host_id: HostId,
-        bundled_skill: BundledSkill,
-    ) {
-        self.bundled_skills.insert_remote(host_id, bundled_skill);
-    }
-
-    pub(super) fn remove_remote_bundled_skill(&mut self, host_id: &HostId) {
-        self.bundled_skills.remove_remote(host_id);
-    }
-
-    pub(crate) fn replace_remote_agent_context(
-        &mut self,
-        host_id: HostId,
-        bundled_skills: Option<BundledSkill>,
-        home_skills: Option<(LocalOrRemotePath, Vec<ParsedSkill>)>,
-    ) {
-        match bundled_skills {
-            Some(bundled_skills) => {
-                self.set_remote_bundled_skill(host_id.clone(), bundled_skills);
-            }
-            None => self.remove_remote_bundled_skill(&host_id),
-        }
-        match home_skills {
-            Some((home_dir, skills)) => {
-                self.set_remote_home_skills(host_id, home_dir, skills);
-            }
-            None => self.remove_remote_home_skills(&host_id),
-        }
-    }
-
-    pub(crate) fn remove_remote_agent_context(&mut self, host_id: &HostId) {
-        self.remove_remote_bundled_skill(host_id);
-        self.remove_remote_home_skills(host_id);
-    }
-
-    /// Replaces the home skills published by one remote host.
-    pub(crate) fn set_remote_home_skills(
-        &mut self,
-        host_id: HostId,
-        home_dir: LocalOrRemotePath,
-        skills: Vec<ParsedSkill>,
-    ) {
-        self.remove_remote_home_skills(&host_id);
-        self.remote_home_directories.insert(host_id, home_dir);
-        self.handle_skills_added(skills);
-    }
-
-    pub(crate) fn remove_remote_home_skills(&mut self, host_id: &HostId) {
-        let Some(home_dir) = self.remote_home_directories.remove(host_id) else {
-            return;
-        };
-        self.remove_skills_for_directory(&home_dir);
-    }
-
     fn home_directory_for_origin(
         &self,
         path_origin: &SkillPathOrigin,
@@ -491,15 +294,6 @@ impl SkillManager {
                 .as_remote()
                 .and_then(|remote| self.bundled_skills.remote_skill_by_path(remote))
         })
-    }
-
-    fn remove_skills_for_directory(&mut self, directory: &LocalOrRemotePath) {
-        let Some(skill_paths) = self.directory_skills.remove(directory) else {
-            return;
-        };
-        for skill_path in skill_paths {
-            self.remove_skill_by_path(&skill_path);
-        }
     }
 
     fn remove_skill_by_path(&mut self, skill_path: &LocalOrRemotePath) {
@@ -640,24 +434,6 @@ impl Entity for SkillManager {
 }
 
 impl SingletonEntity for SkillManager {}
-
-fn path_matches_reference_location(path: &LocalOrRemotePath, reference: &SkillReference) -> bool {
-    match (path, reference) {
-        (
-            LocalOrRemotePath::Remote(path),
-            SkillReference::Path(LocalOrRemotePath::Remote(reference)),
-        ) => path.host_id == reference.host_id,
-        (
-            LocalOrRemotePath::Local(_),
-            SkillReference::Path(LocalOrRemotePath::Local(_)) | SkillReference::BundledSkillId(_),
-        ) => true,
-        (LocalOrRemotePath::Local(_), SkillReference::Path(LocalOrRemotePath::Remote(_)))
-        | (
-            LocalOrRemotePath::Remote(_),
-            SkillReference::Path(LocalOrRemotePath::Local(_)) | SkillReference::BundledSkillId(_),
-        ) => false,
-    }
-}
 
 #[cfg(test)]
 #[path = "skill_manager_tests.rs"]

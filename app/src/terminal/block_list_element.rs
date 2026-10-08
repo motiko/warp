@@ -60,8 +60,8 @@ use super::view::{
 };
 use super::warpify::render::{draw_flag_pole, render_subshell_flag};
 use super::{HEIGHT_FUDGE_FACTOR_LINES, TerminalModel, heights_approx_eq};
+use crate::ai::ask_ai::{AI_ASSISTANT_SVG_PATH, ASK_AI_ASSISTANT_TEXT};
 use crate::ai::blocklist::{ATTACH_AS_AGENT_MODE_CONTEXT_TEXT, ai_brand_color};
-use crate::ai_assistant::{AI_ASSISTANT_SVG_PATH, ASK_AI_ASSISTANT_TEXT};
 use crate::appearance::Appearance;
 use crate::drive::settings::WarpDriveSettings;
 use crate::features::FeatureFlag;
@@ -711,12 +711,6 @@ pub struct BlockListElement {
 
     use_ligature_rendering: bool,
 
-    /// When true, suppresses cursor rendering for CLI agents when rich input is open. For agents that draw their own cursor (SHOW_CURSOR off),
-    /// the cursor cell is skipped. For agents that let Warp draw the cursor
-    /// (SHOW_CURSOR on), the `draw_cursor` call and cursor contrast colouring
-    /// are suppressed instead.
-    hide_cursor_cell: bool,
-
     /// Child Elements to use for rich content inserted into the block list
     rich_content_elements: HashMap<EntityId, Box<dyn Element>>,
     rich_content_metadata: HashMap<EntityId, RichContentMetadata>,
@@ -951,7 +945,6 @@ impl BlockListElement {
             block_banner,
             hovered_secret: terminal_view_render_context.hovered_secret,
             use_ligature_rendering: false,
-            hide_cursor_cell: false,
             active_filter_editor_block_index: None,
             filtered_blocks: None,
             rich_content_elements: HashMap::new(),
@@ -971,11 +964,6 @@ impl BlockListElement {
 
     pub fn with_ligature_rendering(mut self) -> Self {
         self.use_ligature_rendering = true;
-        self
-    }
-
-    pub fn with_hide_cursor_cell(mut self) -> Self {
-        self.hide_cursor_cell = true;
         self
     }
 
@@ -2711,12 +2699,7 @@ impl BlockListElement {
                 app,
             );
 
-            if block.is_output_cursor_visible()
-            // Don't draw the Warp cursor when rich input is hiding
-            // the CLI agent's cursor cell — agents like OpenCode and Codex
-            // rely on Warp's cursor, so we suppress it here too.
-            && !block_grid_params.grid_render_params.hide_cursor_cell
-            {
+            if block.is_output_cursor_visible() {
                 block.output_grid().draw_cursor(
                     *grid_origin,
                     &block_grid_params.grid_render_params,
@@ -3728,7 +3711,6 @@ impl Element for BlockListElement {
             size_info: self.size_info,
             cell_size,
             use_ligature_rendering: self.use_ligature_rendering,
-            hide_cursor_cell: self.hide_cursor_cell,
         };
         let block_grid_params = BlockGridParams {
             grid_render_params,
@@ -4315,11 +4297,7 @@ impl Element for BlockListElement {
                         }
                     }
 
-                    // Don't draw a border below session headers (i.e. above the next block).
-                    draw_border_above_block = !matches!(
-                        self.rich_content_metadata.get(view_id),
-                        Some(RichContentMetadata::HarnessSessionHeader)
-                    );
+                    draw_border_above_block = true;
 
                     grid_origin += vec2f(0., *height_px);
                 }

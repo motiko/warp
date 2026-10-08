@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use ai_types::AmbientAgentTaskId;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use session_sharing_protocol::common::{ParticipantId, Role, SessionId as SharedSessionId};
@@ -22,8 +23,6 @@ use crate::ai::agent::{
     AIAgentActionId, AIAgentExchangeId, AIAgentInput as FullAIAgentInput, AIIdentifiers,
     EntrypointType, PassiveSuggestionTrigger, ServerOutputId, SuggestedLoggingId,
 };
-use crate::ai::agent_management::notifications::NotificationSourceAgent;
-use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
 use crate::ai::blocklist::{
     AIBlockResponseRating, CommandExecutionPermissionAllowedReason, InputType,
@@ -58,7 +57,6 @@ use crate::settings::import::model::TerminalType;
 use crate::tab::TabTelemetryAction;
 use crate::terminal::ShareBlockType;
 use crate::terminal::block_list_viewport::InputMode;
-use crate::terminal::cli_agent_sessions::{CLIAgentInputEntrypoint, CLIAgentRichInputCloseReason};
 use crate::terminal::input::TelemetryInputSuggestionsMode;
 use crate::terminal::model::block::BlockId;
 use crate::terminal::model::session::SessionId;
@@ -420,8 +418,6 @@ pub enum FileTreeSource {
     Keybinding,
     LeftPanelToolbelt,
     ForceOpened,
-    /// Opened from the CLI agent view footer (e.g., Claude Code).
-    CLIAgentView,
     /// Opened from the File explorer chip in Warp's own agent input toolbelt.
     AgentToolbelt,
 }
@@ -435,67 +431,12 @@ pub enum CodePanelsFileOpenEntrypoint {
     GlobalSearch,
 }
 
-/// The CLI agent being used (for telemetry purposes).
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum CLIAgentType {
-    Claude,
-    Gemini,
-    Codex,
-    Amp,
-    Droid,
-    OpenCode,
-    Copilot,
-    Pi,
-    OhMyPi,
-    Auggie,
-    Cursor,
-    Goose,
-    Hermes,
-    Vibe,
-    Antigravity,
-    Grok,
-    Unknown,
-}
-
-/// The kind of plugin chip shown or dismissed (for telemetry purposes).
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PluginChipTelemetryKind {
-    Install,
-    Update,
-}
-
 /// Identifies the agent variant that triggered a notification (for telemetry purposes).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NotificationAgentVariant {
     /// Warp's built-in agent (Oz).
     Oz,
-    /// A CLI agent (e.g., Claude Code, Gemini CLI, etc.).
-    CLIAgent(CLIAgentType),
-}
-
-impl From<NotificationSourceAgent> for NotificationAgentVariant {
-    fn from(agent: NotificationSourceAgent) -> Self {
-        match agent {
-            NotificationSourceAgent::Oz { .. } => Self::Oz,
-            NotificationSourceAgent::CLI { agent, .. } => Self::CLIAgent(agent.into()),
-        }
-    }
-}
-
-/// The action taken on a plugin chip (for telemetry purposes).
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PluginChipTelemetryAction {
-    /// User clicked the auto-install button.
-    Install,
-    /// User clicked the auto-update button.
-    Update,
-    /// User clicked the manual install instructions button.
-    InstallInstructions,
-    /// User clicked the manual update instructions button.
-    UpdateInstructions,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -545,36 +486,10 @@ pub enum PtySpawnMode {
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum OpenedWarpAISource {
-    GlobalEntryButton,
-    HelpWithBlock,
-    HelpWithTextSelection,
-    FromAICommandSearch,
-    WarmWelcome,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum WarpAIRequestResult {
-    Succeeded { latency_ms: i64, truncated: bool },
-    OutOfRequests,
-    Failed,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum WarpAIActionType {
-    CopyTranscript,
-    Restart,
-    CopyAnswer,
-    CopyCode,
-    InsertIntoInput,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum SaveAsWorkflowModalSource {
     Block,
     Input,
     WarpAIWorkflowCard,
-    WarpAIPanel,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -759,14 +674,6 @@ pub enum AgentModeSetupCodebaseContextActionType {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum AgentModeSetupCreateEnvironmentActionType {
-    #[serde(rename = "create_environment")]
-    CreateEnvironment,
-    #[serde(rename = "skip_environment")]
-    SkipEnvironment,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CpuUsageStats {
     /// The number of logical CPUs on the system.
     pub num_cpus: usize,
@@ -849,9 +756,7 @@ pub enum AddTabWithShellSource {
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CodeContextDestination {
-    Pty,
     AgentInput,
-    RichInput,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -890,7 +795,6 @@ pub enum AIAgentInput {
     AutoCodeDiffQuery { query: String },
     ResumeConversation,
     InitProjectRules { display_query: Option<String> },
-    CreateEnvironment { display_query: Option<String> },
     TriggerSuggestPrompt { trigger: PassiveSuggestionTrigger },
     ActionResult { action_id: AIAgentActionId },
     CreateNewProject { query: String },
@@ -902,7 +806,6 @@ pub enum AIAgentInput {
     MessagesReceivedFromAgents { message_count: usize },
     EventsFromAgents { event_count: usize },
     PassiveSuggestionResult,
-    OrchestrationConfigUpdate,
     AgentWake,
 }
 
@@ -914,9 +817,6 @@ impl From<FullAIAgentInput> for AIAgentInput {
             FullAIAgentInput::ResumeConversation { .. } => Self::ResumeConversation,
             FullAIAgentInput::InitProjectRules { display_query, .. } => {
                 Self::InitProjectRules { display_query }
-            }
-            FullAIAgentInput::CreateEnvironment { display_query, .. } => {
-                Self::CreateEnvironment { display_query }
             }
             FullAIAgentInput::TriggerPassiveSuggestion { trigger, .. } => {
                 Self::TriggerSuggestPrompt { trigger }
@@ -943,7 +843,6 @@ impl From<FullAIAgentInput> for AIAgentInput {
                 event_count: events.len(),
             },
             FullAIAgentInput::PassiveSuggestionResult { .. } => Self::PassiveSuggestionResult,
-            FullAIAgentInput::OrchestrationConfigUpdate { .. } => Self::OrchestrationConfigUpdate,
             FullAIAgentInput::AgentWake => Self::AgentWake,
         }
     }
@@ -966,7 +865,6 @@ pub enum TelemetryAgentViewEntryOrigin {
     AcceptedUnitTestSuggestion,
     AcceptedPassiveCodeDiff,
     InlineCodeReview,
-    AmbientAgent,
     Cli,
     ImageAdded,
     SlashCommand,
@@ -984,14 +882,10 @@ pub enum TelemetryAgentViewEntryOrigin {
     Onboarding,
     Keybinding,
     SlashInit,
-    CreateEnvironment,
     ProjectEntry,
     ClearBuffer,
     DefaultSessionMode,
-    ChildAgent,
     LinearDeepLink,
-    ThirdPartyCloudAgent,
-    OrchestrationPillBar,
     JumpToLatestAgentMessage,
 }
 
@@ -1017,8 +911,6 @@ impl From<AgentViewEntryOrigin> for TelemetryAgentViewEntryOrigin {
             AgentViewEntryOrigin::AcceptedUnitTestSuggestion => Self::AcceptedUnitTestSuggestion,
             AgentViewEntryOrigin::AcceptedPassiveCodeDiff => Self::AcceptedPassiveCodeDiff,
             AgentViewEntryOrigin::InlineCodeReview => Self::InlineCodeReview,
-            AgentViewEntryOrigin::CloudAgent => Self::AmbientAgent,
-            AgentViewEntryOrigin::ThirdPartyCloudAgent => Self::ThirdPartyCloudAgent,
             AgentViewEntryOrigin::Cli => Self::Cli,
             AgentViewEntryOrigin::ImageAdded => Self::ImageAdded,
             AgentViewEntryOrigin::SlashCommand { .. } => Self::SlashCommand,
@@ -1036,13 +928,10 @@ impl From<AgentViewEntryOrigin> for TelemetryAgentViewEntryOrigin {
             AgentViewEntryOrigin::Onboarding => Self::Onboarding,
             AgentViewEntryOrigin::Keybinding(_) => Self::Keybinding,
             AgentViewEntryOrigin::SlashInit => Self::SlashInit,
-            AgentViewEntryOrigin::CreateEnvironment => Self::CreateEnvironment,
             AgentViewEntryOrigin::ProjectEntry => Self::ProjectEntry,
             AgentViewEntryOrigin::ClearBuffer => Self::ClearBuffer,
             AgentViewEntryOrigin::DefaultSessionMode => Self::DefaultSessionMode,
-            AgentViewEntryOrigin::ChildAgent => Self::ChildAgent,
             AgentViewEntryOrigin::LinearDeepLink => Self::LinearDeepLink,
-            AgentViewEntryOrigin::OrchestrationPillBar => Self::OrchestrationPillBar,
             AgentViewEntryOrigin::JumpToLatestAgentMessage => Self::JumpToLatestAgentMessage,
         }
     }
@@ -1449,25 +1338,9 @@ pub enum TelemetryEvent {
     InitialWorkingDirectoryConfigurationChanged {
         advanced_mode_enabled: bool,
     },
-    /// Opened legacy Warp AI.
-    OpenedWarpAI {
-        source: OpenedWarpAISource,
-    },
-    /// Issued legacy Warp AI request.
-    WarpAIRequestIssued {
-        result: WarpAIRequestResult,
-    },
-    WarpAIAction {
-        action_type: WarpAIActionType,
-    },
-    /// This is purely for static prompts! Do not send user-written prompts with this event.
-    UsedWarpAIPreparedPrompt {
-        prompt: &'static str,
-    },
     ToggleFocusPaneOnHover {
         enabled: bool,
     },
-    WarpAICharacterLimitExceeded,
     OpenInputContextMenu,
     InputCutSelectedText,
     InputCopySelectedText,
@@ -1545,10 +1418,6 @@ pub enum TelemetryEvent {
     AnonymousUserExpirationLockout,
     AnonymousUserLinkedFromBrowser,
     NeedsReauth,
-    // Toggled the legacy Warp AI side panel.
-    ToggleWarpAI {
-        opened: bool,
-    },
     ToggleSecretRedaction {
         enabled: bool,
     },
@@ -1655,8 +1524,6 @@ pub enum TelemetryEvent {
     FileTreeToggled {
         source: FileTreeSource,
         is_code_mode_v2: bool,
-        /// The CLI agent type if opened from a CLI agent footer (e.g., Claude Code).
-        cli_agent: Option<CLIAgentType>,
     },
     /// User attached a file or directory as context from the file tree
     FileTreeItemAttachedAsContext {
@@ -2197,9 +2064,6 @@ pub enum TelemetryEvent {
     AgentModeSetupCodebaseContextAction {
         action: AgentModeSetupCodebaseContextActionType,
     },
-    AgentModeSetupCreateEnvironmentAction {
-        action: AgentModeSetupCreateEnvironmentActionType,
-    },
     InputBufferSubmitted {
         input_type: warp_core::input_type::InputType,
         is_locked: bool,
@@ -2269,88 +2133,11 @@ pub enum TelemetryEvent {
         block_id: BlockId,
         user_took_over: bool,
     },
-    /// Emitted when the user toggles the Agent Management View.
-    AgentManagementViewToggled {
-        is_open: bool,
-    },
-    /// Emitted when the user opens a session from the Agent Management View.
-    AgentManagementViewOpenedSession,
-    /// Emitted when the user copies a session link from the Agent Management View.
-    AgentManagementViewCopiedSessionLink,
 
     /// Emitted when an agent-requested command causes the shell to exit.
     AgentExitedShellProcess {
         command: String,
         server_output_id: Option<ServerOutputId>,
-    },
-    /// Emitted when the user attaches an image from the CLI agent footer.
-    CLIAgentToolbarImageAttached {
-        /// The CLI agent being used.
-        cli_agent: CLIAgentType,
-    },
-    /// Emitted when the CLI agent footer is shown.
-    CLIAgentToolbarShown {
-        /// The CLI agent being shown.
-        cli_agent: CLIAgentType,
-    },
-    /// Emitted when the user opens the CLI agent rich input editor.
-    CLIAgentRichInputOpened {
-        /// The CLI agent being used.
-        cli_agent: CLIAgentType,
-        /// How the editor was opened (Ctrl-G or footer button).
-        entrypoint: CLIAgentInputEntrypoint,
-    },
-    /// Emitted when the CLI agent rich input editor is closed.
-    CLIAgentRichInputClosed {
-        /// The CLI agent being used.
-        cli_agent: CLIAgentType,
-        /// Why the editor was closed.
-        reason: CLIAgentRichInputCloseReason,
-    },
-    /// Emitted when the user submits a prompt via the CLI agent rich input editor.
-    CLIAgentRichInputSubmitted {
-        /// The CLI agent being used.
-        cli_agent: CLIAgentType,
-        /// Length of the submitted prompt in characters.
-        prompt_length: usize,
-    },
-    /// Emitted when the user clicks a plugin chip (install, update, or instructions).
-    CLIAgentPluginChipClicked {
-        /// The CLI agent being used.
-        cli_agent: CLIAgentType,
-        /// The specific action taken.
-        action: PluginChipTelemetryAction,
-    },
-    /// Emitted when the user dismisses the plugin chip.
-    CLIAgentPluginChipDismissed {
-        /// The CLI agent being used.
-        cli_agent: CLIAgentType,
-        /// Whether this was the install or update chip.
-        chip_kind: PluginChipTelemetryKind,
-    },
-    /// Emitted when auto plugin install or update succeeds.
-    CLIAgentPluginOperationSucceeded {
-        /// The CLI agent being used.
-        cli_agent: CLIAgentType,
-        /// Whether this was an install or update operation.
-        operation: PluginChipTelemetryKind,
-    },
-    /// Emitted when auto plugin install or update fails.
-    CLIAgentPluginOperationFailed {
-        /// The CLI agent being used.
-        cli_agent: CLIAgentType,
-        /// Whether this was an install or update operation.
-        operation: PluginChipTelemetryKind,
-    },
-    /// Emitted when a CLI agent plugin is first recognized (SessionStart event received).
-    CLIAgentPluginDetected {
-        /// The CLI agent whose plugin was detected.
-        cli_agent: CLIAgentType,
-    },
-    /// Emitted when an agent notification is shown (toast or mailbox notification).
-    AgentNotificationShown {
-        /// Which agent variant produced the notification.
-        agent_variant: NotificationAgentVariant,
     },
     /// Emitted when the user enters the agent view.
     AgentViewEntered {
@@ -2692,10 +2479,7 @@ impl TelemetryEvent {
             TelemetryEvent::FileTreeToggled {
                 source,
                 is_code_mode_v2,
-                cli_agent,
-            } => Some(
-                json!({"source": source, "is_code_mode_v2": is_code_mode_v2, "cli_agent": cli_agent}),
-            ),
+            } => Some(json!({"source": source, "is_code_mode_v2": is_code_mode_v2})),
             TelemetryEvent::FileTreeItemAttachedAsContext { is_directory } => {
                 Some(json!({"is_directory": is_directory}))
             }
@@ -2838,11 +2622,6 @@ impl TelemetryEvent {
             TelemetryEvent::InitialWorkingDirectoryConfigurationChanged {
                 advanced_mode_enabled,
             } => Some(json!({ "advanced_mode_enabled": advanced_mode_enabled })),
-            TelemetryEvent::OpenedWarpAI { source } => Some(json!({ "source": source })),
-            TelemetryEvent::WarpAIRequestIssued { result } => Some(json!({ "result": result })),
-            TelemetryEvent::WarpAIAction { action_type } => {
-                Some(json!({ "action_type": action_type }))
-            }
             TelemetryEvent::MCPServerAdded { metadata } => Some(json!({
                 "object_id": metadata.object_id,
                 "name": metadata.name,
@@ -2917,9 +2696,6 @@ impl TelemetryEvent {
             TelemetryEvent::AISuggestedRuleContentChanged { rule_id, is_saved } => {
                 Some(json!({ "rule_id": rule_id, "is_saved": is_saved }))
             }
-            TelemetryEvent::UsedWarpAIPreparedPrompt { prompt } => {
-                Some(json!({ "prompt": prompt }))
-            }
             TelemetryEvent::ExperimentTriggered {
                 experiment,
                 layer,
@@ -2957,7 +2733,6 @@ impl TelemetryEvent {
             } => Some(
                 json!({ "ui_location": ui_location, "open_in_active_window": open_in_active_window }),
             ),
-            TelemetryEvent::ToggleWarpAI { opened } => Some(json!({ "opened": opened })),
             TelemetryEvent::ToggleSecretRedaction { enabled } => {
                 Some(json!({ "enabled": enabled }))
             }
@@ -3549,7 +3324,6 @@ impl TelemetryEvent {
             | TelemetryEvent::KeybindingsPageOpened
             | TelemetryEvent::OpenedAltScreenFind
             | TelemetryEvent::QuitModalDisabled
-            | TelemetryEvent::WarpAICharacterLimitExceeded
             | TelemetryEvent::OpenInputContextMenu
             | TelemetryEvent::InputCutSelectedText
             | TelemetryEvent::InputCopySelectedText
@@ -3864,9 +3638,6 @@ impl TelemetryEvent {
             TelemetryEvent::AgentModeSetupCodebaseContextAction { action } => Some(json!({
                 "action": action,
             })),
-            TelemetryEvent::AgentModeSetupCreateEnvironmentAction { action } => Some(json!({
-                "action": action,
-            })),
             #[cfg(windows)]
             TelemetryEvent::WSLRegistryError
             | TelemetryEvent::AutoupdateUnableToCloseApplications
@@ -3957,72 +3728,12 @@ impl TelemetryEvent {
                 "block_id": block_id,
                 "user_took_over": user_took_over,
             })),
-            TelemetryEvent::AgentManagementViewToggled { is_open } => Some(json!({
-                "is_open": is_open,
-            })),
-            TelemetryEvent::AgentManagementViewOpenedSession => None,
-            TelemetryEvent::AgentManagementViewCopiedSessionLink => None,
             TelemetryEvent::AgentExitedShellProcess {
                 command,
                 server_output_id,
             } => Some(json!({
                 "command": command,
                 "server_output_id": server_output_id,
-            })),
-            TelemetryEvent::CLIAgentToolbarImageAttached { cli_agent } => Some(json!({
-                "agent_name": cli_agent,
-            })),
-            TelemetryEvent::CLIAgentToolbarShown { cli_agent } => Some(json!({
-                "agent_name": cli_agent,
-            })),
-            TelemetryEvent::CLIAgentRichInputOpened {
-                cli_agent,
-                entrypoint,
-            } => Some(json!({
-                "agent_name": cli_agent,
-                "entrypoint": entrypoint,
-            })),
-            TelemetryEvent::CLIAgentRichInputClosed { cli_agent, reason } => Some(json!({
-                "agent_name": cli_agent,
-                "reason": reason,
-            })),
-            TelemetryEvent::CLIAgentRichInputSubmitted {
-                cli_agent,
-                prompt_length,
-            } => Some(json!({
-                "agent_name": cli_agent,
-                "prompt_length": prompt_length,
-            })),
-            TelemetryEvent::CLIAgentPluginChipClicked { cli_agent, action } => Some(json!({
-                "agent_name": cli_agent,
-                "action": action,
-            })),
-            TelemetryEvent::CLIAgentPluginChipDismissed {
-                cli_agent,
-                chip_kind,
-            } => Some(json!({
-                "agent_name": cli_agent,
-                "chip_kind": chip_kind,
-            })),
-            TelemetryEvent::CLIAgentPluginOperationSucceeded {
-                cli_agent,
-                operation,
-            } => Some(json!({
-                "agent_name": cli_agent,
-                "operation": operation,
-            })),
-            TelemetryEvent::CLIAgentPluginOperationFailed {
-                cli_agent,
-                operation,
-            } => Some(json!({
-                "agent_name": cli_agent,
-                "operation": operation,
-            })),
-            TelemetryEvent::CLIAgentPluginDetected { cli_agent } => Some(json!({
-                "agent_name": cli_agent,
-            })),
-            TelemetryEvent::AgentNotificationShown { agent_variant } => Some(json!({
-                "agent_variant": agent_variant,
             })),
             TelemetryEvent::AgentViewEntered {
                 origin,
@@ -4257,12 +3968,7 @@ impl TelemetryEvent {
             | TelemetryEvent::InputModeChanged { .. }
             | TelemetryEvent::PtySpawned { .. }
             | TelemetryEvent::InitialWorkingDirectoryConfigurationChanged { .. }
-            | TelemetryEvent::OpenedWarpAI { .. }
-            | TelemetryEvent::WarpAIRequestIssued { .. }
-            | TelemetryEvent::WarpAIAction { .. }
-            | TelemetryEvent::UsedWarpAIPreparedPrompt { .. }
             | TelemetryEvent::ToggleFocusPaneOnHover { .. }
-            | TelemetryEvent::WarpAICharacterLimitExceeded
             | TelemetryEvent::OpenInputContextMenu
             | TelemetryEvent::InputCutSelectedText
             | TelemetryEvent::InputCopySelectedText
@@ -4302,7 +4008,6 @@ impl TelemetryEvent {
             | TelemetryEvent::AnonymousUserExpirationLockout
             | TelemetryEvent::AnonymousUserLinkedFromBrowser
             | TelemetryEvent::NeedsReauth
-            | TelemetryEvent::ToggleWarpAI { .. }
             | TelemetryEvent::ToggleSecretRedaction { .. }
             | TelemetryEvent::CustomSecretRegexAdded
             | TelemetryEvent::ToggleObfuscateSecret { .. }
@@ -4420,7 +4125,6 @@ impl TelemetryEvent {
             | TelemetryEvent::SlashCommandAccepted { .. }
             | TelemetryEvent::AgentModeSetupProjectScopedRulesAction { .. }
             | TelemetryEvent::AgentModeSetupCodebaseContextAction { .. }
-            | TelemetryEvent::AgentModeSetupCreateEnvironmentAction { .. }
             | TelemetryEvent::CloneRepoPromptSubmitted { .. }
             | TelemetryEvent::GetStartedSkipToTerminal
             | TelemetryEvent::FileTreeItemAttachedAsContext { .. }
@@ -4445,20 +4149,6 @@ impl TelemetryEvent {
             | TelemetryEvent::CLISubagentInputDismissed { .. }
             | TelemetryEvent::CLISubagentActionExecuted { .. }
             | TelemetryEvent::CLISubagentActionRejected { .. }
-            | TelemetryEvent::AgentManagementViewToggled { .. }
-            | TelemetryEvent::AgentManagementViewOpenedSession
-            | TelemetryEvent::AgentManagementViewCopiedSessionLink
-            | TelemetryEvent::CLIAgentToolbarImageAttached { .. }
-            | TelemetryEvent::CLIAgentToolbarShown { .. }
-            | TelemetryEvent::CLIAgentPluginChipClicked { .. }
-            | TelemetryEvent::CLIAgentPluginChipDismissed { .. }
-            | TelemetryEvent::CLIAgentPluginOperationSucceeded { .. }
-            | TelemetryEvent::CLIAgentPluginOperationFailed { .. }
-            | TelemetryEvent::CLIAgentPluginDetected { .. }
-            | TelemetryEvent::AgentNotificationShown { .. }
-            | TelemetryEvent::CLIAgentRichInputOpened { .. }
-            | TelemetryEvent::CLIAgentRichInputClosed { .. }
-            | TelemetryEvent::CLIAgentRichInputSubmitted { .. }
             | TelemetryEvent::LinearIssueLinkOpened
             | TelemetryEvent::ComputerUseApproved { .. }
             | TelemetryEvent::ComputerUseCancelled { .. }
@@ -4710,11 +4400,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::InputModeChanged => EnablementState::Always,
             Self::PtySpawned => EnablementState::Always,
             Self::InitialWorkingDirectoryConfigurationChanged => EnablementState::Always,
-            Self::OpenedWarpAI => EnablementState::Always,
-            Self::WarpAIRequestIssued => EnablementState::Always,
-            Self::WarpAIAction => EnablementState::Always,
-            Self::UsedWarpAIPreparedPrompt => EnablementState::Always,
-            Self::WarpAICharacterLimitExceeded => EnablementState::Always,
             Self::OpenInputContextMenu => EnablementState::Always,
             Self::InputCutSelectedText => EnablementState::Always,
             Self::InputCopySelectedText => EnablementState::Always,
@@ -4755,7 +4440,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::DismissVimKeybindingsBanner => EnablementState::Always,
             Self::InitiateReauth => EnablementState::Always,
             Self::NeedsReauth => EnablementState::Always,
-            Self::ToggleWarpAI => EnablementState::Always,
             Self::ToggleSecretRedaction => EnablementState::Always,
             Self::CustomSecretRegexAdded => EnablementState::Always,
             Self::ToggleObfuscateSecret => EnablementState::Always,
@@ -4882,7 +4566,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::SlashCommandAccepted { .. } => EnablementState::Always,
             Self::AgentModeSetupProjectScopedRulesAction { .. } => EnablementState::Always,
             Self::AgentModeSetupCodebaseContextAction { .. } => EnablementState::Always,
-            Self::AgentModeSetupCreateEnvironmentAction { .. } => EnablementState::Always,
             Self::InputBufferSubmitted => EnablementState::ChannelSpecific {
                 channels: vec![Channel::Local, Channel::Dev],
             },
@@ -4900,29 +4583,7 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             | Self::CLISubagentInputDismissed { .. }
             | Self::CLISubagentActionExecuted { .. }
             | Self::CLISubagentActionRejected { .. } => EnablementState::Always,
-            Self::AgentManagementViewToggled { .. }
-            | Self::AgentManagementViewOpenedSession
-            | Self::AgentManagementViewCopiedSessionLink => {
-                EnablementState::Flag(FeatureFlag::AgentManagementView)
-            }
             Self::AgentExitedShellProcess { .. } => EnablementState::Always,
-            Self::CLIAgentToolbarImageAttached { .. } => EnablementState::Always,
-            Self::CLIAgentToolbarShown { .. } => EnablementState::Always,
-            Self::CLIAgentPluginChipClicked { .. }
-            | Self::CLIAgentPluginChipDismissed { .. }
-            | Self::CLIAgentPluginOperationSucceeded { .. }
-            | Self::CLIAgentPluginOperationFailed { .. } => {
-                EnablementState::Flag(FeatureFlag::HOANotifications)
-            }
-            Self::CLIAgentPluginDetected { .. } => EnablementState::Always,
-            Self::AgentNotificationShown { .. } => {
-                EnablementState::Flag(FeatureFlag::HOANotifications)
-            }
-            Self::CLIAgentRichInputOpened { .. }
-            | Self::CLIAgentRichInputClosed { .. }
-            | Self::CLIAgentRichInputSubmitted { .. } => {
-                EnablementState::Flag(FeatureFlag::CLIAgentRichInput)
-            }
             Self::LinearIssueLinkOpened => EnablementState::Always,
             Self::ComputerUseApproved
             | Self::ComputerUseCancelled
@@ -5120,11 +4781,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
                 "InitialWorkingDirectoryConfigurationChanged"
             }
             Self::InputModeChanged => "Input Mode Changed",
-            Self::OpenedWarpAI => "Opened Warp AI",
-            Self::WarpAIRequestIssued => "Warp AI Request Issued",
-            Self::WarpAIAction => "Warp AI Action",
-            Self::UsedWarpAIPreparedPrompt => "Used Warp AI Prepared Prompt",
-            Self::WarpAICharacterLimitExceeded => "Warp AI Character Limit Exceeded",
             Self::OpenInputContextMenu => "OpenInputBoxContextMenu",
             Self::InputCutSelectedText => "InputBoxCutSelectedText",
             Self::InputCopySelectedText => "InputBoxCutSelectedText",
@@ -5162,7 +4818,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::EnableAliasExpansionFromBanner => "Enable Alias Expansion From Banner",
             Self::InitiateReauth => "Initiate Reauth",
             Self::NeedsReauth => "Needs Reauth",
-            Self::ToggleWarpAI => "Toggle Warp AI",
             Self::ToggleSecretRedaction => "Toggle Secret Redaction",
             Self::CustomSecretRegexAdded => "Custom Secret Regex Added",
             Self::ToggleObfuscateSecret => "Toggle Obfuscate Secret",
@@ -5364,9 +5019,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::AgentModeSetupCodebaseContextAction { .. } => {
                 "Agent Mode.Setup Codebase Context Action"
             }
-            Self::AgentModeSetupCreateEnvironmentAction { .. } => {
-                "AgentMode.SetupCreateEnvironmentAction"
-            }
             Self::InputBufferSubmitted => "AgentMode.NaturalLanguageDetection.InputBufferSubmitted",
             Self::RecentMenuItemSelected { .. } => "Recent Menu Item Selected",
             Self::OpenRepoFolderSubmitted { .. } => "Open Repo Folder Submitted",
@@ -5375,23 +5027,7 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::CLISubagentInputDismissed { .. } => "CLI Subagent Input Dismissed",
             Self::CLISubagentActionExecuted { .. } => "CLI Subagent Action Executed",
             Self::CLISubagentActionRejected { .. } => "CLI Subagent Action Rejected",
-            Self::AgentManagementViewToggled { .. } => "Agent Management View Toggled",
-            Self::AgentManagementViewOpenedSession => "Agent Management View Opened Session",
-            Self::AgentManagementViewCopiedSessionLink => {
-                "Agent Management View Copied Session Link"
-            }
             Self::AgentExitedShellProcess => "AgentMode.ExitedShellProcess",
-            Self::CLIAgentToolbarImageAttached { .. } => "CLIAgentFooter.ImageAttached",
-            Self::CLIAgentToolbarShown { .. } => "CLIAgentFooter.Shown",
-            Self::CLIAgentPluginChipClicked { .. } => "CLIAgentPlugin.ChipClicked",
-            Self::CLIAgentPluginChipDismissed { .. } => "CLIAgentPlugin.ChipDismissed",
-            Self::CLIAgentPluginOperationSucceeded { .. } => "CLIAgentPlugin.OperationSucceeded",
-            Self::CLIAgentPluginOperationFailed { .. } => "CLIAgentPlugin.OperationFailed",
-            Self::CLIAgentPluginDetected { .. } => "CLIAgentPlugin.Detected",
-            Self::AgentNotificationShown { .. } => "AgentNotification.Shown",
-            Self::CLIAgentRichInputOpened { .. } => "CLIAgentRichInput.Opened",
-            Self::CLIAgentRichInputClosed { .. } => "CLIAgentRichInput.Closed",
-            Self::CLIAgentRichInputSubmitted { .. } => "CLIAgentRichInput.Submitted",
             Self::LinearIssueLinkOpened => "Linear.IssueLinkOpened",
             Self::ComputerUseApproved => "ComputerUse.Approved",
             Self::ComputerUseCancelled => "ComputerUse.Cancelled",
@@ -5647,15 +5283,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::InitialWorkingDirectoryConfigurationChanged => {
                 "Replaced the default working directory with a different path"
             }
-            Self::OpenedWarpAI => "Activated Warp AI",
-            Self::WarpAIRequestIssued => "Issued a question to Warp AI",
-            Self::WarpAIAction => "Executed a Warp AI action: Restart, Copy, Insert into terminal",
-            Self::UsedWarpAIPreparedPrompt => {
-                "Used one of the Warp-provided prompts, like \"Show examples\""
-            }
-            Self::WarpAICharacterLimitExceeded => {
-                "Attempted to ask a question longer than 1k chars to Warp AI"
-            }
             Self::OpenInputContextMenu => "Opened the Input Editor's context menu",
             Self::InputCutSelectedText => {
                 "Cut the highlighted text via the Input Editor's context menu (right clicking the buffer)"
@@ -5758,9 +5385,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             }
             Self::InitiateReauth => "Started the flow to re-authenticate the client",
             Self::NeedsReauth => "User needs to re-authenticate",
-            Self::ToggleWarpAI => {
-                "Toggled Warp AI--an AI assistant to help you debug errors, look up forgotten commands and more"
-            }
             Self::ToggleSecretRedaction => {
                 "Toggled on/off the setting for Secret Redaction - attempts to redact secrets and sensitive information"
             }
@@ -6030,9 +5654,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::AgentModeSetupCodebaseContextAction { .. } => {
                 "User clicked a button in the Agent Mode setup codebase context step"
             }
-            Self::AgentModeSetupCreateEnvironmentAction { .. } => {
-                "User clicked a button in the Agent Mode setup create environment step"
-            }
             Self::InputBufferSubmitted => "Input buffer submitted",
             Self::RecentMenuItemSelected { .. } => {
                 "User selected an item from the recents list on the new tab zero state"
@@ -6055,42 +5676,8 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::CLISubagentActionRejected { .. } => {
                 "User rejected a blocked action from the CLI subagent"
             }
-            Self::AgentManagementViewToggled { .. } => {
-                "User toggled the Agent Management View open or closed"
-            }
-            Self::AgentManagementViewOpenedSession => {
-                "User opened a session from the Agent Management View"
-            }
-            Self::AgentManagementViewCopiedSessionLink => {
-                "User copied a session link from the Agent Management View"
-            }
             Self::AgentExitedShellProcess => {
                 "An agent-requested command caused the shell process to exit"
-            }
-            Self::CLIAgentToolbarImageAttached { .. } => {
-                "User attached an image from the CLI agent footer"
-            }
-            Self::CLIAgentToolbarShown { .. } => "CLI agent footer was shown to the user",
-            Self::CLIAgentPluginChipClicked { .. } => {
-                "User clicked the plugin install or update chip"
-            }
-            Self::CLIAgentPluginChipDismissed { .. } => {
-                "User dismissed the plugin install or update chip"
-            }
-            Self::CLIAgentPluginOperationSucceeded { .. } => {
-                "Auto plugin install or update completed successfully"
-            }
-            Self::CLIAgentPluginOperationFailed { .. } => "Auto plugin install or update failed",
-            Self::CLIAgentPluginDetected { .. } => {
-                "A CLI agent plugin was detected via a SessionStart event"
-            }
-            Self::AgentNotificationShown { .. } => {
-                "An agent notification was shown to the user (toast or mailbox)"
-            }
-            Self::CLIAgentRichInputOpened { .. } => "User opened CLI agent Rich Input",
-            Self::CLIAgentRichInputClosed { .. } => "CLI agent Rich Input was closed",
-            Self::CLIAgentRichInputSubmitted { .. } => {
-                "User submitted a prompt via CLI agent Rich Input"
             }
             Self::LinearIssueLinkOpened => {
                 "User opened a warp://linear deeplink to work on an issue"

@@ -11,7 +11,7 @@ use local_control::selection::select_instance;
 use serde::Serialize;
 use warp_core::channel::ChannelState;
 
-use crate::agent::OutputFormat;
+use super::output::OutputFormat;
 use crate::local_control::output::{write_json, write_json_line};
 use crate::local_control::selectors::{instance_selector, target_selector};
 use crate::local_control::{
@@ -60,9 +60,6 @@ pub(super) fn run_surface_command(
             ActionKind::SurfaceResourceCenterToggle,
             output_format,
         ),
-        SurfaceCommand::AiAssistant(command) => {
-            run_surface_toggle_command(command, ActionKind::SurfaceAiAssistantToggle, output_format)
-        }
         SurfaceCommand::CodeReview(command) => match command {
             SurfaceOpenToggleCommand::Open(args) => run_action_with_params(
                 args,
@@ -105,11 +102,6 @@ pub(super) fn run_surface_command(
                 output_format,
             ),
         },
-        SurfaceCommand::AgentManagement(command) => run_surface_open_command(
-            command,
-            ActionKind::SurfaceAgentManagementOpen,
-            output_format,
-        ),
     }
 }
 

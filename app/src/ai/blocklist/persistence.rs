@@ -92,7 +92,6 @@ impl TryFrom<&AIAgentInput> for PersistedAIInputType {
             AIAgentInput::ActionResult { .. }
             | AIAgentInput::ResumeConversation { .. }
             | AIAgentInput::InitProjectRules { .. }
-            | AIAgentInput::CreateEnvironment { .. }
             | AIAgentInput::TriggerPassiveSuggestion { .. }
             | AIAgentInput::CreateNewProject { .. }
             | AIAgentInput::CloneRepository { .. }
@@ -102,7 +101,6 @@ impl TryFrom<&AIAgentInput> for PersistedAIInputType {
             | AIAgentInput::StartFromAmbientRunPrompt { .. }
             | AIAgentInput::MessagesReceivedFromAgents { .. }
             | AIAgentInput::EventsFromAgents { .. }
-            | AIAgentInput::OrchestrationConfigUpdate { .. }
             | AIAgentInput::AgentWake => Err(anyhow::anyhow!(
                 "This input type is not persisted. Only Query inputs are persisted for up-arrow history."
             )),
@@ -438,14 +436,6 @@ impl From<&AIAgentActionType> for PersistedAIAgentActionType {
             AIAgentActionType::FetchConversation { conversation_id } => Self::FetchConversation {
                 conversation_id: conversation_id.clone(),
             },
-            AIAgentActionType::SendMessageToAgent { .. } => Self::NotPersisted,
-            // Orchestrate is rendered from the in-history tool call message;
-            // there is no per-action state we need to persist locally.
-            AIAgentActionType::RunAgents(_) => Self::NotPersisted,
-            // The wait is dropped on restart; the unresolved tool call
-            // stays in the transcript as an orphan until the next
-            // outbound request triggers the server's supersede.
-            AIAgentActionType::WaitForEvents { .. } => Self::NotPersisted,
             // Recordings are tied to a live capture process that cannot survive
             // a restart, so there is nothing useful to persist.
             AIAgentActionType::StartRecording { .. } | AIAgentActionType::StopRecording { .. } => {

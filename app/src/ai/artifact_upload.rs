@@ -4,12 +4,12 @@ use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use ai_types::AmbientAgentTaskId;
 use anyhow::{Context, Result, anyhow, bail};
 use blocking::unblock;
 
 use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent::conversation::ServerAIConversationMetadata;
-use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::server::server_api::ServerApi;
 use crate::server::server_api::ai::{
     AIClient, CreateFileArtifactUploadRequest, CreateFileArtifactUploadResponse,

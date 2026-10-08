@@ -15,13 +15,11 @@ use warpui::{AppContext, SingletonEntity};
 
 use crate::ai::agent_conversations_model::AgentConversationsModel;
 use crate::ai::blocklist::BlocklistAIHistoryModel;
-use crate::ai::blocklist::agent_view::orchestration_pill_bar_model::OrchestrationPillBarModel;
 use crate::ai::chatgpt_subscription::ChatGPTSubscriptionModel;
 use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
 #[cfg(not(target_family = "wasm"))]
 use crate::ai::mcp::TemplatableMCPServerManager;
 use crate::ai::request_usage_model::AIRequestUsageModel;
-use crate::ai_assistant::requests::REQUEST_LIMIT_INFO_CACHE_KEY;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::env_vars::manager::EnvVarCollectionManager;
 use crate::notebooks::manager::NotebookManager;
@@ -69,9 +67,6 @@ pub fn log_out(app: &mut AppContext) {
     }
     BlocklistAIHistoryModel::handle(app).update(app, |history_model, _| {
         history_model.reset();
-    });
-    OrchestrationPillBarModel::handle(app).update(app, |pill_bar_model, _| {
-        pill_bar_model.reset();
     });
     AgentConversationsModel::handle(app).update(app, |agent_conversations_model, _| {
         agent_conversations_model.reset();
@@ -167,16 +162,6 @@ fn remove_cloud_persisted_settings(app: &mut AppContext) {
             anyhow::Error::new(e).context(
                 "Failed to remove Crash Reporting Enabled Defaults Key from user defaults"
             )
-        );
-    }
-
-    if let Err(e) = app
-        .private_user_preferences()
-        .remove_value(REQUEST_LIMIT_INFO_CACHE_KEY)
-    {
-        report_error!(
-            anyhow::Error::new(e)
-                .context("Failed to remove Request Limit Defaults Key from user defaults")
         );
     }
 

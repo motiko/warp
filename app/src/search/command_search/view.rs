@@ -31,7 +31,7 @@ use super::history::history_data_source_for_session;
 use super::warp_ai::WarpAIDataSource;
 use super::workflows::{WorkflowsDataSource, cloud_workflows_data_source};
 use super::zero_state::{CommandSearchZeroStateEvent, CommandSearchZeroStateView};
-use crate::ai_assistant::execution_context::WarpAiExecutionContext;
+use crate::ai::execution_context::WarpAiExecutionContext;
 use crate::appearance::Appearance;
 use crate::completer::SessionContext;
 use crate::drive::settings::WarpDriveSettings;

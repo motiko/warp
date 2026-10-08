@@ -9,14 +9,11 @@ use super::BlocklistAIController;
 use super::shared_session::SharedSessionPromptTarget;
 use crate::ai::agent::conversation::AIConversationId;
 use crate::ai::agent::{AIAgentAttachment, BaseUserQuery};
-use crate::ai::attachment_utils::{
-    build_file_attachment_map, download_task_file_attachments, resolve_agent_attachments,
-};
+use crate::ai::attachment_utils::resolve_agent_attachments;
 #[cfg(test)]
 use crate::ai::blocklist::QueuedPromptDeliveryMode;
 use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
 use crate::ai::blocklist::{BlocklistAIHistoryModel, QueuedQuery, QueuedQueryId, QueuedQueryModel};
-use crate::server::server_api::ServerApiProvider;
 
 impl BlocklistAIController {
     /// Binds this controller to a native conversation before session sharing can begin
@@ -34,7 +31,7 @@ impl BlocklistAIController {
         }
         let id = restored_conversation_id.unwrap_or_else(|| {
             BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, ctx| {
-                history.start_new_conversation(self.terminal_surface_id, false, false, false, ctx)
+                history.start_new_conversation(self.terminal_surface_id, false, false, ctx)
             })
         });
         self.native_prompt_conversation_id = Some(id);
@@ -263,44 +260,15 @@ impl BlocklistAIController {
         ctx: &mut ModelContext<Self>,
     ) {
         let (_, _, file_downloads) = resolve_agent_attachments(attachments);
-        log::info!(
-            "event=queued_attachment_download_started conversation_id={conversation_id} query_id={query_id:?} file_count={}",
-            file_downloads.len(),
-        );
-        let Some((task_id, directory)) = self
-            .ambient_agent_task_id
-            .zip(self.attachments_download_dir.clone())
-        else {
-            report_error!(
-                "Missing native attachment download configuration for a queued startup injection",
-                extra: { "conversation_id" => %conversation_id, "query_id" => ?query_id }
+        if !file_downloads.is_empty() {
+            log::warn!(
+                "event=queued_attachment_files_dropped conversation_id={conversation_id} query_id={query_id:?} file_count={}",
+                file_downloads.len(),
             );
-            QueuedQueryModel::handle(ctx).update(ctx, |queue, ctx| {
-                queue.complete_preparation(conversation_id, query_id, HashMap::new(), ctx);
-            });
-            return;
-        };
-        let ai_client = ServerApiProvider::as_ref(ctx).get_ai_client();
-        let http_client = ServerApiProvider::as_ref(ctx).get_http_client();
-        ctx.spawn(
-            download_task_file_attachments(
-                ai_client,
-                http_client,
-                task_id,
-                directory,
-                file_downloads,
-            ),
-            move |_, downloaded, ctx| {
-                QueuedQueryModel::handle(ctx).update(ctx, |queue, ctx| {
-                    queue.complete_preparation(
-                        conversation_id,
-                        query_id,
-                        build_file_attachment_map(&downloaded),
-                        ctx,
-                    );
-                });
-            },
-        );
+        }
+        QueuedQueryModel::handle(ctx).update(ctx, |queue, ctx| {
+            queue.complete_preparation(conversation_id, query_id, HashMap::new(), ctx);
+        });
     }
 
     /// Submits an attributed prompt with resolved file attachments.

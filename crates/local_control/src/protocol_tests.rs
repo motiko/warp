@@ -163,8 +163,8 @@ fn malformed_and_removed_action_names_are_not_deserialized() {
 }
 
 #[test]
-fn catalog_has_exactly_81_retained_actions() {
-    assert_eq!(ActionKind::ALL.len(), 81);
+fn catalog_has_exactly_79_retained_actions() {
+    assert_eq!(ActionKind::ALL.len(), 79);
 }
 
 #[test]
@@ -193,10 +193,6 @@ fn direct_surface_actions_have_stable_names() {
     assert_eq!(
         ActionKind::SurfaceVerticalTabsOpen.as_str(),
         "surface.vertical_tabs.open"
-    );
-    assert_eq!(
-        ActionKind::SurfaceAgentManagementOpen.as_str(),
-        "surface.agent_management.open"
     );
 }
 

@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use ai::agent::orchestration_config::{OrchestrationConfig, OrchestrationConfigStatus};
 use ai::document::AIDocumentId;
 use ai::skills::SkillPathOrigin;
+use ai_types::AmbientAgentTaskId;
 use anyhow::Context as _;
 use chrono::{DateTime, Local, TimeZone};
 use itertools::Itertools as _;
 use vec1::{Size0Error, Vec1};
-use warp_cli::agent::Harness;
 use warp_core::command::ExitCode;
 use warp_core::execution_mode::AppExecutionMode;
 use warp_core::features::FeatureFlag;
@@ -55,7 +54,6 @@ use crate::ai::agent::{
     AIAgentOutputMessage, AIAgentOutputMessageType, AIIdentifiers, CancellationOutcome,
     CancellationReason, MessageToAIAgentOutputMessageError, SummarizationType,
 };
-use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::artifacts::Artifact;
 use crate::ai::blocklist::{
     BlocklistAIHistoryEvent, ConversationStatusUpdate, RequestInput, ResponseStreamId,
@@ -405,11 +403,6 @@ pub struct AIConversation {
     /// Artifacts created during this conversation (plans, PRs, etc.).
     artifacts: Vec<Artifact>,
 
-    /// Whether the AIConversation is being used as a vehicle for a CLI conversation, that
-    /// doesn't have a full internal representation but uses an AIConversationId to render
-    /// in the agent view.
-    is_cli_agent_transcript: bool,
-
     // TODO(advait): Group child-agent-only fields (parent_agent_id,
     // agent_name, orchestration_harness_type, parent_conversation_id,
     // is_remote_child, pinned) into a ChildAgentState sub-struct. See
@@ -434,11 +427,6 @@ pub struct AIConversation {
     /// event log. Used on restore to resume event delivery without
     /// re-delivering already-processed events.
     last_event_sequence: Option<i64>,
-
-    /// Per-plan orchestration configs hydrated from
-    /// `OrchestrationConfigSnapshot` messages in the conversation's task list.
-    /// Keyed by `plan_id`; snapshots with empty `plan_id` are ignored.
-    orchestration_configs: HashMap<String, (OrchestrationConfig, OrchestrationConfigStatus)>,
 
     /// Whether the user has pinned this child agent in the
     /// orchestration pill bar. Persisted via `AgentConversationData.pinned`.
@@ -469,7 +457,7 @@ pub(crate) fn artifact_from_fork_proto(
 }
 
 impl AIConversation {
-    pub fn new(is_viewing_shared_session: bool, is_cli_agent_transcript: bool) -> Self {
+    pub fn new(is_viewing_shared_session: bool) -> Self {
         let root_task = Task::new_optimistic_root();
         Self {
             id: AIConversationId::new(),
@@ -477,7 +465,6 @@ impl AIConversation {
             optimistic_cli_subagent_subtask_id: None,
             code_review: None,
             is_viewing_shared_session,
-            is_cli_agent_transcript,
             todo_lists: vec![],
             status: ConversationStatus::InProgress,
             status_error: None,
@@ -506,7 +493,6 @@ impl AIConversation {
             parent_conversation_id: None,
             is_remote_child: false,
             last_event_sequence: None,
-            orchestration_configs: HashMap::new(),
             pinned: false,
             task_sync_mode: TaskSyncMode::default(),
             use_warp_credits_instead_of_chatgpt: false,
@@ -730,7 +716,6 @@ impl AIConversation {
         Ok(Self {
             id,
             is_viewing_shared_session: false,
-            is_cli_agent_transcript: false,
             task_store,
             status,
             status_error: None,
@@ -763,7 +748,6 @@ impl AIConversation {
             parent_conversation_id,
             is_remote_child,
             last_event_sequence,
-            orchestration_configs: HashMap::new(),
             pinned,
             task_sync_mode: TaskSyncMode::default(),
             use_warp_credits_instead_of_chatgpt,
@@ -792,10 +776,6 @@ impl AIConversation {
 
     pub fn set_is_viewing_shared_session(&mut self, is_viewing_shared_session: bool) {
         self.is_viewing_shared_session = is_viewing_shared_session;
-    }
-
-    pub fn is_cli_agent_transcript(&self) -> bool {
-        self.is_cli_agent_transcript
     }
 
     pub fn was_summarized(&self) -> bool {
@@ -1080,27 +1060,6 @@ impl AIConversation {
         &self.status
     }
 
-    /// Test-only setter for driving status-dependent logic directly.
-    #[cfg(test)]
-    pub(crate) fn set_status_for_test(&mut self, status: ConversationStatus) {
-        self.status = status;
-    }
-
-    /// Test-only setter for the structured status error, used to exercise the
-    /// `status_error` classification path in `map_conversation_status`.
-    #[cfg(test)]
-    pub(crate) fn set_status_error_for_test(&mut self, error: Option<RenderableAIError>) {
-        self.status_error = error;
-    }
-
-    /// Test-only helper: appends an exchange to the root task so status-derivation
-    /// logic (e.g. `map_conversation_status`) can be exercised end-to-end.
-    #[cfg(test)]
-    pub(crate) fn append_root_exchange_for_test(&mut self, exchange: AIAgentExchange) {
-        self.task_store
-            .modify_root_task(|root_task| root_task.append_exchange(exchange));
-    }
-
     /// The human-readable message for the current error status, derived from the
     /// structured `status_error`.
     pub fn status_error_message(&self) -> Option<String> {
@@ -1285,21 +1244,6 @@ impl AIConversation {
         self.orchestration_harness_type.as_deref()
     }
 
-    pub fn orchestration_harness(&self) -> Option<Harness> {
-        self.orchestration_harness_type
-            .as_deref()
-            .map(parse_orchestration_harness_type)
-            .or_else(|| {
-                self.server_metadata
-                    .as_ref()
-                    .map(|metadata| Harness::from(metadata.harness))
-            })
-    }
-
-    pub fn set_orchestration_harness(&mut self, harness: Harness) {
-        self.orchestration_harness_type = Some(harness.config_name().to_string());
-    }
-
     pub fn parent_conversation_id(&self) -> Option<AIConversationId> {
         self.parent_conversation_id
     }
@@ -1376,69 +1320,6 @@ impl AIConversation {
     /// right after creating a debug-turn bootstrap conversation with no prior token.
     pub fn set_task_sync_mode(&mut self, mode: TaskSyncMode) {
         self.task_sync_mode = mode;
-    }
-
-    /// Returns the orchestration config and status for a specific plan,
-    /// or `None` if no config has been hydrated for that plan.
-    pub fn orchestration_config_for_plan(
-        &self,
-        plan_id: &str,
-    ) -> Option<(&OrchestrationConfig, OrchestrationConfigStatus)> {
-        self.orchestration_configs
-            .get(plan_id)
-            .map(|(config, status)| (config, *status))
-    }
-
-    /// Returns `true` if at least one plan has an orchestration config.
-    pub fn has_any_orchestration_config(&self) -> bool {
-        !self.orchestration_configs.is_empty()
-    }
-
-    /// Inserts or replaces the orchestration config for a specific plan.
-    /// Returns `true` if the value actually changed.
-    pub fn set_orchestration_config_for_plan(
-        &mut self,
-        plan_id: String,
-        config: OrchestrationConfig,
-        status: OrchestrationConfigStatus,
-    ) -> bool {
-        use std::collections::hash_map::Entry;
-        match self.orchestration_configs.entry(plan_id) {
-            Entry::Occupied(mut entry) => {
-                let existing = entry.get();
-                if existing.0 != config || existing.1 != status {
-                    entry.insert((config, status));
-                    true
-                } else {
-                    false
-                }
-            }
-            Entry::Vacant(entry) => {
-                entry.insert((config, status));
-                true
-            }
-        }
-    }
-
-    /// Returns a reference to the full per-plan config map.
-    pub fn orchestration_configs(
-        &self,
-    ) -> &HashMap<String, (OrchestrationConfig, OrchestrationConfigStatus)> {
-        &self.orchestration_configs
-    }
-
-    /// Bulk-replaces all orchestration configs (used during hydration).
-    /// Returns `true` if the map actually changed.
-    pub fn set_orchestration_configs(
-        &mut self,
-        configs: HashMap<String, (OrchestrationConfig, OrchestrationConfigStatus)>,
-    ) -> bool {
-        if self.orchestration_configs != configs {
-            self.orchestration_configs = configs;
-            true
-        } else {
-            false
-        }
     }
 
     /// Returns a flat list of linearized messages across all tasks, interpolating subtask messages
@@ -1624,9 +1505,6 @@ impl AIConversation {
             // Shared session viewer conversations are excluded because the shared session itself
             // is visible/represented elsewhere.
             || self.is_viewing_shared_session()
-            // 3p transcript viewers create an internal conversation only so agent-view
-            // filtering can associate the restored block snapshot with an active conversation.
-            || self.is_cli_agent_transcript()
             // Child agent conversations spawned by an orchestrator are managed via the parent's
             // status card and shouldn't clutter the navigation list.
             || self.is_child_agent_conversation()
@@ -3139,32 +3017,6 @@ impl AIConversation {
                                 None => {}
                             }
                         }
-                        Some(api::message::Message::OrchestrationConfigSnapshot(
-                            snapshot,
-                        )) => {
-                            if !snapshot.plan_id.is_empty()
-                                && let Some(config) = snapshot
-                                    .config
-                                    .as_ref()
-                                    .map(OrchestrationConfig::from_proto)
-                                {
-                                    let status = OrchestrationConfigStatus::from_proto(
-                                        snapshot.status.as_ref(),
-                                    );
-                                    if self.set_orchestration_config_for_plan(
-                                        snapshot.plan_id.clone(),
-                                        config,
-                                        status,
-                                    ) {
-                                        ctx.emit(
-                                            BlocklistAIHistoryEvent::OrchestrationConfigUpdated {
-                                                conversation_id: self.id,
-                                                from_restore: false,
-                                            },
-                                        );
-                                    }
-                                }
-                        }
                         Some(api::message::Message::ToolCallResult(tcr)) => {
                             // Shared-session viewers do not own temp directories created by
                             // conversation search subagents.
@@ -3319,30 +3171,6 @@ impl AIConversation {
                 message: Some(message),
                 mask: Some(mask),
             }) => {
-                // Process OrchestrationConfigSnapshot if the updated
-                // message carries one (e.g. create_orchestration_config
-                // tool call result updating a single message in place).
-                if let Some(api::message::Message::OrchestrationConfigSnapshot(snapshot)) =
-                    &message.message
-                    && !snapshot.plan_id.is_empty()
-                    && let Some(config) = snapshot
-                        .config
-                        .as_ref()
-                        .map(OrchestrationConfig::from_proto)
-                {
-                    let status = OrchestrationConfigStatus::from_proto(snapshot.status.as_ref());
-                    if self.set_orchestration_config_for_plan(
-                        snapshot.plan_id.clone(),
-                        config,
-                        status,
-                    ) {
-                        ctx.emit(BlocklistAIHistoryEvent::OrchestrationConfigUpdated {
-                            conversation_id: self.id,
-                            from_restore: false,
-                        });
-                    }
-                }
-
                 let task_id = TaskId::new(task_id);
                 // Updates may target messages from exchanges added by earlier response
                 // streams (e.g. the server swapping computer-use screenshot bytes for a
@@ -4708,12 +4536,6 @@ fn subagent_pair_message_ids_to_remove(
     extra_ids
 }
 
-fn parse_orchestration_harness_type(value: &str) -> Harness {
-    Harness::from_config_name(value)
-        .or_else(|| Harness::parse_orchestration_harness(value))
-        .unwrap_or(Harness::Unknown)
-}
-
 pub(super) fn update_todo_list_from_todo_op(
     todo_lists: &mut Vec<AIAgentTodoList>,
     op: api::message::update_todos::Operation,
@@ -4913,7 +4735,7 @@ pub struct ServerAIConversationMetadata {
     pub permissions: crate::cloud_object::ServerPermissions,
 
     /// The ID of the associated ambient agent task, if any.
-    pub ambient_agent_task_id: Option<crate::ai::ambient_agents::AmbientAgentTaskId>,
+    pub ambient_agent_task_id: Option<ai_types::AmbientAgentTaskId>,
 
     /// The server conversation token used to identify this conversation on the server.
     pub server_conversation_token: ServerConversationToken,
@@ -5058,6 +4880,26 @@ impl std::fmt::Display for ConversationStatus {
 }
 
 impl ConversationStatus {
+    /// Returns true if the updating the conversation with this status should trigger some
+    /// notification to the user.
+    ///
+    /// Exhaustive match so a new `ConversationStatus` variant forces a
+    /// deliberate decision about whether it should fire a notification.
+    pub fn should_trigger_notification(&self) -> bool {
+        match self {
+            ConversationStatus::Success
+            | ConversationStatus::Blocked { .. }
+            | ConversationStatus::Error => true,
+            // Streaming hasn't reached a notable state; a recovering or
+            // yielded conversation is still active; user-cancellations are
+            // self-evident.
+            ConversationStatus::InProgress
+            | ConversationStatus::TransientError
+            | ConversationStatus::WaitingForEvents
+            | ConversationStatus::Cancelled => false,
+        }
+    }
+
     pub fn render_icon(&self, appearance: &Appearance) -> warpui::elements::Icon {
         match self {
             ConversationStatus::InProgress => in_progress_icon(appearance),

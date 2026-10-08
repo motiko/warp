@@ -6,9 +6,6 @@ use crate::ai::agent::base_user_query::warp_client_origin;
 use crate::ai::agent::conversation::ConversationStatus;
 use crate::ai::agent::{AIAgentContext, AIAgentInput, CancellationReason};
 use crate::ai::blocklist::QueuedQueryOrigin;
-use crate::ai::blocklist::orchestration_events::{
-    OrchestrationEventService, PendingEvent, PendingEventDetail,
-};
 use crate::test_util::terminal::{add_window_with_terminal, initialize_app_for_terminal_view};
 
 /// The text of every `UserQuery` input across `id`'s root-task exchanges, in the order they
@@ -501,77 +498,6 @@ fn wake_text_without_the_wake_origin_stays_a_user_query() {
 }
 
 #[test]
-fn orchestration_events_wait_for_the_native_setup_barrier_before_injecting() {
-    // The server folds pending inbox messages into the initial turn itself, so an event that
-    // arrives during setup must not become the run's opening turn.
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-        let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-        let terminal = add_window_with_terminal(&mut app, None);
-        let controller = terminal.read(&app, |terminal, _| terminal.ai_controller().clone());
-        let id = controller.update(&mut app, |controller, ctx| {
-            controller.bind_native_prompt_conversation(None, ctx)
-        });
-        terminal.update(&mut app, |terminal, ctx| {
-            terminal.enter_agent_view(None, Some(id), AgentViewEntryOrigin::Cli, ctx);
-        });
-
-        OrchestrationEventService::handle(&app).update(&mut app, |service, ctx| {
-            service.enqueue_event_batch(
-                id,
-                vec![PendingEvent {
-                    event_id: "event-1".to_string(),
-                    source_agent_id: "child".to_string(),
-                    attempt_count: 0,
-                    detail: PendingEventDetail::Message {
-                        message_id: "message-1".to_string(),
-                        addresses: vec!["parent".to_string()],
-                        subject: "subject".to_string(),
-                        message_body: "body".to_string(),
-                    },
-                }],
-                ctx,
-            );
-        });
-
-        controller.read(&app, |controller, ctx| {
-            assert!(
-                QueuedQueryModel::as_ref(ctx).is_dispatch_blocked(id),
-                "precondition: the native setup barrier must still be up"
-            );
-            assert!(
-                !controller.has_active_stream_for_conversation(id, ctx),
-                "the event must not have been injected while the barrier is up"
-            );
-        });
-        OrchestrationEventService::handle(&app).read(&app, |service, _| {
-            assert!(
-                service.has_pending_events(id),
-                "the event must still be held, waiting for the barrier to lift"
-            );
-        });
-
-        controller.update(&mut app, |controller, ctx| {
-            controller.send_user_query_in_conversation("initial".into(), id, None, ctx);
-            assert!(!QueuedQueryModel::as_ref(ctx).is_dispatch_blocked(id));
-        });
-        BlocklistAIHistoryModel::handle(&app).read(&app, |history, _| {
-            assert_eq!(
-                user_queries_in_order(history, id),
-                vec!["initial".to_owned()],
-                "the initial prompt must be the run's first turn"
-            );
-        });
-        OrchestrationEventService::handle(&app).read(&app, |service, _| {
-            assert!(
-                service.has_pending_events(id),
-                "the event stays held behind the active initial-turn stream"
-            );
-        });
-    });
-}
-
-#[test]
 fn live_injection_while_a_turn_is_active_is_queued_instead_of_interrupting_it() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
@@ -766,8 +692,7 @@ fn route_native_startup_injection_rejects_a_prompt_targeting_a_different_convers
         let other_token_str = "550e8400-e29b-41d4-a716-446655440b00";
         let other_id = terminal.update(&mut app, |terminal, ctx| {
             BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, ctx| {
-                let other_id =
-                    history.start_new_conversation(terminal.id(), false, false, false, ctx);
+                let other_id = history.start_new_conversation(terminal.id(), false, false, ctx);
                 history.set_server_conversation_token_for_conversation(
                     other_id,
                     other_token_str.to_owned(),
@@ -916,7 +841,7 @@ fn startup_injections_reuse_the_restored_conversation() {
         let terminal = add_window_with_terminal(&mut app, None);
         terminal.update(&mut app, |terminal, ctx| {
             let restored = BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, ctx| {
-                history.start_new_conversation(terminal.id(), false, false, false, ctx)
+                history.start_new_conversation(terminal.id(), false, false, ctx)
             });
             terminal.ai_controller().update(ctx, |controller, ctx| {
                 assert_eq!(

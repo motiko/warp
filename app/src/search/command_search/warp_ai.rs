@@ -11,8 +11,8 @@ use warpui::{AppContext, Element, SingletonEntity};
 
 use super::workflows::{WorkflowIdentity, WorkflowSearchItem};
 use crate::ai::AIRequestUsageModel;
-use crate::ai_assistant::execution_context::WarpAiExecutionContext;
-use crate::ai_assistant::{AI_ASSISTANT_LOGO_COLOR, GenerateCommandsFromNaturalLanguageError};
+use crate::ai::ask_ai::{AI_ASSISTANT_LOGO_COLOR, GenerateCommandsFromNaturalLanguageError};
+use crate::ai::execution_context::WarpAiExecutionContext;
 use crate::appearance::Appearance;
 use crate::features::FeatureFlag;
 use crate::search::command_search::searcher::CommandSearchItemAction;

@@ -8,8 +8,6 @@ use warpui::platform::FullscreenState;
 use warpui::{AppContext, SingletonEntity as _};
 
 use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::agent_conversations_model::AgentManagementFilters;
-use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::blocklist::{InputConfig, SerializedBlockListItem};
 use crate::code::editor_management::CodeSource;
 use crate::drive::OpenWarpDriveObjectSettings;
@@ -34,12 +32,6 @@ pub struct AppState {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PaneUuid(pub Vec<u8>);
 
-/// Wrapper for persisting agent management filters to restore.
-#[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PersistedAgentManagementFilters {
-    pub filters: AgentManagementFilters,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct WindowSnapshot {
     pub tabs: Vec<TabSnapshot>,
@@ -56,7 +48,6 @@ pub struct WindowSnapshot {
     pub vertical_tabs_panel_open: bool,
     pub left_panel_width: Option<f32>,
     pub right_panel_width: Option<f32>,
-    pub agent_management_filters: Option<PersistedAgentManagementFilters>,
     /// Tab groups defined in this window. Group order is implicit from
     /// member tabs' positions, so no explicit ordering is persisted.
     pub tab_groups: Vec<TabGroupSnapshot>,
@@ -145,7 +136,6 @@ pub enum LeafContents {
     CustomRouterEditor,
     ExecutionProfileEditor,
     CodeReview(CodeReviewPaneSnapshot),
-    AmbientAgent(AmbientAgentPaneSnapshot),
     /// The in-app network log pane. Not persisted across restarts because the
     /// backing log is an in-memory ring buffer that starts empty on launch.
     NetworkLog,
@@ -181,19 +171,9 @@ impl LeafContents {
             | LeafContents::CustomRouterEditor
             | LeafContents::ExecutionProfileEditor
             | LeafContents::CodeReview(_)
-            | LeafContents::AmbientAgent(_)
             | LeafContents::GetStarted => true,
         }
     }
-}
-
-/// Snapshot of an ambient agent pane.
-#[derive(Clone, Debug, PartialEq)]
-pub struct AmbientAgentPaneSnapshot {
-    pub uuid: Vec<u8>,
-    // `task_id` is purposefully optional,
-    // as you can have a valid state (i.e. an empty cloud mode pane) where it is None.
-    pub task_id: Option<AmbientAgentTaskId>,
 }
 
 /// Snapshot of the contents of a terminal pane.

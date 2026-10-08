@@ -887,8 +887,7 @@ impl WorkflowModal {
             | CloudModelEvent::ObjectDeleted { .. }
             | CloudModelEvent::ObjectForceExpanded { .. }
             | CloudModelEvent::ObjectSynced { .. }
-            | CloudModelEvent::InitialLoadCompleted
-            | CloudModelEvent::EnvironmentLastTaskRunTimestampsUpdated => {}
+            | CloudModelEvent::InitialLoadCompleted => {}
         }
     }
 

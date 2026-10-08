@@ -633,6 +633,7 @@ impl QueuedQueryModel {
     /// Returns true when a queued row would auto-fire for `conversation_id` the next time the
     /// conversation finishes successfully. Mirrors [`Self::peek_autofire`]'s gating: false for an
     /// empty queue or a locked head row (which never auto-fires).
+    #[cfg(test)]
     pub fn has_autofireable_prompt(&self, conversation_id: AIConversationId) -> bool {
         !self.is_dispatch_blocked(conversation_id)
             && self
@@ -963,31 +964,6 @@ impl QueuedQueryModel {
         });
     }
 
-    /// Restores a fired row when submission fails after the row was removed.
-    pub(crate) fn restore_fired_row(
-        &mut self,
-        conversation_id: AIConversationId,
-        insert_index: usize,
-        query: QueuedQuery,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let state = self.queues.entry(conversation_id).or_default();
-        let query_id = query.id;
-        if state.queue.iter().any(|queued| queued.id == query_id) {
-            return;
-        }
-        let insert_index = insert_index.min(state.queue.len());
-        log::warn!(
-            "event=restored_after_failed_send conversation_id={conversation_id} query_id={query_id:?} index={insert_index} queue_len_after={}",
-            state.queue.len() + 1,
-        );
-        state.queue.insert(insert_index, query);
-        ctx.emit(QueuedQueryEvent::Appended {
-            conversation_id,
-            query_id,
-        });
-    }
-
     /// Returns the attachments captured on the queued row `query_id` within `conversation_id`'s
     /// queue, or an empty slice if no such row exists. Used by the send path to attach a fired
     /// queued prompt's images/files without removing the row first.
@@ -1029,32 +1005,6 @@ impl QueuedQueryModel {
         ctx.emit(QueuedQueryEvent::Removed {
             conversation_id,
             query_id,
-        });
-        Some(removed)
-    }
-
-    /// Removes the locked initial Cloud Mode row from `conversation_id`'s queue, if it is still
-    /// at the queue head.
-    pub fn remove_initial_cloud_mode_row(
-        &mut self,
-        conversation_id: AIConversationId,
-        ctx: &mut ModelContext<Self>,
-    ) -> Option<QueuedQuery> {
-        let state = self.queues.get_mut(&conversation_id)?;
-        if !state
-            .queue
-            .first()
-            .is_some_and(|row| row.origin == QueuedQueryOrigin::InitialCloudMode)
-        {
-            return None;
-        }
-        let removed = state.queue.remove(0);
-        if state.editing == Some(removed.id) {
-            state.editing = None;
-        }
-        ctx.emit(QueuedQueryEvent::Removed {
-            conversation_id,
-            query_id: removed.id,
         });
         Some(removed)
     }

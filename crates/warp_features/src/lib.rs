@@ -447,9 +447,6 @@ pub enum FeatureFlag {
     /// Enables inline code review functionality
     InlineCodeReview,
 
-    /// Enables the /create-environment slash command for setting up Warp Environments
-    CreateEnvironmentSlashCommand,
-
     /// Enables the local docker sandbox entrypoints in the client.
     LocalDockerSandbox,
 
@@ -509,15 +506,6 @@ pub enum FeatureFlag {
     /// Enables the /rewind slash command.
     RewindSlashCommand,
 
-    /// Agent Management View.
-    AgentManagementView,
-
-    /// Agent Management Details View - enables new details panel on card click.
-    AgentManagementDetailsView,
-
-    /// Enables scheduled ambient agents.
-    ScheduledAmbientAgents,
-
     AgentView,
 
     /// Enables block context functionality in Agent View.
@@ -528,15 +516,6 @@ pub enum FeatureFlag {
 
     /// Enables the inline repo switcher menu for switching between indexed repos.
     InlineRepoMenu,
-
-    /// Enables cloud mode functionality for ambient agents.
-    CloudMode,
-
-    /// Enables starting cloud mode from a local session.
-    CloudModeFromLocalSession,
-
-    /// Enables host selection in cloud mode.
-    CloudModeHostSelector,
 
     /// Enables support for AM file diffs backed by the V4A patch format.
     V4AFileDiffs,
@@ -579,9 +558,6 @@ pub enum FeatureFlag {
     /// Enables configuring header toolbar item order, side placement, and visibility.
     ConfigurableToolbar,
 
-    /// Enables real-time communication updates for ambient agent tasks.
-    AmbientAgentsRTC,
-
     // Enables a side panel conversation list view for AgentView mode.
     AgentViewConversationListView,
 
@@ -607,14 +583,8 @@ pub enum FeatureFlag {
     /// Enables conversation artifacts.
     ConversationArtifacts,
 
-    /// Enables auto-syncing ambient plans to Warp Drive.
-    SyncAmbientPlans,
-
     /// Gates populating/reading oz updates from channel versions in the changelog model.
     OzChangelogUpdates,
-
-    /// Enables image attachment support for cloud mode conversations.
-    CloudModeImageContext,
 
     /// Enables loading and returning bundled skills in the SkillManager.
     BundledSkills,
@@ -631,27 +601,12 @@ pub enum FeatureFlag {
     /// Enables attaching conversations as context in Agent Mode via the @ menu.
     ConversationsAsContext,
 
-    /// Enables the rich input editor for CLI agents (e.g., Claude Code).
-    /// Ctrl-G intercepts the keystroke and opens Warp's input editor instead of $EDITOR.
-    CLIAgentRichInput,
-
     /// Enables incremental (diff-based) buffer updates for auto-reload instead of full replace.
     IncrementalAutoReload,
 
     /// Enables scroll position preservation in the code review pane when file
     /// content changes via auto-reload.
     CodeReviewScrollPreservation,
-
-    /// Re-enables local Claude Code and Codex child harnesses in orchestration
-    /// flows while the default behavior temporarily keeps them disabled.
-    LocalClaudeCodexChildHarnesses,
-
-    /// Gates the client-side multi-level orchestration surfaces: child
-    /// conversations auto-executing their own `run_agents` calls and the
-    /// confirmation-card disclosure that launched agents may start
-    /// children of their own. When disabled, a child's `run_agents` call
-    /// fails gracefully instead of presenting a card in a hidden pane.
-    MultiLevelOrchestration,
 
     /// Shows a pending user query indicator during summarization when a follow-up
     /// prompt is queued via `/fork-and-compact` or `/compact-and`.
@@ -691,39 +646,6 @@ pub enum FeatureFlag {
     /// from code review + code editor for House Of Agents work
     HoaCodeReview,
 
-    /// Enables the `--harness` flag for `oz agent run`, allowing external agent
-    /// CLIs (e.g. `claude`) to execute prompts instead of Warp's agent harness.
-    AgentHarness,
-
-    /// Enables workspace- and block-snapshot handoff between cloud agent runs
-    /// and the local Warp client.
-    /// When enabled:
-    /// - The `AgentDriver` uploads a workspace snapshot (repo diffs + files) at the end of every
-    ///   cloud agent run, regardless of harness.
-    /// - Subsequent executions download the prior execution's handoff snapshot attachments.
-    /// - Third-party harness conversations hydrate their terminal output inline by fetching a
-    ///   block snapshot from the server.
-    OzHandoff,
-
-    /// Enables the upgraded CLI agent session tracking and notifications infrastructure.
-    HOANotifications,
-
-    /// Enables the install/update chip for the OpenCode Warp plugin.
-    /// Requires HOANotifications to also be enabled.
-    OpenCodeNotifications,
-
-    /// Enables the install/update chip for the Codex Warp notification plugin.
-    /// Requires HOANotifications to also be enabled.
-    CodexNotifications,
-
-    /// Enables the Codex Warp plugin marketplace integration.
-    /// When disabled, Codex uses native OSC9 notifications.
-    CodexPlugin,
-
-    /// Enables the install/update chip for the Gemini CLI Warp extension.
-    /// Requires HOANotifications to also be enabled.
-    GeminiNotifications,
-
     /// When enabled, the "Skip for now" login flow does not create a Firebase
     /// anonymous user. The user remains fully logged out (no credentials) and
     /// login-gated features are disabled until they sign in.
@@ -747,9 +669,6 @@ pub enum FeatureFlag {
     /// Enables commit, push, and create-PR actions in the code review panel.
     GitOperationsInCodeReview,
 
-    /// Gates the remote control chip and `/remote-control` slash command in the CLI agent footer.
-    HOARemoteControl,
-
     /// Trims trailing blank rows from CLI agent block output so unused vertical
     /// space is not rendered while the agent is running.
     TrimTrailingBlankLines,
@@ -759,31 +678,14 @@ pub enum FeatureFlag {
     /// for command execution.
     SshRemoteServer,
 
-    /// Redux of the setup/initial user query UI for cloud mode.
-    CloudModeSetupV2,
-
     /// Enables summary mode in vertical tabs, showing condensed tab summaries
     /// instead of individual pane rows.
     VerticalTabsSummaryMode,
-
-    CloudModeInputV2,
-
-    /// Enables continuing cloud mode conversations in the cloud after an execution ends.
-    HandoffCloudCloud,
-
-    /// Enables the local-to-cloud Oz handoff entry points (footer chip and
-    /// `/move-to-cloud` slash command) that fork the active local Oz
-    /// conversation into a fresh cloud agent run with the current workspace
-    /// snapshot attached. Requires `OzHandoff` to also be enabled.
-    HandoffLocalCloud,
 
     /// Gates the v2 billing and usage page redesign.
     BillingAndUsagePageV2,
     /// Enables configurable expanded context windows for eligible GPT models.
     GPTConfigurableContextWindow,
-
-    /// Replaces the raw harness CLI command with a styled header showing CLI name + status icon.
-    HarnessSessionHeader,
 
     /// Enables the code review view for remote sessions.
     RemoteCodeReview,
@@ -836,12 +738,6 @@ pub enum FeatureFlag {
     /// eliminating seams between adjacent box-drawing cells in the terminal.
     BoxDrawingGlyphs,
 
-    /// Enables cloud agent runner selection: the `oz runner` CRUD commands
-    /// for managing runners via the CLI, and the Runner dropdown in the
-    /// orchestration (`run_agents`) confirmation card and plan-card config
-    /// block for choosing a runner when starting remote child agents.
-    CloudAgentRunners,
-
     /// Automatically attaches the Warp-hosted Factory MCP server
     /// (`/api/v1/mcp/factory`) to agents as a built-in MCP server,
     /// authenticated with the logged-in user's session token. No manual MCP
@@ -853,15 +749,6 @@ pub enum FeatureFlag {
     /// `PricingTransparencyEnabled` flag in warp-server, but is a fully independent
     /// flag — the two do not sync automatically.
     PricingTransparency,
-
-    /// Observes Ctrl-C (`0x03`) written on the shared-session viewer input
-    /// path to a terminal with a working, rich-status-capable CLI agent
-    /// session (e.g. Claude Code). Arms a short grace window; if no further
-    /// plugin activity is seen, the session (and its ambient task) resolves
-    /// to `Cancelled`. Purely client-side status synthesis: the keystroke is
-    /// always forwarded unchanged and the harness process/sandbox are never
-    /// signaled or torn down.
-    CtrlCCancelsThirdPartyHarness,
 
     /// Uses fzf or atuin for history search instead of Warp's command search.
     ShellWidgetHandoff,
@@ -900,7 +787,7 @@ static FEATURES_INITIALIZED: AtomicBool = AtomicBool::new(false);
 /// Features used in debugging.
 pub const DEBUG_FLAGS: &[FeatureFlag] = &[FeatureFlag::DebugMode, FeatureFlag::RuntimeFeatureFlags];
 /// Features enabled only for the WarpLocal developer build.
-pub const LOCAL_FLAGS: &[FeatureFlag] = &[FeatureFlag::LocalClaudeCodexChildHarnesses];
+pub const LOCAL_FLAGS: &[FeatureFlag] = &[];
 
 /// Features enabled for the development team.  The expectation is that, over
 /// time, these will move on to PREVIEW_FLAGS before being launched.
@@ -937,7 +824,6 @@ pub const DOGFOOD_FLAGS: &[FeatureFlag] = &[
     FeatureFlag::EditableMarkdownMermaid,
     FeatureFlag::CodeReviewScrollPreservation,
     FeatureFlag::RememberFastForwardState,
-    FeatureFlag::GeminiNotifications,
     FeatureFlag::LocalDockerSandbox,
     #[cfg(not(windows))]
     FeatureFlag::SshRemoteServer,
@@ -947,11 +833,9 @@ pub const DOGFOOD_FLAGS: &[FeatureFlag] = &[
     FeatureFlag::TerminalLifecycleRecovery,
     FeatureFlag::PromptCacheExpiryWarning,
     FeatureFlag::JupyterNotebookRendering,
-    FeatureFlag::MultiLevelOrchestration,
     FeatureFlag::McpJsonTreeView,
     FeatureFlag::BoxDrawingGlyphs,
     FeatureFlag::PricingTransparency,
-    FeatureFlag::CtrlCCancelsThirdPartyHarness,
     FeatureFlag::WarpingModelName,
     FeatureFlag::LrcActivitySignal,
     FeatureFlag::StoredScreenshots,
@@ -972,7 +856,7 @@ pub const RELEASE_FLAGS: &[FeatureFlag] = &[
 ];
 
 /// Flags that we want to allow to switch at runtime (assuming RuntimeFeatureFlags is set)
-pub const RUNTIME_FEATURE_FLAGS: &[FeatureFlag] = &[FeatureFlag::LocalClaudeCodexChildHarnesses];
+pub const RUNTIME_FEATURE_FLAGS: &[FeatureFlag] = &[];
 
 impl FeatureFlag {
     pub fn is_enabled(&self) -> bool {
@@ -1041,9 +925,6 @@ impl FeatureFlag {
             BlocklistMarkdownImages => {
                 Some("Enables rendering markdown images inline in AI block list responses.")
             }
-            CreateEnvironmentSlashCommand => Some(
-                "Enables the /create environment slash command for setting up Warp Environments with custom configurations.",
-            ),
             GlobalSearch => Some("Enables global search in the left panel"),
             BlocklistMarkdownTableRendering => {
                 Some("Enables rendering markdown tables inline in AI block list responses.")

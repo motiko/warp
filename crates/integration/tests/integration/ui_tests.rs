@@ -8,7 +8,6 @@ use super::integration_tests;
 
 integration_tests! {
     test_add_many_sessions,
-    test_child_pill_after_reopening_closed_parent_tab,
     test_ctrl_tab_session_switching,
     test_hover_over_menu,
     test_shell_reinitializing,
@@ -190,11 +189,6 @@ integration_tests! {
     #[ignore]
     test_create_session_with_split_pane_while_bootstrapping,
 
-    // For some reason, disabling the `AgentMode` flag does not actually disable Agent Mode in the test
-    // run. Ignore for now.
-    #[ignore]
-    test_ask_warp_ai_keybinding_for_selected_block,
-
     test_tab_behavior_setting,
 
     test_private_public_settings_routing_with_flag_enabled,
@@ -329,7 +323,6 @@ integration_tests! {
     #[ignore = "Affected by agent_view feature flag UI changes"]
     test_selection_last_to_ai_lines,
     test_restored_ai_block_renders_mermaid_and_local_images,
-    test_cancelled_run_agents_card_renders_cancelled_state,
 
     // Middle-click-paste is only implemented for Linux right now.
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -378,9 +371,4 @@ integration_tests! {
     // Video recording test — requires real display, run manually
     #[ignore = "Manual test: requires real display for frame capture"]
     test_video_recording,
-
-    // Rich Input Ctrl+Enter submit toggle (issue #11588)
-    test_rich_input_toggle_on_enter_inserts_newline_and_ctrl_enter_submits,
-    // Regression: Enter must accept inline menus (not insert newline) when toggle=true
-    test_rich_input_enter_accepts_menu_item_when_toggle_is_true,
 }

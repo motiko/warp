@@ -22,11 +22,11 @@ use crate::ai::blocklist::controller::{BlocklistAIController, BlocklistAIControl
 use crate::ai::blocklist::{
     BlocklistAIHistoryModel, BlocklistAIPermissions, read_local_file_context,
 };
+use crate::ai::execution_context::WarpAiExecutionContext;
 use crate::ai::paths::host_native_absolute_path;
 use crate::ai::predict::generate_am_query_suggestions::{
     GenerateAMQuerySuggestionsRequest, GenerateAMQuerySuggestionsResponse, Suggestion,
 };
-use crate::ai_assistant::execution_context::WarpAiExecutionContext;
 use crate::network::NetworkStatus;
 use crate::safe_warn;
 use crate::server::server_api::ServerApiProvider;
@@ -217,19 +217,6 @@ impl PassiveSuggestionsModel {
         }
 
         self.abort_pending_requests(ctx);
-
-        // Startup commands run while bootstrapping an Oz cloud environment, so we skip
-        // passive prompt suggestion generation for them to avoid unnecessary requests.
-        let is_oz_environment_startup_command = FeatureFlag::CloudModeSetupV2.is_enabled()
-            && self
-                .terminal_model
-                .lock()
-                .block_list()
-                .block_at(block_completed.index)
-                .is_some_and(|block| block.is_oz_environment_startup_command());
-        if is_oz_environment_startup_command {
-            return;
-        }
 
         if should_generate_unit_test_suggestion(block_completed, &self.terminal_model, ctx) {
             self.generate_unit_test_suggestion(block_completed.clone(), ctx);

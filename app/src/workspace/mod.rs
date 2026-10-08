@@ -59,9 +59,8 @@ pub use toast_stack::{ToastStack, ToastStackEvent};
 
 use crate::workspace::view::{
     LEFT_PANEL_GLOBAL_SEARCH_BINDING_NAME, LEFT_PANEL_PROJECT_EXPLORER_BINDING_NAME,
-    NEW_AGENT_TAB_BINDING_NAME, NEW_AMBIENT_AGENT_TAB_BINDING_NAME, NEW_FILE_BINDING_NAME,
-    NEW_TAB_BINDING_NAME, NEW_TERMINAL_TAB_BINDING_NAME, NEW_WINDOW_BINDING_NAME,
-    OPEN_GLOBAL_SEARCH_BINDING_NAME, TOGGLE_NOTIFICATION_MAILBOX_BINDING_NAME,
+    NEW_AGENT_TAB_BINDING_NAME, NEW_FILE_BINDING_NAME, NEW_TAB_BINDING_NAME,
+    NEW_TERMINAL_TAB_BINDING_NAME, NEW_WINDOW_BINDING_NAME, OPEN_GLOBAL_SEARCH_BINDING_NAME,
     TOGGLE_PROJECT_EXPLORER_BINDING_NAME, TOGGLE_RIGHT_PANEL_BINDING_NAME,
     TOGGLE_TAB_CONFIGS_MENU_BINDING_NAME, TOGGLE_VERTICAL_TABS_PANEL_BINDING_NAME,
 };
@@ -133,26 +132,12 @@ pub fn init(app: &mut AppContext) {
         )]);
         #[cfg(debug_assertions)]
         {
-            app.register_editable_bindings([
-                EditableBinding::new(
-                    "workspace:install_opencode_warp_plugin",
-                    "[Debug] Install OpenCode Warp plugin",
-                    WorkspaceAction::InstallOpenCodeWarpPlugin,
-                )
-                .with_context_predicate(id!("Workspace")),
-                EditableBinding::new(
-                    "workspace:use_local_opencode_warp_plugin",
-                    "[Debug] Use local OpenCode Warp plugin (testing only)",
-                    WorkspaceAction::UseLocalOpenCodeWarpPlugin,
-                )
-                .with_context_predicate(id!("Workspace")),
-                EditableBinding::new(
-                    "workspace:open_session_config_modal",
-                    "[Debug] Open Session Config Modal",
-                    WorkspaceAction::ShowSessionConfigModal,
-                )
-                .with_context_predicate(id!("Workspace")),
-            ]);
+            app.register_editable_bindings([EditableBinding::new(
+                "workspace:open_session_config_modal",
+                "[Debug] Open Session Config Modal",
+                WorkspaceAction::ShowSessionConfigModal,
+            )
+            .with_context_predicate(id!("Workspace"))]);
         }
     }
 
@@ -516,18 +501,6 @@ pub fn init(app: &mut AppContext) {
         .with_context_predicate(
             id!("Workspace") & id!(flags::IS_ANY_AI_ENABLED) & !id!("Workspace_PaneDragging"),
         ),
-        EditableBinding::new(
-            NEW_AMBIENT_AGENT_TAB_BINDING_NAME,
-            BindingDescription::new("New Cloud Agent Tab"),
-            WorkspaceAction::AddAmbientAgentTab,
-        )
-        .with_group(bindings::BindingGroup::WarpAi.as_str())
-        .with_context_predicate(
-            id!("Workspace") & id!(flags::IS_ANY_AI_ENABLED) & !id!("Workspace_PaneDragging"),
-        )
-        .with_enabled(|| {
-            FeatureFlag::AgentView.is_enabled() && FeatureFlag::CloudMode.is_enabled()
-        }),
         EditableBinding::new(
             "workspace:toggle_left_panel",
             BindingDescription::new("Open Left Panel"),
@@ -1002,32 +975,17 @@ pub fn init(app: &mut AppContext) {
         .with_enabled(|| ContextFlag::WarpEssentials.is_enabled())]);
     }
 
-    // We use the same binding name for the AI Assistant and block list AI to preserve custom
-    // keybindings between them.
-    app.register_editable_bindings([
-        EditableBinding::new(
-            "workspace:toggle_ai_assistant",
-            *NEW_AGENT_PANE_LABEL,
-            WorkspaceAction::NewPaneInAgentMode {
-                entrypoint: AgentModeEntrypoint::NewPaneBinding,
-            },
-        )
-        .with_enabled(|| FeatureFlag::AgentMode.is_enabled())
-        .with_context_predicate(id!("Workspace") & id!(flags::IS_ANY_AI_ENABLED))
-        .with_group(bindings::BindingGroup::WarpAi.as_str())
-        .with_custom_action(CustomAction::NewAgentModePane),
-        EditableBinding::new(
-            "workspace:toggle_ai_assistant",
-            "Toggle Warp AI",
-            WorkspaceAction::ToggleAIAssistant,
-        )
-        .with_enabled(|| !FeatureFlag::AgentMode.is_enabled())
-        .with_context_predicate(id!("Workspace") & id!(flags::IS_ANY_AI_ENABLED))
-        .with_group(bindings::BindingGroup::WarpAi.as_str())
-        // We use the same custom action as AM so that we don't have
-        // two mac menu items for AM vs Warp AI since they are mutually exclusive.
-        .with_custom_action(CustomAction::NewAgentModePane),
-    ]);
+    app.register_editable_bindings([EditableBinding::new(
+        "workspace:toggle_ai_assistant",
+        *NEW_AGENT_PANE_LABEL,
+        WorkspaceAction::NewPaneInAgentMode {
+            entrypoint: AgentModeEntrypoint::NewPaneBinding,
+        },
+    )
+    .with_enabled(|| FeatureFlag::AgentMode.is_enabled())
+    .with_context_predicate(id!("Workspace") & id!(flags::IS_ANY_AI_ENABLED))
+    .with_group(bindings::BindingGroup::WarpAi.as_str())
+    .with_custom_action(CustomAction::NewAgentModePane)]);
 
     app.register_editable_bindings([]);
 
@@ -1091,41 +1049,8 @@ pub fn init(app: &mut AppContext) {
         .with_group(bindings::BindingGroup::WarpAi.as_str()),
     ]);
 
-    app.register_editable_bindings([EditableBinding::new(
-        "workspace:jump_to_latest_toast",
-        "Jump to latest agent task",
-        WorkspaceAction::JumpToLatestToast,
-    )
-    .with_enabled(|| FeatureFlag::AgentMode.is_enabled())
-    .with_context_predicate(id!("Workspace") & id!(flags::IS_ANY_AI_ENABLED))
-    .with_mac_key_binding("cmd-shift-G")
-    .with_linux_or_windows_key_binding("ctrl-shift-G")
-    .with_group(bindings::BindingGroup::WarpAi.as_str())]);
-
-    app.register_editable_bindings([EditableBinding::new(
-        TOGGLE_NOTIFICATION_MAILBOX_BINDING_NAME,
-        "Toggle notification mailbox",
-        WorkspaceAction::ToggleNotificationMailbox { select_first: true },
-    )
-    .with_enabled(|| FeatureFlag::HOANotifications.is_enabled())
-    .with_context_predicate(id!("Workspace"))
-    .with_mac_key_binding("cmd-shift-U")
-    .with_linux_or_windows_key_binding("ctrl-shift-U")
-    .with_group(bindings::BindingGroup::WarpAi.as_str())]);
-
     add_open_setting_pages_as_editable_binding(app);
     add_overflow_menu_items_as_editable_binding(app);
-
-    app.register_editable_bindings([EditableBinding::new(
-        "workspace:toggle_agent_management_view",
-        "Toggle the agent management view",
-        WorkspaceAction::ToggleAgentManagementView,
-    )
-    .with_enabled(|| FeatureFlag::AgentManagementView.is_enabled())
-    .with_context_predicate(id!("Workspace") & id!(flags::IS_ANY_AI_ENABLED))
-    .with_mac_key_binding("cmd-shift-M")
-    .with_linux_or_windows_key_binding("ctrl-shift-M")
-    .with_group(bindings::BindingGroup::WarpAi.as_str())]);
 }
 
 fn add_open_setting_pages_as_editable_binding(app: &mut AppContext) {

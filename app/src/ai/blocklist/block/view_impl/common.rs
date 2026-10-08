@@ -3678,7 +3678,6 @@ pub(crate) fn user_query_mode_prefix_highlight_len(mode: UserQueryMode) -> Optio
     match mode {
         UserQueryMode::Normal => None,
         UserQueryMode::Plan => Some(commands::PLAN.name.len()),
-        UserQueryMode::Orchestrate => Some(commands::ORCHESTRATE.name.len()),
     }
 }
 
@@ -3694,9 +3693,7 @@ pub(super) fn query_prefix_highlight_len(
         return Some(prefix_len);
     }
 
-    if displayed_query.starts_with(commands::CREATE_ENVIRONMENT.name) {
-        Some(commands::CREATE_ENVIRONMENT.name.len())
-    } else if displayed_query.starts_with(commands::AGENT.name) {
+    if displayed_query.starts_with(commands::AGENT.name) {
         Some(commands::AGENT.name.len())
     } else if displayed_query.starts_with(commands::NEW.name) {
         Some(commands::NEW.name.len())
@@ -3707,7 +3704,6 @@ pub(super) fn query_prefix_highlight_len(
             | AIAgentInput::AutoCodeDiffQuery { .. }
             | AIAgentInput::ResumeConversation { .. }
             | AIAgentInput::InitProjectRules { .. }
-            | AIAgentInput::CreateEnvironment { .. }
             | AIAgentInput::TriggerPassiveSuggestion { .. }
             | AIAgentInput::CreateNewProject { .. }
             | AIAgentInput::CloneRepository { .. }
@@ -3718,7 +3714,6 @@ pub(super) fn query_prefix_highlight_len(
             | AIAgentInput::MessagesReceivedFromAgents { .. }
             | AIAgentInput::EventsFromAgents { .. }
             | AIAgentInput::PassiveSuggestionResult { .. }
-            | AIAgentInput::OrchestrationConfigUpdate { .. }
             | AIAgentInput::AgentWake => None,
         }
     }

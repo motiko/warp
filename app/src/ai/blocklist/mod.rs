@@ -2,22 +2,14 @@
 mod action_model;
 pub mod agent_view;
 pub mod block;
-mod child_agent_launch;
 pub mod code_block;
 mod context_model;
 mod controller;
 pub(crate) mod conversation_selection;
 pub(crate) mod diff_storage;
 pub(crate) mod diff_types;
-pub(crate) mod handoff;
 
-pub(crate) mod local_agent_task_sync_model;
-pub(crate) mod orchestration_child_tracker;
-pub(crate) mod orchestration_event_streamer;
-pub(crate) mod orchestration_events;
-pub(crate) mod orchestration_topology;
 mod passive_suggestions;
-pub(crate) mod pending_cli_harness_prompt_queue;
 pub(crate) mod queued_query;
 pub(super) use controller::RequestInput;
 pub mod history_model;
@@ -31,7 +23,6 @@ pub mod suggested_agent_mode_workflow_modal;
 pub mod suggested_rule_modal;
 mod suggestion_chip_view;
 pub mod summarization_cancel_dialog;
-pub(crate) mod telemetry;
 pub mod usage;
 
 pub(crate) mod codebase_index_speedbump_banner;
@@ -44,21 +35,10 @@ pub use action_model::{
 };
 #[cfg_attr(target_family = "wasm", allow(unused_imports))]
 pub(crate) use action_model::{ReadFileContextResult, read_local_file_context};
-#[cfg_attr(target_family = "wasm", allow(unused_imports))]
-pub use action_model::{
-    StartAgentExecutor, StartAgentExecutorEvent, StartAgentRequest, StartAgentRequestId,
-    TEAM_CHANGED_DURING_CHILD_LAUNCH_ERROR,
-};
 #[cfg(any(test, feature = "integration_tests"))]
 pub(crate) use block::model::testing::FakeAIBlockModel;
 pub(crate) use block::{AIBlock, AIBlockEvent, RequestedEditResolution, init, model};
 pub use block::{keyboard_navigable_buttons, toggleable_items};
-pub use child_agent_launch::inherit_child_agent_settings;
-#[cfg(not(target_family = "wasm"))]
-pub use child_agent_launch::{
-    apply_child_agent_model_override, finish_local_oz_child_conversation,
-    prepare_local_oz_child_launch,
-};
 pub(crate) use context_model::block_context_from_terminal_model;
 pub use context_model::{
     AttachmentType, BlocklistAIContextEvent, BlocklistAIContextModel, PendingAttachment,
@@ -106,10 +86,9 @@ pub(crate) use queued_query::{
 pub use queued_query::{QueuedQueryEvent, QueuedQueryModel};
 pub use suggestion_chip_view::*;
 pub(crate) use view_util::{
-    ATTACH_AS_AGENT_MODE_CONTEXT_TEXT, CLAUDE_ORANGE, NEW_AGENT_PANE_LABEL, ai_brand_color,
-    ai_indicator_height, format_credits, get_ai_block_overflow_menu_element_position_id,
-    get_attached_blocks_chip_element_position_id, render_ai_agent_mode_icon,
-    render_ai_follow_up_icon,
+    ATTACH_AS_AGENT_MODE_CONTEXT_TEXT, NEW_AGENT_PANE_LABEL, ai_brand_color, ai_indicator_height,
+    get_ai_block_overflow_menu_element_position_id, get_attached_blocks_chip_element_position_id,
+    render_ai_agent_mode_icon, render_ai_follow_up_icon,
 };
 
 pub use crate::ai::blocklist::block::{AIBlockResponseRating, TextLocation, secret_redaction};

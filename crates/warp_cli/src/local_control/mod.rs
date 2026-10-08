@@ -15,9 +15,8 @@ use commands::{
     run_tab_command, run_theme_command, run_window_command,
 };
 use completions::generate_completions_to_stdout;
+pub use output::OutputFormat;
 use output::write_control_error;
-
-use crate::agent::OutputFormat;
 
 /// Hidden flag used by the channel-specific Warp app binary to enter `warpctrl` mode.
 pub const CONTROL_MODE_FLAG: &str = "--warpctrl";
@@ -409,10 +408,6 @@ pub enum SurfaceCommand {
     #[command(subcommand)]
     ResourceCenter(SurfaceToggleCommand),
 
-    /// Toggle the AI assistant.
-    #[command(subcommand)]
-    AiAssistant(SurfaceToggleCommand),
-
     /// Open or toggle code review.
     #[command(subcommand)]
     CodeReview(SurfaceOpenToggleCommand),
@@ -436,10 +431,6 @@ pub enum SurfaceCommand {
     /// Open or toggle vertical tabs.
     #[command(subcommand)]
     VerticalTabs(SurfaceOpenToggleCommand),
-
-    /// Open agent management.
-    #[command(subcommand)]
-    AgentManagement(SurfaceOpenCommand),
 }
 
 #[derive(Debug, Clone, Subcommand)]

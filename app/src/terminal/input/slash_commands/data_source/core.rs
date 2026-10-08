@@ -14,7 +14,6 @@ use warp_util::local_or_remote_path::LocalOrRemotePath;
 use warpui::fonts::FamilyId;
 use warpui::{AppContext, Entity, EntityId, ModelContext, ModelHandle, SingletonEntity};
 
-use crate::ai::agent_conversations_model::{AgentConversationsModel, AgentConversationsModelEvent};
 use crate::ai::blocklist::block::cli_controller::{CLISubagentController, CLISubagentEvent};
 use crate::ai::blocklist::{BlocklistAIHistoryEvent, BlocklistAIHistoryModel};
 use crate::ai::skills::{SkillDescriptor, SkillManager};
@@ -23,9 +22,6 @@ use crate::search::slash_command_menu::static_commands::{Availability, commands}
 use crate::search::slash_command_menu::{SlashCommandId, StaticCommand};
 use crate::settings::{
     AISettings, AISettingsChangedEvent, PrivacySettings, PrivacySettingsChangedEvent,
-};
-use crate::terminal::cli_agent_sessions::{
-    CLIAgentInputState, CLIAgentSessionsModel, CLIAgentSessionsModelEvent,
 };
 use crate::terminal::input::slash_command_model::{
     DetectedCommand, DetectedSkillCommand, ParsedSlashCommandInput,
@@ -45,11 +41,6 @@ pub struct UpdatedActiveCommands;
 /// Multiplier to ensure static commands always appear at the top of the match results.
 const SCORE_MULTIPLIER: OrderedFloat<f64> = OrderedFloat(1000.0);
 
-/// Slash commands that are available in CLI agent rich input mode.
-/// Add command names here to make them accessible when composing prompts
-/// for a running CLI agent (Claude Code, Codex, etc.).
-const CLI_AGENT_INPUT_ALLOWED_COMMANDS: &[&str] = &["/prompts", "/skills"];
-
 fn split_command_and_argument(buffer: &str) -> (&str, Option<&str>) {
     buffer
         .split_once(' ')
@@ -58,21 +49,11 @@ fn split_command_and_argument(buffer: &str) -> (&str, Option<&str>) {
         })
 }
 
-/// Command availability gates that do not depend on view concepts such as cloud mode or the
-/// agent view; they are computed once per recompute.
-pub struct CommonCommandGates {
-    is_orchestration_enabled: bool,
-    is_cloud_handoff_enabled: bool,
-    has_default_host: bool,
-    is_cli_agent_input: bool,
-}
-
 /// Subscribe a concrete data source to dependencies that affect command availability. The
 /// callback remains concrete, so this helper does not require a surface trait.
 pub(super) fn subscribe_to_shared_dependencies<T>(
     active_session: &ModelHandle<ActiveSession>,
     cli_subagent_controller: &ModelHandle<CLISubagentController>,
-    terminal_view_id: EntityId,
     recompute_active_commands: fn(&mut T, &mut ModelContext<T>),
     ctx: &mut ModelContext<T>,
 ) where
@@ -95,7 +76,6 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
         if matches!(
             event,
             AISettingsChangedEvent::IsAnyAIEnabled { .. }
-                | AISettingsChangedEvent::ShouldForceDisableCloudHandoff { .. }
                 | AISettingsChangedEvent::AIAutoDetectionEnabled { .. }
         ) {
             recompute_active_commands(me, ctx);
@@ -118,21 +98,8 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
             recompute_active_commands(me, ctx);
         }
     });
-    ctx.subscribe_to_model(
-        &CLIAgentSessionsModel::handle(ctx),
-        move |me, _, event, ctx| {
-            if let CLIAgentSessionsModelEvent::InputSessionChanged {
-                terminal_view_id: event_terminal_view_id,
-                ..
-            } = event
-                && *event_terminal_view_id == terminal_view_id
-            {
-                recompute_active_commands(me, ctx);
-            }
-        },
-    );
     // Recompute when the active conversation switches so commands gated on the active
-    // conversation's task (e.g. /continue-locally) update on navigation.
+    // conversation update on navigation.
     ctx.subscribe_to_model(
         &BlocklistAIHistoryModel::handle(ctx),
         move |me, _, event, ctx| {
@@ -145,27 +112,13 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
             }
         },
     );
-    // Recompute when task data is updated so commands gated on a conversation's task
-    // harness (e.g. /continue-locally) appear once the task fetch resolves.
-    ctx.subscribe_to_model(
-        &AgentConversationsModel::handle(ctx),
-        move |me, _, event, ctx| {
-            if matches!(
-                event,
-                AgentConversationsModelEvent::TasksUpdated
-                    | AgentConversationsModelEvent::NewTasksReceived
-            ) {
-                recompute_active_commands(me, ctx);
-            }
-        },
-    );
 }
 
 /// State shared by slash command data sources.
 ///
 /// Surface-neutral behavior is provided by [`SlashCommandDataSource`]. Surface-specific behavior
-/// such as agent view, cloud mode, compact rendering, recomputation, and event emission lives on
-/// the wrapping data source types.
+/// such as agent view, compact rendering, recomputation, and event emission lives on the wrapping
+/// data source types.
 pub struct SlashCommandDataSourceState {
     active_session: ModelHandle<ActiveSession>,
     cli_subagent_controller: ModelHandle<CLISubagentController>,
@@ -402,52 +355,6 @@ pub trait SlashCommandDataSource {
         false
     }
 
-    /// Whether a command should be shown given the availability set and the shared gates.
-    fn command_passes_common_gates(
-        &self,
-        command: &StaticCommand,
-        availability: Availability,
-        gates: &CommonCommandGates,
-    ) -> bool {
-        if !command.is_active(availability) {
-            return false;
-        }
-        if command.name == commands::ORCHESTRATE_NAME && !gates.is_orchestration_enabled {
-            return false;
-        }
-        if command.name == commands::MOVE_TO_CLOUD.name && !gates.is_cloud_handoff_enabled {
-            return false;
-        }
-        // /host is only useful when a default self-hosted host is configured.
-        if command.name == commands::HOST.name && !gates.has_default_host {
-            return false;
-        }
-        // When CLI agent input is open, restrict to the explicit allowlist.
-        if gates.is_cli_agent_input && !CLI_AGENT_INPUT_ALLOWED_COMMANDS.contains(&command.name) {
-            return false;
-        }
-        true
-    }
-
-    fn common_command_gates(&self, ctx: &AppContext) -> CommonCommandGates {
-        let ai_settings = AISettings::as_ref(ctx);
-        // Hide /host when no default host is configured (env var or the window's own team
-        // setting), matching the host the command itself resolves when it runs.
-        let has_default_host = std::env::var("WARP_CLOUD_MODE_DEFAULT_HOST")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .is_some()
-            || UserWorkspaces::as_ref(ctx)
-                .default_host_slug(&self.team_context(ctx))
-                .is_some();
-        CommonCommandGates {
-            is_orchestration_enabled: ai_settings.is_orchestration_enabled(ctx),
-            is_cloud_handoff_enabled: ai_settings.is_cloud_handoff_enabled(ctx),
-            has_default_host,
-            is_cli_agent_input: self.is_cli_agent_input_open(ctx),
-        }
-    }
-
     /// Whether there is an active conversation, given whether the agent view is active.
     /// There is always an active conversation in the agent view.
     fn has_active_conversation(&self, is_agent_view_active: bool, ctx: &AppContext) -> bool {
@@ -455,23 +362,6 @@ pub trait SlashCommandDataSource {
             || crate::ai::blocklist::BlocklistAIHistoryModel::as_ref(ctx)
                 .active_conversation(self.terminal_view_id())
                 .is_some()
-    }
-
-    /// Returns `true` if the CLI agent rich input is currently open for this terminal.
-    fn is_cli_agent_input_open(&self, ctx: &AppContext) -> bool {
-        CLIAgentSessionsModel::as_ref(ctx).is_input_open(self.terminal_view_id())
-    }
-
-    /// Returns the supported skill providers for the active CLI agent, or `None` if
-    /// CLI agent input is not open (meaning no filtering should be applied).
-    fn active_cli_agent_providers(
-        &self,
-        ctx: &AppContext,
-    ) -> Option<&'static [ai::skills::SkillProvider]> {
-        CLIAgentSessionsModel::as_ref(ctx)
-            .session(self.terminal_view_id())
-            .filter(|s| matches!(s.input_state, CLIAgentInputState::Open { .. }))
-            .map(|s| s.agent.supported_skill_providers())
     }
 
     /// Fuzzy-match the active commands against `query_text`. Returns scored [`InlineItem`]s with
@@ -519,28 +409,14 @@ pub trait SlashCommandDataSource {
             return Vec::new();
         }
 
-        let cli_agent_providers = self.active_cli_agent_providers(app);
         let active_session = self.active_session().as_ref(app);
         let cwd_path = active_session.current_working_directory_location(app);
         let skills = SkillManager::handle(app)
             .as_ref(app)
             .get_skills_for_working_directory(cwd_path.as_ref(), app);
 
-        let skill_manager = SkillManager::as_ref(app);
         let mut results = Vec::new();
-        for mut skill in skills {
-            // In CLI agent input mode, only show skills that exist in a supported
-            // provider folder. We check all paths (not just the deduplicated
-            // provider) because deduplication may have picked a higher-priority
-            // provider even when the skill also exists in the CLI agent's folder.
-            if let Some(providers) = &cli_agent_providers {
-                if !skill_manager.skill_exists_for_any_provider(&skill, providers) {
-                    continue;
-                }
-                // Re-map the provider to the best supported one so the icon
-                // reflects the active CLI agent's native provider.
-                skill.provider = skill_manager.best_supported_provider(&skill, providers);
-            }
+        for skill in skills {
             let Some(fuzzy_result) = SlashCommandFuzzyMatchResult::try_match(
                 query_text,
                 &skill.name,
@@ -577,7 +453,6 @@ pub trait SlashCommandDataSource {
         use itertools::Itertools;
 
         let prioritized_commands = vec![
-            &*commands::CREATE_ENVIRONMENT,
             &*commands::EDIT,
             &commands::CONVERSATIONS,
             &commands::PROMPTS,
@@ -671,26 +546,6 @@ impl InlineItem {
         }
     }
 
-    pub(crate) fn from_saved_prompt(
-        saved_prompt: &crate::workflows::CloudWorkflow,
-        app: &AppContext,
-    ) -> Self {
-        let appearance = Appearance::as_ref(app);
-        Self {
-            action: AcceptSlashCommandOrSavedPrompt::SavedPrompt {
-                id: saved_prompt.id,
-            },
-            icon_path: Some("bundled/svg/prompt.svg"),
-            name: saved_prompt.model().data.name().to_owned(),
-            description: None,
-            font_family: appearance.ui_font_family(),
-            name_match_result: None,
-            description_match_result: None,
-            score: OrderedFloat(f64::MIN),
-            compact_layout: false,
-        }
-    }
-
     pub(super) fn from_skill(skill: &SkillDescriptor, app: &AppContext) -> Self {
         let appearance = Appearance::handle(app).as_ref(app);
         // Use icon_override if set (e.g. Figma skills), otherwise derive from provider.
@@ -736,11 +591,6 @@ impl InlineItem {
 
     fn with_score(mut self, score: OrderedFloat<f64>) -> Self {
         self.score = score;
-        self
-    }
-
-    pub(crate) fn with_compact_layout(mut self, compact: bool) -> Self {
-        self.compact_layout = compact;
         self
     }
 }

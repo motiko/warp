@@ -781,7 +781,7 @@ fn update_cost_and_usage_resolves_custom_endpoint_alias_for_footer_usage() {
         });
         app.add_singleton_model(LLMPreferences::new);
 
-        let mut conversation = AIConversation::new(false, false);
+        let mut conversation = AIConversation::new(false);
         app.read(|ctx| {
             conversation
                 .update_cost_and_usage_for_request(
@@ -817,7 +817,7 @@ fn update_cost_and_usage_uses_fallback_label_for_unknown_custom_endpoint() {
         initialize_custom_endpoint_usage_test_app(&mut app);
         app.add_singleton_model(LLMPreferences::new);
 
-        let mut conversation = AIConversation::new(false, false);
+        let mut conversation = AIConversation::new(false);
         app.read(|ctx| {
             conversation
                 .update_cost_and_usage_for_request(
@@ -890,7 +890,7 @@ fn usage_totals_reads_gui_credits_and_accumulates_provider_cost() {
         initialize_custom_endpoint_usage_test_app(&mut app);
         app.add_singleton_model(LLMPreferences::new);
 
-        let mut conversation = AIConversation::new(false, false);
+        let mut conversation = AIConversation::new(false);
         assert_eq!(
             conversation.usage_totals(),
             ConversationUsageTotals {
@@ -947,7 +947,7 @@ fn usage_totals_reads_gui_credits_and_accumulates_provider_cost() {
 /// rounded cent). Both figures must read from charged usage.
 #[test]
 fn usage_totals_dollar_total_matches_last_block_when_provider_cost_diverges() {
-    let mut conversation = AIConversation::new(false, false);
+    let mut conversation = AIConversation::new(false);
 
     let charged_usage = ChargedUsageTotals {
         input_cost_in_cents: 4.0,
@@ -999,7 +999,7 @@ fn update_cost_and_usage_resets_stale_charged_usage_for_last_block_on_new_user_t
         initialize_custom_endpoint_usage_test_app(&mut app);
         app.add_singleton_model(LLMPreferences::new);
 
-        let mut conversation = AIConversation::new(false, false);
+        let mut conversation = AIConversation::new(false);
         // Simulate a stale last-block breakdown left over from a previous
         // response, as would happen if this turn's request carries no
         // `request_charges` (e.g. the flag is off for it).
@@ -1288,13 +1288,6 @@ fn test_new_restored_prefers_parentless_task_with_messages_over_empty_stub() {
 }
 
 #[test]
-fn cli_agent_transcript_vehicle_is_excluded_from_navigation() {
-    let conversation = AIConversation::new(false, true);
-
-    assert!(conversation.should_exclude_from_navigation());
-}
-
-#[test]
 fn restored_conversation_defaults_unknown_persisted_autoexecute_override() {
     let _flag = FeatureFlag::RememberFastForwardState.override_enabled(true);
     let conversation_data: AgentConversationData = serde_json::from_str(
@@ -1352,7 +1345,7 @@ fn restored_conversation_keeps_use_warp_credits_instead_of_chatgpt() {
     let conversation = restored_conversation(Some(conversation_data));
 
     assert!(conversation.use_warp_credits_instead_of_chatgpt());
-    assert!(!AIConversation::new(false, false).use_warp_credits_instead_of_chatgpt());
+    assert!(!AIConversation::new(false).use_warp_credits_instead_of_chatgpt());
 }
 
 #[test]

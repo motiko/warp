@@ -147,7 +147,6 @@ pub struct LeftPanelView {
     active_pane_group: Option<WeakViewHandle<PaneGroup>>,
     #[cfg_attr(not(feature = "local_fs"), allow(dead_code))]
     working_directories_model: ModelHandle<WorkingDirectoriesModel>,
-    is_agent_management_view_open: bool,
     panel_position: super::PanelPosition,
 }
 
@@ -282,17 +281,11 @@ impl LeftPanelView {
             toolbelt_buttons,
             active_pane_group: None,
             working_directories_model,
-            is_agent_management_view_open: false,
             panel_position: super::PanelPosition::Left,
         };
         view.update_button_active_states();
 
         view
-    }
-
-    pub fn set_agent_management_view_open(&mut self, is_open: bool, ctx: &mut ViewContext<Self>) {
-        self.is_agent_management_view_open = is_open;
-        ctx.notify();
     }
 
     pub fn set_panel_position(
@@ -866,7 +859,6 @@ impl LeftPanelView {
                         TelemetryEvent::FileTreeToggled {
                             source: FileTreeSource::ForceOpened,
                             is_code_mode_v2: true,
-                            cli_agent: None,
                         },
                         ctx
                     );
@@ -875,7 +867,6 @@ impl LeftPanelView {
                         TelemetryEvent::FileTreeToggled {
                             source: FileTreeSource::LeftPanelToolbelt,
                             is_code_mode_v2: true,
-                            cli_agent: None,
                         },
                         ctx
                     );

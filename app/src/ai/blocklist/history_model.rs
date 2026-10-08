@@ -12,7 +12,6 @@ use diesel::SqliteConnection;
 use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use warp_cli::agent::Harness;
 use warp_core::features::FeatureFlag;
 use warp_multi_agent_api::RequestCharges;
 use warp_multi_agent_api::client_action::{Action, StartNewConversation};
@@ -53,8 +52,8 @@ use crate::ui_components::icons::Icon;
 
 mod conversation_loader;
 pub use conversation_loader::{
-    CLIAgentConversation, CloudConversationData,
-    convert_persisted_conversation_to_ai_conversation_with_metadata, load_conversation_from_server,
+    CloudConversationData, convert_persisted_conversation_to_ai_conversation_with_metadata,
+    load_conversation_from_server,
 };
 use warp_errors::report_error;
 
@@ -558,7 +557,6 @@ impl BlocklistAIHistoryModel {
         terminal_surface_id: EntityId,
         name: String,
         parent_conversation_id: AIConversationId,
-        orchestration_harness: Option<Harness>,
         is_remote: bool,
         ctx: &mut ModelContext<Self>,
     ) -> AIConversationId {
@@ -574,7 +572,7 @@ impl BlocklistAIHistoryModel {
 
         let auto_execute = true; // Child auto-executes by default.
         let conversation_id =
-            self.start_new_conversation(terminal_surface_id, auto_execute, false, false, ctx);
+            self.start_new_conversation(terminal_surface_id, auto_execute, false, ctx);
         {
             let conversation = self
                 .conversation_mut(&conversation_id)
@@ -583,9 +581,6 @@ impl BlocklistAIHistoryModel {
                 conversation.set_parent_agent_id(id);
             }
             conversation.set_agent_name(name);
-            if let Some(harness) = orchestration_harness {
-                conversation.set_orchestration_harness(harness);
-            }
             if is_remote {
                 conversation.mark_as_remote_child();
             }
@@ -605,10 +600,9 @@ impl BlocklistAIHistoryModel {
         terminal_surface_id: EntityId,
         parent_conversation_id: AIConversationId,
         run_id: String,
-        task_id: crate::ai::ambient_agents::AmbientAgentTaskId,
+        task_id: ai_types::AmbientAgentTaskId,
         name: String,
         fallback_title: String,
-        orchestration_harness: Option<Harness>,
         ctx: &mut ModelContext<Self>,
     ) -> AIConversationId {
         if let Some(conversation_id) = self.conversation_id_for_agent_id(&run_id) {
@@ -630,7 +624,6 @@ impl BlocklistAIHistoryModel {
             terminal_surface_id,
             name,
             parent_conversation_id,
-            orchestration_harness,
             true,
             ctx,
         );
@@ -1383,11 +1376,9 @@ impl BlocklistAIHistoryModel {
         terminal_surface_id: EntityId,
         is_autoexecute_override: bool,
         is_viewing_shared_session: bool,
-        is_cli_agent_transcript: bool,
         ctx: &mut ModelContext<Self>,
     ) -> AIConversationId {
-        let mut new_conversation =
-            AIConversation::new(is_viewing_shared_session, is_cli_agent_transcript);
+        let mut new_conversation = AIConversation::new(is_viewing_shared_session);
         if is_autoexecute_override {
             new_conversation.toggle_autoexecute_override();
         }
@@ -1528,7 +1519,7 @@ impl BlocklistAIHistoryModel {
         &mut self,
         conversation_id: AIConversationId,
         run_id: String,
-        task_id: Option<crate::ai::ambient_agents::AmbientAgentTaskId>,
+        task_id: Option<ai_types::AmbientAgentTaskId>,
         terminal_surface_id: EntityId,
         ctx: &mut ModelContext<Self>,
     ) {
@@ -1658,7 +1649,7 @@ impl BlocklistAIHistoryModel {
         );
 
         let new_conversation_id =
-            self.start_new_conversation(terminal_surface_id, false, false, false, ctx);
+            self.start_new_conversation(terminal_surface_id, false, false, ctx);
         for exchange_id in exchange_ids_to_transfer {
             let old_conversation = self
                 .conversations_by_id
@@ -3251,21 +3242,6 @@ pub enum BlocklistAIHistoryEvent {
         new_terminal_surface_id: EntityId,
     },
 
-    /// Links an executor-minted request to a freshly-created
-    /// conversation.
-    NewConversationRequestComplete {
-        request_id: crate::ai::blocklist::StartAgentRequestId,
-        conversation_id: AIConversationId,
-    },
-
-    /// Emitted when a conversation's orchestration config is updated
-    /// (live wire snapshot, user edit, or restore-hydration).
-    /// Consumers that perform UI side effects should gate on `!from_restore`.
-    OrchestrationConfigUpdated {
-        conversation_id: AIConversationId,
-        from_restore: bool,
-    },
-
     /// Emitted when a conversation's `conversation_usage_metadata` is updated
     /// (for example after a `StreamFinished` event). Subscribers that derive
     /// data from cross-conversation usage — e.g. the orchestration credit
@@ -3373,12 +3349,6 @@ impl BlocklistAIHistoryEvent {
                 terminal_surface_id,
                 ..
             } => *terminal_surface_id,
-            // NewConversationRequestComplete is executor-scoped and has no
-            // terminal_surface_id.
-            BlocklistAIHistoryEvent::NewConversationRequestComplete { .. } => None,
-            // OrchestrationConfigUpdated is conversation-scoped and has no
-            // terminal_surface_id.
-            BlocklistAIHistoryEvent::OrchestrationConfigUpdated { .. } => None,
             // ConversationUsageMetadataUpdated is conversation-scoped and
             // has no terminal_surface_id. Cross-pane consumers (e.g. the
             // orchestrator footer reading descendant credits) can't be
@@ -3390,20 +3360,7 @@ impl BlocklistAIHistoryEvent {
     }
 }
 
-impl BlocklistAIHistoryModel {
-    /// Emits [`BlocklistAIHistoryEvent::NewConversationRequestComplete`].
-    pub fn record_new_conversation_request_complete(
-        &mut self,
-        request_id: crate::ai::blocklist::StartAgentRequestId,
-        conversation_id: AIConversationId,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        ctx.emit(BlocklistAIHistoryEvent::NewConversationRequestComplete {
-            request_id,
-            conversation_id,
-        });
-    }
-}
+impl BlocklistAIHistoryModel {}
 
 impl Entity for BlocklistAIHistoryModel {
     type Event = BlocklistAIHistoryEvent;

@@ -11,7 +11,7 @@ use std::time::{Duration, SystemTime};
 use ai::agent::action_result::{
     AskUserQuestionAnswerItem, AskUserQuestionResult, FetchConversationResult, ReadSkillResult,
     RecordingStarted, RecordingStopped, RequestComputerUseResult, ScreenshotSource,
-    SendMessageToAgentResult, StartRecordingResult, StopRecordingResult, UseComputerResult,
+    StartRecordingResult, StopRecordingResult, UseComputerResult,
 };
 use ai::skills::{ParsedSkill, SkillPathOrigin};
 use chrono::{DateTime, Local, TimeZone};
@@ -45,8 +45,8 @@ use crate::ai::agent::{
 };
 use crate::ai::block_context::BlockContext;
 use crate::ai::document::ai_document_model::{AIDocumentId, AIDocumentVersion};
+use crate::ai::execution_context::{WarpAiExecutionContext, WarpAiOsContext};
 use crate::ai::llms::LLMId;
-use crate::ai_assistant::execution_context::{WarpAiExecutionContext, WarpAiOsContext};
 use crate::terminal::model::block::BlockId;
 use crate::terminal::model::terminal_model::BlockIndex;
 
@@ -1570,106 +1570,6 @@ pub(crate) fn convert_tool_call_result_to_input(
                 context,
             })
         }
-        Some(ToolCallResultType::SendMessageToAgent(result)) => {
-            let send_message_result = match &result.result {
-                Some(api::send_message_to_agent_result::Result::Success(success)) => {
-                    SendMessageToAgentResult::Success {
-                        message_id: success.message_id.clone(),
-                    }
-                }
-                Some(api::send_message_to_agent_result::Result::Error(error)) => {
-                    SendMessageToAgentResult::Error(error.message.clone())
-                }
-                None => SendMessageToAgentResult::Cancelled,
-            };
-
-            Some(AIAgentInput::ActionResult {
-                result: AIAgentActionResult {
-                    id: tool_call_id.into(),
-                    task_id: task_id.clone(),
-                    result: AIAgentActionResultType::SendMessageToAgent(send_message_result),
-                },
-                context,
-            })
-        }
-        Some(ToolCallResultType::RunAgentsResult(result)) => {
-            use ai::agent::action_result::{
-                RunAgentsAgentOutcome, RunAgentsAgentOutcomeKind, RunAgentsLaunchedExecutionMode,
-                RunAgentsResult,
-            };
-            let run_agents_result = match &result.outcome {
-                Some(api::run_agents_result::Outcome::Launched(launched)) => {
-                    #[allow(deprecated)]
-                    let execution_mode = match &launched.resolved_execution_mode {
-                        Some(api::run_agents_result::launched::ResolvedExecutionMode::Remote(
-                            remote,
-                        )) => RunAgentsLaunchedExecutionMode::Remote {
-                            environment_id: remote.environment_id.clone(),
-                            worker_host: remote.worker_host.clone(),
-                            computer_use_enabled: remote.computer_use_enabled,
-                            runner_id: remote.runner_id.clone(),
-                        },
-                        Some(api::run_agents_result::launched::ResolvedExecutionMode::Local(_))
-                        | None => RunAgentsLaunchedExecutionMode::Local,
-                    };
-                    let agents = launched
-                        .agents
-                        .iter()
-                        .map(|outcome| RunAgentsAgentOutcome {
-                            name: outcome.name.clone(),
-                            // Proto field is model_id (renamed from resolved_model_id).
-                            resolved_model_id: outcome.model_id.clone(),
-                            kind: match &outcome.result {
-                                Some(api::run_agents_result::agent_outcome::Result::Launched(
-                                    launched_agent,
-                                )) => RunAgentsAgentOutcomeKind::Launched {
-                                    agent_id: launched_agent.agent_id.clone(),
-                                },
-                                Some(api::run_agents_result::agent_outcome::Result::Failed(
-                                    failed,
-                                )) => RunAgentsAgentOutcomeKind::Failed {
-                                    error: failed.error.clone(),
-                                },
-                                None => RunAgentsAgentOutcomeKind::Failed {
-                                    error: String::new(),
-                                },
-                            },
-                        })
-                        .collect();
-                    #[allow(deprecated)]
-                    let model_id = launched.resolved_model_id.clone();
-                    #[allow(deprecated)]
-                    let harness_type =
-                        crate::ai::agent::api::convert_from::convert_run_agents_harness(
-                            launched.resolved_harness.as_ref(),
-                        )
-                        .unwrap_or_default();
-                    RunAgentsResult::Launched {
-                        model_id,
-                        harness_type,
-                        execution_mode,
-                        agents,
-                    }
-                }
-                Some(api::run_agents_result::Outcome::Denied(denied)) => RunAgentsResult::Denied {
-                    reason: denied.reason.clone(),
-                },
-                Some(api::run_agents_result::Outcome::Failure(failure)) => {
-                    RunAgentsResult::Failure {
-                        error: failure.error.clone(),
-                    }
-                }
-                None => RunAgentsResult::Cancelled,
-            };
-            Some(AIAgentInput::ActionResult {
-                result: AIAgentActionResult {
-                    id: tool_call_id.into(),
-                    task_id: task_id.clone(),
-                    result: AIAgentActionResultType::RunAgents(run_agents_result),
-                },
-                context,
-            })
-        }
         Some(ToolCallResultType::StartRecording(result)) => {
             let start_result = match &result.result {
                 Some(api::start_recording_result::Result::Success(success)) => {
@@ -1749,7 +1649,10 @@ pub(crate) fn convert_tool_call_result_to_input(
             log::warn!("No result present for tool call ID: {tool_call_id}");
             None
         }
-        Some(ToolCallResultType::WaitForEvents(_)) => None,
+        // Multi-agent orchestration tools are not supported by this client.
+        Some(ToolCallResultType::SendMessageToAgent(_))
+        | Some(ToolCallResultType::RunAgentsResult(_))
+        | Some(ToolCallResultType::WaitForEvents(_)) => None,
     }
 }
 
@@ -1881,12 +1784,6 @@ fn create_cancelled_result_for_tool_call(
         ToolType::AskUserQuestion(_) => {
             AIAgentActionResultType::AskUserQuestion(AskUserQuestionResult::Cancelled)
         }
-        ToolType::SendMessageToAgent(_) => {
-            AIAgentActionResultType::SendMessageToAgent(SendMessageToAgentResult::Cancelled)
-        }
-        ToolType::RunAgents(_) => {
-            AIAgentActionResultType::RunAgents(ai::agent::action_result::RunAgentsResult::Cancelled)
-        }
         ToolType::StartRecording(_) => {
             AIAgentActionResultType::StartRecording(StartRecordingResult::Cancelled)
         }
@@ -1895,7 +1792,7 @@ fn create_cancelled_result_for_tool_call(
         }
         // These tools are deprecated.
         ToolType::SuggestCreatePlan(_) | ToolType::SuggestPlan(_) => return None,
-        ToolType::WaitForEvents(_) => {
+        ToolType::SendMessageToAgent(_) | ToolType::RunAgents(_) | ToolType::WaitForEvents(_) => {
             return None;
         }
     };

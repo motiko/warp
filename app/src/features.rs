@@ -81,8 +81,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::ShellSelector,
         #[cfg(feature = "artifact_command")]
         FeatureFlag::ArtifactCommand,
-        #[cfg(feature = "cloud_agent_runners")]
-        FeatureFlag::CloudAgentRunners,
         #[cfg(feature = "session_sharing_acls")]
         FeatureFlag::SessionSharingAcls,
         #[cfg(feature = "full_screen_zen_mode")]
@@ -223,8 +221,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::MultiProfile,
         #[cfg(feature = "conversation_artifacts")]
         FeatureFlag::ConversationArtifacts,
-        #[cfg(feature = "sync_ambient_plans")]
-        FeatureFlag::SyncAmbientPlans,
         #[cfg(feature = "get_started_tab")]
         FeatureFlag::GetStartedTab,
         #[cfg(feature = "projects")]
@@ -255,8 +251,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::FileTree,
         #[cfg(feature = "allow_ignoring_input_suggestions")]
         FeatureFlag::AllowIgnoringInputSuggestions,
-        #[cfg(feature = "scheduled_ambient_agents")]
-        FeatureFlag::ScheduledAmbientAgents,
         #[cfg(feature = "code_launch_modal")]
         FeatureFlag::CodeLaunchModal,
         #[cfg(feature = "mcp_oauth")]
@@ -277,8 +271,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::AutoOpenCodeReviewPane,
         #[cfg(feature = "inline_code_review")]
         FeatureFlag::InlineCodeReview,
-        #[cfg(feature = "create_environment_slash_command")]
-        FeatureFlag::CreateEnvironmentSlashCommand,
         #[cfg(feature = "summarize_conversation_command")]
         FeatureFlag::SummarizationConversationCommand,
         #[cfg(feature = "mcp_grouped_server_context")]
@@ -305,10 +297,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::RevertToCheckpoints,
         #[cfg(feature = "rewind_slash_command")]
         FeatureFlag::RewindSlashCommand,
-        #[cfg(feature = "agent_management_view")]
-        FeatureFlag::AgentManagementView,
-        #[cfg(feature = "agent_management_details_view")]
-        FeatureFlag::AgentManagementDetailsView,
         #[cfg(feature = "agent_view")]
         FeatureFlag::AgentView,
         #[cfg(feature = "agent_view_block_context")]
@@ -325,8 +313,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::LocalComputerUse,
         #[cfg(feature = "background_computer_use")]
         FeatureFlag::BackgroundComputerUse,
-        #[cfg(feature = "local_claude_codex_child_harnesses")]
-        FeatureFlag::LocalClaudeCodexChildHarnesses,
         #[cfg(feature = "cloud_conversations")]
         FeatureFlag::CloudConversations,
         #[cfg(feature = "agent_toolbar_editor")]
@@ -335,8 +321,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::ConfigurableToolbar,
         #[cfg(feature = "agent_view_prompt_chip")]
         FeatureFlag::AgentViewPromptChip,
-        #[cfg(feature = "ambient_agents_rtc")]
-        FeatureFlag::AmbientAgentsRTC,
         #[cfg(feature = "classic_completions")]
         FeatureFlag::ClassicCompletions,
         #[cfg(feature = "force_classic_completions")]
@@ -349,12 +333,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::InlineHistoryMenu,
         #[cfg(feature = "inline_repo_menu")]
         FeatureFlag::InlineRepoMenu,
-        #[cfg(feature = "cloud_mode")]
-        FeatureFlag::CloudMode,
-        #[cfg(feature = "cloud_mode_from_local_session")]
-        FeatureFlag::CloudModeFromLocalSession,
-        #[cfg(feature = "cloud_mode_image_context")]
-        FeatureFlag::CloudModeImageContext,
         #[cfg(feature = "summarization_via_message_replacement")]
         FeatureFlag::SummarizationViaMessageReplacement,
         #[cfg(feature = "pluggable_notifications")]
@@ -409,18 +387,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::PinnedTabs,
         #[cfg(feature = "warp_control_cli")]
         FeatureFlag::WarpControlCli,
-        #[cfg(feature = "agent_harness")]
-        FeatureFlag::AgentHarness,
-        #[cfg(feature = "oz_handoff")]
-        FeatureFlag::OzHandoff,
-        #[cfg(feature = "handoff_local_cloud")]
-        FeatureFlag::HandoffLocalCloud,
-        #[cfg(feature = "hoa_notifications")]
-        FeatureFlag::HOANotifications,
-        #[cfg(feature = "open_code_notifications")]
-        FeatureFlag::OpenCodeNotifications,
-        #[cfg(feature = "cli_agent_rich_input")]
-        FeatureFlag::CLIAgentRichInput,
         #[cfg(feature = "transfer_control_tool")]
         FeatureFlag::TransferControlTool,
         #[cfg(feature = "warpify_footer")]
@@ -435,20 +401,8 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::SkipFirebaseAnonymousUser,
         #[cfg(feature = "git_operations_in_code_review")]
         FeatureFlag::GitOperationsInCodeReview,
-        #[cfg(feature = "hoa_remote_control")]
-        FeatureFlag::HOARemoteControl,
-        #[cfg(feature = "codex_notifications")]
-        FeatureFlag::CodexNotifications,
-        #[cfg(feature = "codex_plugin")]
-        FeatureFlag::CodexPlugin,
         #[cfg(feature = "trim_trailing_blank_lines")]
         FeatureFlag::TrimTrailingBlankLines,
-        #[cfg(feature = "cloud_mode_setup_v2")]
-        FeatureFlag::CloudModeSetupV2,
-        #[cfg(feature = "cloud_mode_input_v2")]
-        FeatureFlag::CloudModeInputV2,
-        #[cfg(feature = "handoff_cloud_cloud")]
-        FeatureFlag::HandoffCloudCloud,
         #[cfg(feature = "remote_code_review")]
         FeatureFlag::RemoteCodeReview,
         #[cfg(feature = "custom_model_routers")]
@@ -467,8 +421,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::OscHyperlinks,
         #[cfg(feature = "terminal_lifecycle_recovery")]
         FeatureFlag::TerminalLifecycleRecovery,
-        #[cfg(feature = "ctrl_c_cancels_third_party_harness")]
-        FeatureFlag::CtrlCCancelsThirdPartyHarness,
         #[cfg(feature = "shell_widget_handoff")]
         FeatureFlag::ShellWidgetHandoff,
         #[cfg(feature = "history_search_ranking_v2")]

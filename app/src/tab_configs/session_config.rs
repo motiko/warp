@@ -10,37 +10,22 @@ use super::tab_config::{
 };
 use crate::app_state::{BranchSnapshot, LeafContents, LeafSnapshot, PaneNodeSnapshot};
 use crate::launch_configs::launch_config::SplitDirection;
-use crate::terminal::cli_agent::CLIAgent;
 use crate::themes::theme::AnsiColorIdentifier;
 use crate::ui_components::icons::Icon;
 
 /// The type of session the user wants to start.
-///
-/// Wraps the existing `CLIAgent` for third-party agents and adds
-/// Terminal and Oz as first-class variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SessionType {
     Terminal,
     Oz,
-    CliAgent(CLIAgent),
 }
 
 impl SessionType {
-    /// The CLI command to auto-run for this session type, if any.
-    /// Returns `None` for Terminal and Oz (Oz uses agent view, not a CLI command).
-    fn command_prefix(&self) -> Option<&'static str> {
-        match self {
-            SessionType::Terminal | SessionType::Oz => None,
-            SessionType::CliAgent(agent) => Some(agent.command_prefix()),
-        }
-    }
-
     /// The icon to display for this session type.
     pub(crate) fn icon(&self) -> Icon {
         match self {
             SessionType::Terminal => Icon::Terminal,
             SessionType::Oz => Icon::Agent,
-            SessionType::CliAgent(agent) => agent.icon().unwrap_or(Icon::Terminal),
         }
     }
 
@@ -49,10 +34,6 @@ impl SessionType {
         match self {
             SessionType::Terminal => "Terminal",
             SessionType::Oz => "Warp Agent",
-            SessionType::CliAgent(CLIAgent::Claude) => "Claude",
-            SessionType::CliAgent(CLIAgent::Codex) => "Codex",
-            SessionType::CliAgent(CLIAgent::Gemini) => "Gemini",
-            SessionType::CliAgent(agent) => agent.display_name(),
         }
     }
 }
@@ -138,13 +119,9 @@ pub fn build_tab_config(
         }
     }
 
-    if let Some(prefix) = session_type.command_prefix() {
-        commands.push(prefix.to_string());
-    }
-
     let pane_type = match session_type {
         SessionType::Oz => TabConfigPaneType::Agent,
-        SessionType::Terminal | SessionType::CliAgent(_) => TabConfigPaneType::Terminal,
+        SessionType::Terminal => TabConfigPaneType::Terminal,
     };
 
     TabConfig {
@@ -287,7 +264,6 @@ fn snapshot_to_flat_panes(
                     };
                     (terminal.cwd.clone(), pane_type)
                 }
-                LeafContents::AmbientAgent(_) => (None, TabConfigPaneType::Cloud),
                 // Non-terminal panes become empty terminal panes to preserve layout.
                 _ => (None, TabConfigPaneType::Terminal),
             };

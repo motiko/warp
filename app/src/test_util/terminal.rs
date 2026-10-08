@@ -15,20 +15,11 @@ use super::settings::initialize_history_persistence_for_tests;
 use crate::ai::AIRequestUsageModel;
 use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 use crate::ai::agent_conversations_model::AgentConversationsModel;
-use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
-use crate::ai::blocklist::agent_view::orchestration_pill_bar_model::OrchestrationPillBarModel;
-use crate::ai::blocklist::local_agent_task_sync_model::LocalAgentTaskSyncModel;
-use crate::ai::blocklist::orchestration_event_streamer::OrchestrationEventStreamer;
-use crate::ai::blocklist::orchestration_events::OrchestrationEventService;
-use crate::ai::blocklist::pending_cli_harness_prompt_queue::PendingCliHarnessPromptQueue;
 use crate::ai::blocklist::{
     BlocklistAIHistoryModel, BlocklistAIPermissions, QueuedQueryModel, SerializedBlockListItem,
 };
-use crate::ai::cloud_environments::CloudEnvironmentCatalog;
-use crate::ai::connected_self_hosted_workers::ConnectedSelfHostedWorkersModel;
 use crate::ai::document::ai_document_model::AIDocumentModel;
 use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
-use crate::ai::harness_availability::HarnessAvailabilityModel;
 use crate::ai::llms::LLMPreferences;
 use crate::ai::mcp::gallery::MCPGalleryManager;
 use crate::ai::mcp::templatable_manager::TemplatableMCPServerManager;
@@ -42,6 +33,7 @@ use crate::changelog_model::ChangelogModel;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::code_review::git_repo_model::GitRepoModels;
 use crate::context_chips::prompt::Prompt;
+use crate::experiments;
 use crate::network::NetworkStatus;
 use crate::pricing::PricingInfoModel;
 use crate::projects::persisted_workspace::PersistedWorkspace;
@@ -56,7 +48,6 @@ use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::suggestions::ignored_suggestions_model::IgnoredSuggestionsModel;
 use crate::system::{SystemInfo, SystemStats};
 use crate::terminal::alt_screen_reporting::AltScreenReporting;
-use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::keys::TerminalKeybindings;
 use crate::terminal::resizable_data::ResizableData;
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
@@ -70,7 +61,6 @@ use crate::workspace::{ActiveSession, WorkspaceRegistry};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_workspaces::UserWorkspaces;
-use crate::{AgentNotificationsModel, experiments};
 
 /// Initializes all of the necessary models to use a terminal view.
 pub fn initialize_app_for_terminal_view(app: &mut App) {
@@ -93,7 +83,6 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
     app.add_singleton_model(|_| Prompt::mock());
     app.add_singleton_model(SyncQueue::mock);
     app.add_singleton_model(CloudModel::mock);
-    app.add_singleton_model(CloudEnvironmentCatalog::new);
     app.add_singleton_model(UserWorkspaces::default_mock);
     app.add_singleton_model(TeamTesterStatus::mock);
     app.add_singleton_model(TeamUpdateManager::mock);
@@ -110,21 +99,12 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
     // QueuedQueryModel subscribes to history events; register after the
     // history model is in place.
     app.add_singleton_model(QueuedQueryModel::new);
-    // Pill bar model subscribes to history events; register after the
-    // history model is in place.
-    app.add_singleton_model(|ctx| OrchestrationPillBarModel::new(Default::default(), ctx));
-    app.add_singleton_model(|_| CLIAgentSessionsModel::new());
-    app.add_singleton_model(OrchestrationEventService::new);
-    app.add_singleton_model(LocalAgentTaskSyncModel::new);
-    app.add_singleton_model(PendingCliHarnessPromptQueue::new);
-    app.add_singleton_model(OrchestrationEventStreamer::new);
     app.add_singleton_model(|_| ActiveAgentViewsModel::new());
     app.add_singleton_model(BlocklistAIPermissions::new);
-    app.add_singleton_model(AgentNotificationsModel::new);
     app.add_singleton_model(UndoCloseStack::new);
 
     app.add_singleton_model(|ctx| {
-        AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client(), ctx)
+        AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client())
     });
     app.add_singleton_model(|_| KeybindingChangedNotifier::new());
     app.add_singleton_model(TerminalKeybindings::new);
@@ -133,8 +113,6 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
     app.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
     app.add_singleton_model(AuthManager::new_for_test);
     app.add_singleton_model(LLMPreferences::new);
-    app.add_singleton_model(HarnessAvailabilityModel::new);
-    app.add_singleton_model(ConnectedSelfHostedWorkersModel::new);
     app.add_singleton_model(SessionPermissionsManager::new);
     app.add_singleton_model(DirectoryWatcher::new);
     app.add_singleton_model(|_| DetectedRepositories::default());
@@ -179,7 +157,6 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
     app.add_singleton_model(PricingPromotionState::new);
     app.add_singleton_model(AIDocumentModel::new);
     app.add_singleton_model(ByoLlmAuthBannerSessionState::new);
-    app.add_singleton_model(|_| GitHubAuthNotifier::new());
     app.add_singleton_model(AgentConversationsModel::new);
     app.add_singleton_model(PersistedWorkspace::new_for_test);
 

@@ -2,10 +2,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use ai_types::AmbientAgentTaskId;
 use chrono::{DateTime, Local, Utc};
 use itertools::Itertools;
 use uuid::Uuid;
-use warp_cli::agent::Harness;
 use warpui::{App, EntityId, ModelHandle};
 
 use super::{
@@ -15,23 +15,17 @@ use super::{
 };
 use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent::conversation::{
-    AIAgentHarness, AIConversation, AIConversationId, ConversationStatus,
-    ServerAIConversationMetadata, TodoStatus,
+    AIAgentHarness, AIConversation, AIConversationId, ServerAIConversationMetadata, TodoStatus,
 };
 use crate::ai::agent::task::helper::MessageExt;
 use crate::ai::agent::todos::AIAgentTodoList;
 use crate::ai::agent::{
     AIAgentExchange, AIAgentExchangeId, AIAgentInput, AIAgentOutputStatus, AIAgentTodo,
-    AIAgentTodoId, FinishedAIAgentOutput, RenderableAIError, Shared, TransientNetworkErrorKind,
-    UserQueryMode,
-};
-use crate::ai::ambient_agents::{
-    AmbientAgentTaskId, AmbientConversationStatus, conversation_output_status_from_conversation,
+    AIAgentTodoId, FinishedAIAgentOutput, Shared, UserQueryMode,
 };
 use crate::ai::blocklist::ResponseStreamId;
 use crate::ai::blocklist::controller::RequestInput;
 use crate::ai::llms::LLMId;
-use crate::auth::AuthStateProvider;
 use crate::cloud_object::{Owner, Revision, ServerMetadata, ServerPermissions};
 use crate::features::FeatureFlag;
 use crate::input_suggestions::HistoryInputSuggestion;
@@ -42,7 +36,6 @@ use crate::persistence::model::{
 };
 use crate::server::ids::ServerId;
 use crate::server::server_api::ServerApiProvider;
-use crate::server::telemetry::context_provider::AppTelemetryContextProvider;
 use crate::terminal::model::session::SessionId;
 use crate::test_util::ai_agent_tasks::create_api_task;
 use crate::test_util::settings::{
@@ -72,67 +65,6 @@ fn create_persisted_query(
     }
 }
 
-#[test]
-fn ensure_remote_child_conversation_creates_one_named_run_mapping() {
-    App::test((), |mut app| async move {
-        initialize_history_persistence_for_tests(&mut app);
-        let terminal_view_id = EntityId::new();
-        let history_model = app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
-        let parent_run_id = "11111111-1111-1111-1111-111111111111";
-        let child_task_id: AmbientAgentTaskId =
-            "22222222-2222-2222-2222-222222222222".parse().unwrap();
-
-        let (parent_id, first, second) = history_model.update(&mut app, |history, ctx| {
-            let parent_id =
-                history.start_new_conversation(terminal_view_id, false, true, false, ctx);
-            history.assign_run_id_for_conversation(
-                parent_id,
-                parent_run_id.to_string(),
-                parent_run_id.parse().ok(),
-                terminal_view_id,
-                ctx,
-            );
-            let first = history.ensure_remote_child_conversation(
-                terminal_view_id,
-                parent_id,
-                child_task_id.to_string(),
-                child_task_id,
-                "Researcher".to_string(),
-                "Investigate observer restore".to_string(),
-                Some(Harness::Codex),
-                ctx,
-            );
-            let second = history.ensure_remote_child_conversation(
-                terminal_view_id,
-                parent_id,
-                child_task_id.to_string(),
-                child_task_id,
-                "Duplicate".to_string(),
-                String::new(),
-                Some(Harness::Oz),
-                ctx,
-            );
-            (parent_id, first, second)
-        });
-
-        assert_eq!(first, second);
-        history_model.read(&app, |history, _| {
-            assert_eq!(
-                history.conversation_id_for_agent_id(&child_task_id.to_string()),
-                Some(first),
-                "message sender attribution must resolve through the run-id index",
-            );
-            assert_eq!(history.child_conversation_ids_of(&parent_id), &[first]);
-            let child = history.conversation(&first).unwrap();
-            assert_eq!(child.agent_name(), Some("Researcher"));
-            assert_eq!(child.parent_conversation_id(), Some(parent_id));
-            assert!(child.is_remote_child());
-            assert!(!child.is_viewing_shared_session());
-            assert_eq!(child.orchestration_harness(), Some(Harness::Codex));
-        });
-    });
-}
-
 /// Reproduces the race between the SSE family drain (which materializes an
 /// `is_remote_child` placeholder for a `child_agent_started` event before the
 /// local in-process child conversation has claimed its run_id) and the local
@@ -151,8 +83,7 @@ fn assign_run_id_for_conversation_discards_stale_remote_placeholder_for_same_run
 
         let (parent_id, placeholder_id, local_id) =
             history_model.update(&mut app, |history, ctx| {
-                let parent_id =
-                    history.start_new_conversation(terminal_view_id, false, true, false, ctx);
+                let parent_id = history.start_new_conversation(terminal_view_id, false, true, ctx);
                 history.assign_run_id_for_conversation(
                     parent_id,
                     parent_run_id.to_string(),
@@ -171,7 +102,6 @@ fn assign_run_id_for_conversation_discards_stale_remote_placeholder_for_same_run
                     child_task_id,
                     "Researcher".to_string(),
                     String::new(),
-                    Some(Harness::Codex),
                     ctx,
                 );
 
@@ -181,7 +111,6 @@ fn assign_run_id_for_conversation_discards_stale_remote_placeholder_for_same_run
                     terminal_view_id,
                     "Researcher".to_string(),
                     parent_id,
-                    Some(Harness::Codex),
                     false,
                     ctx,
                 );
@@ -483,8 +412,7 @@ fn begin_conversation_rename_rejects_optimistic_root_task() {
         let history_model = app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
 
         let (conversation_id, result) = history_model.update(&mut app, |model, ctx| {
-            let conversation_id =
-                model.start_new_conversation(terminal_view_id, false, false, false, ctx);
+            let conversation_id = model.start_new_conversation(terminal_view_id, false, false, ctx);
             model.set_server_conversation_token_for_conversation(
                 conversation_id,
                 "server-conversation-token".to_string(),
@@ -701,78 +629,6 @@ fn begin_conversation_rename_rejects_second_rename_while_in_flight() {
                     .in_flight_conversation_renames
                     .contains_key(&conversation_id)
             );
-        });
-    });
-}
-
-#[test]
-fn start_new_child_conversation_persists_harness_metadata() {
-    App::test((), |mut app| async move {
-        initialize_history_persistence_for_tests(&mut app);
-        let terminal_view_id = EntityId::new();
-        let history_model = app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
-
-        // Pick a non-nil UUID for the parent run_id so the orchestration
-        // capability gate (which now reads run_id() exclusively) sees a valid
-        // agent identifier when seeding the child's parent_agent_id.
-        const PARENT_RUN_ID: &str = "00000000-0000-0000-0000-000000000001";
-        let (child_a, child_b, child_ids) = history_model.update(&mut app, |history_model, ctx| {
-            let parent_conversation_id =
-                history_model.start_new_conversation(terminal_view_id, false, false, false, ctx);
-            if let Some(parent) = history_model.conversation_mut(&parent_conversation_id) {
-                parent.set_run_id(PARENT_RUN_ID.to_string());
-            }
-            let child_a = history_model.start_new_child_conversation(
-                terminal_view_id,
-                "Agent 1".to_string(),
-                parent_conversation_id,
-                Some(Harness::Claude),
-                false,
-                ctx,
-            );
-            let child_b = history_model.start_new_child_conversation(
-                terminal_view_id,
-                "Agent 2".to_string(),
-                parent_conversation_id,
-                Some(Harness::Codex),
-                false,
-                ctx,
-            );
-            (
-                child_a,
-                child_b,
-                history_model
-                    .child_conversation_ids_of(&parent_conversation_id)
-                    .to_vec(),
-            )
-        });
-
-        assert_eq!(child_ids, vec![child_a, child_b]);
-        history_model.read(&app, |history_model, _| {
-            let child_a_conversation = history_model
-                .conversation(&child_a)
-                .expect("child conversation should exist");
-            let child_b_conversation = history_model
-                .conversation(&child_b)
-                .expect("child conversation should exist");
-            assert_eq!(
-                child_a_conversation.orchestration_harness_type(),
-                Some(Harness::Claude.config_name())
-            );
-            assert_eq!(
-                child_a_conversation.orchestration_harness(),
-                Some(Harness::Claude)
-            );
-            assert_eq!(
-                child_b_conversation.orchestration_harness_type(),
-                Some(Harness::Codex.config_name())
-            );
-            assert_eq!(
-                child_b_conversation.orchestration_harness(),
-                Some(Harness::Codex)
-            );
-            assert_eq!(child_a_conversation.parent_agent_id(), Some(PARENT_RUN_ID));
-            assert_eq!(child_b_conversation.parent_agent_id(), Some(PARENT_RUN_ID));
         });
     });
 }
@@ -1152,7 +1008,7 @@ fn prompt_history_candidates_seeds_from_snapshot_then_appends_session_prompts() 
         // A new in-memory query submitted this session duplicates a persisted prompt. It is NOT
         // deduped; it is appended as the newest (last) session prompt.
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         history_model.update(&mut app, |history_model, ctx| {
             let exchange = create_exchange_with_query("live query", now, None);
@@ -1247,7 +1103,7 @@ fn test_ai_queries_for_terminal_view_up_arrow_history() {
 
         // Start a new conversation and add "live query 1"
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         let stream_id = ResponseStreamId::new_for_test();
@@ -1289,7 +1145,7 @@ fn test_ai_queries_for_terminal_view_up_arrow_history() {
 
         // Start another new conversation and add "live query 2"
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         history_model.update(&mut app, |history_model, ctx| {
@@ -1349,7 +1205,7 @@ fn test_ai_queries_for_terminal_view_up_arrow_history() {
 
         // Start a new conversation after clearing and add "new query after clear"
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         history_model.update(&mut app, |history_model, ctx| {
@@ -1539,7 +1395,7 @@ fn test_merge_cloud_metadata_updates_already_restored_conversations() {
         let terminal_view_id = EntityId::new();
 
         // Create a conversation with a server token and restore it
-        let mut conversation = AIConversation::new(false, false);
+        let mut conversation = AIConversation::new(false);
         conversation.set_server_conversation_token("token-1".to_string());
         let conversation_id = conversation.id();
 
@@ -1602,7 +1458,7 @@ fn test_merge_cloud_metadata_refreshes_stale_restored_conversation_metadata() {
         let terminal_view_id = EntityId::new();
         let token = "stale-metadata-token";
 
-        let mut conversation = AIConversation::new(false, false);
+        let mut conversation = AIConversation::new(false);
         conversation.set_server_conversation_token(token.to_string());
         conversation.set_server_metadata(create_server_metadata(
             "Stale Conversation",
@@ -1652,7 +1508,7 @@ fn test_merge_cloud_metadata_reuses_restored_conversation_id_for_token() {
         let terminal_view_id = EntityId::new();
         let token = ServerConversationToken::new("restored-canonical-token".to_string());
 
-        let mut conversation = AIConversation::new(false, false);
+        let mut conversation = AIConversation::new(false);
         conversation.set_server_conversation_token(token.as_str().to_string());
         let conversation_id = conversation.id();
 
@@ -1807,7 +1663,7 @@ fn test_transcript_viewer_terminal_view_is_not_marked_historical() {
             app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
 
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         history_model.update(&mut app, |history_model, ctx| {
@@ -1917,10 +1773,10 @@ fn test_child_agent_conversations_excluded_from_list_but_accessible_by_id() {
 
         // One child linked via a local parent placeholder, one via the
         // parent's server-side run identifier (driver-hosted processes).
-        let mut local_child = AIConversation::new(false, false);
+        let mut local_child = AIConversation::new(false);
         local_child.set_parent_conversation_id(AIConversationId::new());
         let local_child_id = local_child.id();
-        let mut driver_child = AIConversation::new(false, false);
+        let mut driver_child = AIConversation::new(false);
         driver_child.set_parent_agent_id("parent-run-id".to_string());
         let driver_child_id = driver_child.id();
 
@@ -2019,10 +1875,10 @@ fn test_set_parent_for_conversation_populates_index() {
 
         // Create parent and child conversations via start_new_conversation.
         let parent_id = history_model.update(&mut app, |model, ctx| {
-            model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         let child_id = history_model.update(&mut app, |model, ctx| {
-            model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         // Set the parent-child relationship.
@@ -2054,10 +1910,10 @@ fn test_set_parent_for_conversation_dedup() {
             app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
 
         let parent_id = history_model.update(&mut app, |model, ctx| {
-            model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         let child_id = history_model.update(&mut app, |model, ctx| {
-            model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         // Set the same parent-child relationship twice.
@@ -2081,13 +1937,13 @@ fn test_set_parent_multiple_children() {
             app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
 
         let parent_id = history_model.update(&mut app, |model, ctx| {
-            model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         let child_a = history_model.update(&mut app, |model, ctx| {
-            model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         let child_b = history_model.update(&mut app, |model, ctx| {
-            model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         history_model.update(&mut app, |model, _| {
@@ -2112,10 +1968,10 @@ fn test_remove_child_conversation_cleans_parent_index() {
         let history_model =
             app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
         let parent_id = history_model.update(&mut app, |model, ctx| {
-            model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         let child_id = history_model.update(&mut app, |model, ctx| {
-            let child_id = model.start_new_conversation(terminal_view_id, false, false, false, ctx);
+            let child_id = model.start_new_conversation(terminal_view_id, false, false, ctx);
             model.set_parent_for_conversation(child_id, parent_id);
             child_id
         });
@@ -2138,16 +1994,15 @@ fn test_remove_parent_conversation_cleans_incoming_and_outgoing_index_entries() 
         let history_model =
             app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
         let grandparent_id = history_model.update(&mut app, |model, ctx| {
-            model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         let parent_id = history_model.update(&mut app, |model, ctx| {
-            let parent_id =
-                model.start_new_conversation(terminal_view_id, false, false, false, ctx);
+            let parent_id = model.start_new_conversation(terminal_view_id, false, false, ctx);
             model.set_parent_for_conversation(parent_id, grandparent_id);
             parent_id
         });
         let child_id = history_model.update(&mut app, |model, ctx| {
-            let child_id = model.start_new_conversation(terminal_view_id, false, false, false, ctx);
+            let child_id = model.start_new_conversation(terminal_view_id, false, false, ctx);
             model.set_parent_for_conversation(child_id, parent_id);
             child_id
         });
@@ -2189,7 +2044,7 @@ fn test_restore_conversations_maintains_children_by_parent() {
             app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
 
         let parent_id = AIConversationId::new();
-        let mut child_conv = AIConversation::new(false, false);
+        let mut child_conv = AIConversation::new(false);
         child_conv.set_parent_conversation_id(parent_id);
         let child_id = child_conv.id();
 
@@ -2213,11 +2068,11 @@ fn test_restore_conversations_indexes_child_by_parent_agent_id() {
             app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
         let parent_run_id = Uuid::new_v4().to_string();
 
-        let mut parent_conversation = AIConversation::new(false, false);
+        let mut parent_conversation = AIConversation::new(false);
         parent_conversation.set_run_id(parent_run_id.clone());
         let parent_id = parent_conversation.id();
 
-        let mut child_conversation = AIConversation::new(false, false);
+        let mut child_conversation = AIConversation::new(false);
         child_conversation.set_parent_agent_id(parent_run_id);
         let child_id = child_conversation.id();
 
@@ -2246,7 +2101,7 @@ fn test_restore_conversations_dedup_children_by_parent() {
             app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
 
         let parent_id = AIConversationId::new();
-        let mut child_conv_a = AIConversation::new(false, false);
+        let mut child_conv_a = AIConversation::new(false);
         child_conv_a.set_parent_conversation_id(parent_id);
         let child_id = child_conv_a.id();
         let child_conv_b = child_conv_a.clone();
@@ -2271,7 +2126,7 @@ fn closed_surface_cleanup_preserves_transferred_conversation() {
     App::test((), |mut app| async move {
         let old_surface = EntityId::new();
         let new_surface = EntityId::new();
-        let conversation = AIConversation::new(false, false);
+        let conversation = AIConversation::new(false);
         let conversation_id = conversation.id();
         let history = app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
         history.update(&mut app, |model, ctx| {
@@ -2325,7 +2180,7 @@ fn closed_surface_cleanup_preserves_transferred_conversation() {
 fn closed_surface_cleanup_clears_owned_conversations() {
     App::test((), |mut app| async move {
         let surface_id = EntityId::new();
-        let conversation = AIConversation::new(false, false);
+        let conversation = AIConversation::new(false);
         let conversation_id = conversation.id();
         let history = app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
         history.update(&mut app, |model, ctx| {
@@ -2359,7 +2214,7 @@ fn test_all_cleared_conversations_includes_terminal_view_id() {
             app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
 
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         history_model.update(&mut app, |history_model, ctx| {
@@ -2423,7 +2278,7 @@ fn test_toggle_autoexecute_override_persists_updated_conversation_state() {
         let terminal_view_id = EntityId::new();
 
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         history_model.update(&mut app, |history_model, ctx| {
@@ -2464,7 +2319,7 @@ fn test_update_event_sequence_persists_updated_conversation_state() {
         let terminal_view_id = EntityId::new();
 
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         history_model.update(&mut app, |history_model, ctx| {
@@ -2495,79 +2350,6 @@ fn test_update_event_sequence_persists_updated_conversation_state() {
 }
 
 #[test]
-fn test_start_new_child_conversation_persists_child_metadata_for_restore() {
-    App::test((), |mut app| async move {
-        initialize_settings_for_tests(&mut app);
-
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-        let mut global_resource_handles = GlobalResourceHandles::mock(&mut app);
-        global_resource_handles.model_event_sender = Some(sender);
-        app.add_singleton_model(|_| GlobalResourceHandlesProvider::new(global_resource_handles));
-
-        let history_model = app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
-        let terminal_view_id = EntityId::new();
-        let parent_run_id = Uuid::new_v4().to_string();
-
-        let (parent_conversation_id, child_conversation_id, expected_parent_agent_id) =
-            history_model.update(&mut app, |history_model, ctx| {
-                let parent_conversation_id = history_model.start_new_conversation(
-                    terminal_view_id,
-                    false,
-                    false,
-                    false,
-                    ctx,
-                );
-                history_model.set_server_conversation_token_for_conversation(
-                    parent_conversation_id,
-                    "parent-server-token".to_string(),
-                );
-                history_model
-                    .conversation_mut(&parent_conversation_id)
-                    .expect("parent conversation should exist")
-                    .set_run_id(parent_run_id.clone());
-                let expected_parent_agent_id = history_model
-                    .conversation(&parent_conversation_id)
-                    .and_then(|conversation| conversation.orchestration_agent_id())
-                    .expect("parent conversation should expose an orchestration agent id");
-                let child_conversation_id = history_model.start_new_child_conversation(
-                    terminal_view_id,
-                    "Agent 1".to_string(),
-                    parent_conversation_id,
-                    Some(Harness::Claude),
-                    false,
-                    ctx,
-                );
-                (
-                    parent_conversation_id,
-                    child_conversation_id,
-                    expected_parent_agent_id,
-                )
-            });
-
-        let persisted_conversation = persisted_agent_conversation_from_update_event(
-            receiver
-                .recv_timeout(Duration::from_secs(1))
-                .expect("child creation should persist conversation state"),
-        );
-        let restored =
-            convert_persisted_conversation_to_ai_conversation_with_metadata(persisted_conversation)
-                .expect("persisted child conversation should be restorable");
-
-        assert_eq!(restored.id(), child_conversation_id);
-        assert_eq!(
-            restored.parent_conversation_id(),
-            Some(parent_conversation_id)
-        );
-        assert_eq!(
-            restored.parent_agent_id(),
-            Some(expected_parent_agent_id.as_str())
-        );
-        assert_eq!(restored.agent_name(), Some("Agent 1"));
-        assert_eq!(restored.orchestration_harness(), Some(Harness::Claude));
-    });
-}
-
-#[test]
 fn test_start_new_remote_child_conversation_does_not_persist() {
     App::test((), |mut app| async move {
         initialize_settings_for_tests(&mut app);
@@ -2582,12 +2364,11 @@ fn test_start_new_remote_child_conversation_does_not_persist() {
 
         let remote_child_id = history_model.update(&mut app, |history_model, ctx| {
             let parent_id =
-                history_model.start_new_conversation(terminal_view_id, false, false, false, ctx);
+                history_model.start_new_conversation(terminal_view_id, false, false, ctx);
             history_model.start_new_child_conversation(
                 terminal_view_id,
                 "Remote child".to_string(),
                 parent_id,
-                None,
                 true,
                 ctx,
             )
@@ -2633,7 +2414,7 @@ fn test_persist_with_optimistic_root_emits_event_with_no_task_rows() {
         // Create a fresh conversation. Its root is `Optimistic(Root)` with a
         // client-generated UUID; no server response has been received.
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         history_model.update(&mut app, |history_model, ctx| {
@@ -2696,7 +2477,7 @@ fn test_optimistic_root_upgrade_then_persist_emits_event_with_single_server_task
         let terminal_view_id = EntityId::new();
 
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         // First persist: while the root is still Optimistic(Root).
@@ -2767,112 +2548,6 @@ fn test_optimistic_root_upgrade_then_persist_emits_event_with_single_server_task
     });
 }
 
-/// Round-trip: take the persist event emitted while the root is still
-/// optimistic, build an `AgentConversation` from it (with the expected empty
-/// `tasks` list), feed it through the local-DB restore path, and confirm we
-/// get back an `InProgress` conversation with a fresh optimistic root and all
-/// linkage metadata preserved.
-#[test]
-fn test_optimistic_root_restore_round_trip_yields_in_progress_optimistic_root() {
-    use crate::ai::agent::conversation::ConversationStatus;
-
-    App::test((), |mut app| async move {
-        initialize_settings_for_tests(&mut app);
-
-        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
-        let mut global_resource_handles = GlobalResourceHandles::mock(&mut app);
-        global_resource_handles.model_event_sender = Some(sender);
-        app.add_singleton_model(|_| GlobalResourceHandlesProvider::new(global_resource_handles));
-
-        let history_model = app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
-        let terminal_view_id = EntityId::new();
-
-        // Set up a parent conversation so the child has a real parent_agent_id.
-        let (child_conversation_id, expected_parent_agent_id) =
-            history_model.update(&mut app, |history_model, ctx| {
-                let parent_id = history_model.start_new_conversation(
-                    terminal_view_id,
-                    false,
-                    false,
-                    false,
-                    ctx,
-                );
-                let parent_run_id = Uuid::new_v4().to_string();
-                history_model
-                    .conversation_mut(&parent_id)
-                    .expect("parent conversation should exist")
-                    .set_run_id(parent_run_id.clone());
-                // Drain any persist event from parent setup. start_new_conversation
-                // itself does not persist; nothing should be enqueued yet.
-                let child_id = history_model.start_new_child_conversation(
-                    terminal_view_id,
-                    "Round-trip child".to_string(),
-                    parent_id,
-                    Some(Harness::Claude),
-                    false,
-                    ctx,
-                );
-                let expected_parent_agent_id = history_model
-                    .conversation(&child_id)
-                    .and_then(|c| c.parent_agent_id().map(|s| s.to_string()))
-                    .expect("child conversation should have its parent_agent_id stamped");
-                (child_id, expected_parent_agent_id)
-            });
-
-        // The child-creation call site is itself one of the early-persist
-        // sites; consume that first event for the assertion below.
-        let first_event = receiver
-            .recv_timeout(Duration::from_secs(1))
-            .expect("child creation should persist conversation state");
-        let ModelEvent::UpdateMultiAgentConversation {
-            conversation_id: child_id_str,
-            updated_tasks,
-            conversation_data,
-        } = first_event
-        else {
-            panic!("expected UpdateMultiAgentConversation event");
-        };
-        assert_eq!(child_id_str, child_conversation_id.to_string());
-        assert!(
-            updated_tasks.is_empty(),
-            "child conversation persisted while root is optimistic must emit zero task rows",
-        );
-
-        // Round-trip via the local-DB loader.
-        let persisted = AgentConversation {
-            conversation: AgentConversationRecord {
-                id: 0,
-                conversation_id: child_id_str.clone(),
-                conversation_data: serde_json::to_string(&conversation_data)
-                    .expect("conversation data should serialize"),
-                last_modified_at: Utc::now().naive_utc(),
-                summary: None,
-            },
-            tasks: updated_tasks,
-        };
-        let restored = convert_persisted_conversation_to_ai_conversation_with_metadata(persisted)
-            .expect("empty-tasks restore must succeed");
-
-        assert_eq!(restored.id(), child_conversation_id);
-        let root_task = restored.get_root_task().expect("root task should exist");
-        assert!(root_task.is_root_task());
-        assert!(
-            root_task.source().is_none(),
-            "the synthesized restored root must be optimistic (no api::Task source)",
-        );
-        assert_eq!(restored.status(), &ConversationStatus::InProgress);
-        assert!(restored.status_error_message().is_none());
-
-        // All persisted linkage metadata must round-trip.
-        assert_eq!(
-            restored.parent_agent_id(),
-            Some(expected_parent_agent_id.as_str()),
-        );
-        assert_eq!(restored.agent_name(), Some("Round-trip child"));
-        assert_eq!(restored.orchestration_harness(), Some(Harness::Claude));
-    });
-}
-
 /// `AIConversation::truncate_from_exchange` resets the root to
 /// `Optimistic(Root)` when all exchanges are removed and then calls
 /// `write_updated_conversation_state`. That persist must emit zero task rows
@@ -2894,7 +2569,7 @@ fn test_truncate_from_exchange_to_empty_persist_event_has_empty_updated_tasks() 
         let now = Local::now();
 
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         // Upgrade the root to a server-backed task so the truncate path
@@ -3003,7 +2678,7 @@ fn test_two_restart_cycles_keep_exactly_one_server_root_task_row() {
         let terminal_view_id = EntityId::new();
 
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         // Early persist while the root is still optimistic.
@@ -3144,7 +2819,7 @@ fn test_initialize_output_for_response_stream_persists_updated_conversation_stat
         let now = Local::now();
 
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         let stream_id = ResponseStreamId::new_for_test();
@@ -3226,7 +2901,7 @@ fn test_assign_run_id_for_conversation_persists_updated_conversation_state() {
         let terminal_view_id = EntityId::new();
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
             let conversation_id =
-                history_model.start_new_conversation(terminal_view_id, false, false, false, ctx);
+                history_model.start_new_conversation(terminal_view_id, false, false, ctx);
             history_model.set_server_conversation_token_for_conversation(
                 conversation_id,
                 "assigned-run-token".to_string(),
@@ -3305,7 +2980,7 @@ fn test_find_by_token_after_restore_conversations() {
             app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
         let terminal_view_id = EntityId::new();
 
-        let mut conversation = AIConversation::new(false, false);
+        let mut conversation = AIConversation::new(false);
         conversation.set_server_conversation_token("restored-token".to_string());
         let conversation_id = conversation.id();
 
@@ -3409,7 +3084,7 @@ fn test_find_by_token_after_initialize_output_for_response_stream() {
         let terminal_view_id = EntityId::new();
 
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            history_model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history_model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         // Prime a pending request so StreamInit can install the token.
@@ -3477,8 +3152,7 @@ fn test_find_by_token_after_assign_run_id_for_conversation() {
         let terminal_view_id = EntityId::new();
 
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            let id =
-                history_model.start_new_conversation(terminal_view_id, false, false, false, ctx);
+            let id = history_model.start_new_conversation(terminal_view_id, false, false, ctx);
             // Seed a token so assign_run_id has one to forward into the index.
             history_model
                 .conversation_mut(&id)
@@ -3574,7 +3248,7 @@ fn test_find_by_token_after_mark_conversations_historical_for_terminal_surface()
         let terminal_view_id = EntityId::new();
 
         // Needs a real exchange to pass `conversation_would_render_in_blocklist`.
-        let mut conversation = AIConversation::new(false, false);
+        let mut conversation = AIConversation::new(false);
         conversation.set_server_conversation_token("historical-token".to_string());
         let conversation_id = conversation.id();
 
@@ -3646,8 +3320,7 @@ fn test_set_server_conversation_token_rebinds_reverse_index() {
         let terminal_view_id = EntityId::new();
 
         let conversation_id = history_model.update(&mut app, |history_model, ctx| {
-            let id =
-                history_model.start_new_conversation(terminal_view_id, false, false, false, ctx);
+            let id = history_model.start_new_conversation(terminal_view_id, false, false, ctx);
             history_model.set_server_conversation_token_for_conversation(id, "old".to_string());
             id
         });
@@ -3682,7 +3355,7 @@ fn test_fork_conversation_rejects_an_empty_source() {
     App::test((), |mut app| async move {
         let history_model =
             app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
-        let source = AIConversation::new(false, false);
+        let source = AIConversation::new(false);
 
         let error = history_model.update(&mut app, |model, ctx| {
             model
@@ -4156,7 +3829,7 @@ fn test_new_conversation_does_not_inherit_waiting_for_events() {
         // First conversation enters the waiting state via the normal
         // status-update path used by `WaitForEventsExecutor::execute`.
         let first_id = history_model.update(&mut app, |model, ctx| {
-            let id = model.start_new_conversation(terminal_view_id, false, false, false, ctx);
+            let id = model.start_new_conversation(terminal_view_id, false, false, ctx);
             model.update_conversation_status(
                 terminal_view_id,
                 id,
@@ -4176,7 +3849,7 @@ fn test_new_conversation_does_not_inherit_waiting_for_events() {
         // Starting a new conversation in the same terminal view must not
         // copy the waiting state forward.
         let second_id = history_model.update(&mut app, |model, ctx| {
-            model.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            model.start_new_conversation(terminal_view_id, false, false, ctx)
         });
         assert_ne!(
             first_id, second_id,
@@ -4282,8 +3955,9 @@ fn test_fork_conversation_title_override_replaces_prefix() {
 /// `Err` so the caller stops instead of silently constructing a detached conversation.
 #[test]
 fn hydrate_remote_child_placeholder_with_cloud_transcript_preserves_placeholder_identity() {
+    use ai_types::AmbientAgentTaskId;
+
     use crate::ai::agent::conversation::AIConversation;
-    use crate::ai::ambient_agents::AmbientAgentTaskId;
     use crate::persistence::model::AgentConversationData;
     use crate::test_util::ai_agent_tasks::create_api_task;
 
@@ -4482,7 +4156,7 @@ fn repeated_stream_completions_share_one_in_flight_metadata_fetch() {
         let terminal_surface_id = EntityId::new();
         let conversation_id = history_model.update(&mut app, |history, ctx| {
             let conversation_id =
-                history.start_new_conversation(terminal_surface_id, false, false, false, ctx);
+                history.start_new_conversation(terminal_surface_id, false, false, ctx);
             history.set_server_conversation_token_for_conversation(
                 conversation_id,
                 "metadata-fetch-token".to_string(),
@@ -4510,159 +4184,6 @@ fn repeated_stream_completions_share_one_in_flight_metadata_fetch() {
             );
         });
     });
-}
-
-// --- conversation_output_status_from_conversation ---
-
-/// Builds a conversation with one in-flight exchange, completes it with the
-/// given error (mirroring what the controller does when a response stream
-/// fails), and returns the resulting [`ConversationStatus`] plus the derived
-/// [`AmbientConversationStatus`].
-fn statuses_after_stream_error(
-    error: RenderableAIError,
-    recovery_pending: bool,
-) -> (
-    Option<ConversationStatus>,
-    Option<AmbientConversationStatus>,
-) {
-    type Captured = (
-        Option<ConversationStatus>,
-        Option<AmbientConversationStatus>,
-    );
-    let derived: Arc<Mutex<Captured>> = Arc::new(Mutex::new((None, None)));
-    let derived_for_test = Arc::clone(&derived);
-    App::test((), |mut app| async move {
-        initialize_history_persistence_for_tests(&mut app);
-        // Completing a request with an error emits telemetry, which requires
-        // the telemetry context provider (and the auth state it reads).
-        app.add_singleton_model(|_| AuthStateProvider::new_for_test());
-        app.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
-        let terminal_view_id = EntityId::new();
-        let history_model = app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
-
-        let conversation_id = history_model.update(&mut app, |model, ctx| {
-            model.start_new_conversation(terminal_view_id, false, false, false, ctx)
-        });
-
-        let stream_id = ResponseStreamId::new_for_test();
-        history_model.update(&mut app, |model, ctx| {
-            let exchange = create_exchange_with_query("test query", Local::now(), None);
-            let task_id = model
-                .conversation(&conversation_id)
-                .unwrap()
-                .get_root_task_id()
-                .clone();
-            let request_input = RequestInput {
-                conversation_id,
-                input_messages: HashMap::from([(task_id, exchange.input)]),
-                working_directory: exchange.working_directory,
-                model_id: exchange.model_id,
-                coding_model_id: exchange.coding_model_id,
-                cli_agent_model_id: exchange.cli_agent_model_id,
-                computer_use_model_id: exchange.computer_use_model_id,
-                shared_session_response_initiator: exchange.response_initiator,
-                request_start_ts: exchange.start_time,
-                supported_tools_override: None,
-            };
-            model
-                .update_conversation_for_new_request_input(
-                    request_input,
-                    stream_id.clone(),
-                    terminal_view_id,
-                    ctx,
-                )
-                .unwrap();
-        });
-
-        history_model.update(&mut app, |model, ctx| {
-            model.mark_response_stream_completed_with_error(
-                error,
-                recovery_pending,
-                &stream_id,
-                conversation_id,
-                terminal_view_id,
-                ctx,
-            );
-        });
-
-        *derived_for_test.lock().unwrap() = history_model.read(&app, |model, _| {
-            let conversation = model.conversation(&conversation_id).unwrap();
-            (
-                Some(conversation.status().clone()),
-                conversation_output_status_from_conversation(conversation),
-            )
-        });
-    });
-    // Two steps: a tail-expression `lock()` temporary would outlive `derived` (E0597).
-
-    std::mem::take(&mut *derived.lock().unwrap())
-}
-
-/// A failure with a recovery scheduled moves the conversation to the
-/// non-terminal `TransientError` status, and the driver-facing conversion must
-/// not report a terminal outcome for it.
-#[test]
-fn recovery_pending_error_sets_transient_error_status() {
-    let (status, derived) = statuses_after_stream_error(
-        RenderableAIError::transient_network_error(
-            true,
-            false,
-            TransientNetworkErrorKind::UnfinishedExchange,
-        ),
-        /*recovery_pending*/ true,
-    );
-
-    assert_eq!(status, Some(ConversationStatus::TransientError));
-    assert!(
-        derived.is_none(),
-        "a pending recovery must not derive a terminal outcome, got {derived:?}"
-    );
-}
-
-/// The structured exchange error (and its rendering hints) must survive the
-/// conversion to `AmbientConversationStatus`; the conversation-level
-/// `status_error_message` is a plain string and would otherwise drop them.
-#[test]
-fn structured_exchange_error_is_preserved_in_output_status() {
-    let (status, derived) = statuses_after_stream_error(
-        RenderableAIError::transient_network_error(
-            true,
-            false,
-            TransientNetworkErrorKind::UnfinishedExchange,
-        ),
-        /*recovery_pending*/ false,
-    );
-
-    assert_eq!(status, Some(ConversationStatus::Error));
-    let Some(AmbientConversationStatus::Error { error }) = derived else {
-        panic!("expected an error status, got {derived:?}");
-    };
-    assert!(
-        error.will_attempt_resume(),
-        "the structured exchange error must be preserved, got {error:?}"
-    );
-}
-
-/// A stream error without a pending recovery stays terminal.
-#[test]
-fn non_resumable_stream_error_stays_terminal_in_output_status() {
-    let (status, derived) = statuses_after_stream_error(
-        RenderableAIError::transient_network_error(
-            false,
-            false,
-            TransientNetworkErrorKind::UnfinishedExchange,
-        ),
-        /*recovery_pending*/ false,
-    );
-
-    assert_eq!(status, Some(ConversationStatus::Error));
-    let Some(AmbientConversationStatus::Error { error }) = derived else {
-        panic!("expected an error status, got {derived:?}");
-    };
-    assert!(
-        !error.will_attempt_resume(),
-        "will_attempt_resume must be false for a non-recoverable error, got {error:?}"
-    );
 }
 
 // --- rewind truncation regression (REPRO) ---
@@ -5552,7 +5073,7 @@ fn todo_projections_delegate_to_the_conversation() {
         let history_model = app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
         let terminal_view_id = EntityId::new();
         let conversation_id = history_model.update(&mut app, |history, ctx| {
-            history.start_new_conversation(terminal_view_id, false, false, false, ctx)
+            history.start_new_conversation(terminal_view_id, false, false, ctx)
         });
 
         let completed = AIAgentTodo::new("t1".to_owned().into(), "one".to_owned(), String::new());

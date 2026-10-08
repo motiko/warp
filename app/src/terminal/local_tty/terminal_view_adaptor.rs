@@ -6,10 +6,9 @@ use std::sync::mpsc::SyncSender;
 
 use parking_lot::FairMutex;
 use session_sharing_protocol::common::{
-    ActivePrompt, AgentPromptFailureReason, AgentPromptRequest, CLIAgentSessionState,
-    CommandExecutionFailureReason, ControlAction, ControlActionFailureReason,
-    LongRunningCommandAgentInteraction, ParticipantId, SelectedAgentModel,
-    UniversalDeveloperInputContextUpdate, WriteToPtyFailureReason,
+    ActivePrompt, AgentPromptFailureReason, AgentPromptRequest, CommandExecutionFailureReason,
+    ControlAction, ControlActionFailureReason, LongRunningCommandAgentInteraction, ParticipantId,
+    SelectedAgentModel, UniversalDeveloperInputContextUpdate, WriteToPtyFailureReason,
 };
 #[cfg(not(any(test, feature = "integration_tests")))]
 use session_sharing_protocol::common::{
@@ -30,12 +29,7 @@ use crate::NetworkStatus;
 use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 use crate::ai::agent::BaseUserQuery;
 use crate::ai::agent::conversation::AIConversation;
-use crate::ai::agent_conversations_model::AgentConversationsModel;
 use crate::ai::blocklist::agent_view::{AgentViewController, AgentViewControllerEvent};
-use crate::ai::blocklist::local_agent_task_sync_model::LocalAgentTaskSyncModel;
-use crate::ai::blocklist::pending_cli_harness_prompt_queue::{
-    PendingCliHarnessPromptQueue, QueuedCliHarnessPrompt,
-};
 use crate::ai::blocklist::{
     BlocklistAIContextEvent, BlocklistAIContextModel, BlocklistAIControllerEvent,
     BlocklistAIHistoryEvent, BlocklistAIHistoryModel, InputConfig, SerializedBlockListItem,
@@ -50,9 +44,6 @@ use crate::network::{NetworkStatusEvent, NetworkStatusKind};
 use crate::pane_group::TerminalViewResources;
 use crate::persistence::ModelEvent;
 use crate::server::telemetry::{TelemetryAgentViewEntryOrigin, TelemetryEvent};
-use crate::terminal::cli_agent_sessions::{
-    CLIAgentInputState, CLIAgentSessionsModel, CLIAgentSessionsModelEvent,
-};
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};
 use crate::terminal::shared_session::manager::Manager;
@@ -61,8 +52,8 @@ use crate::terminal::shared_session::presence_manager::PresenceManager;
 use crate::terminal::shared_session::replay_agent_conversations::reconstruct_response_events_from_conversations;
 use crate::terminal::shared_session::settings::SharedSessionSettings;
 use crate::terminal::shared_session::shared_handlers::{
-    RemoteUpdateGuard, apply_auto_approve_agent_actions_update, apply_cli_agent_state_update,
-    apply_input_mode_update, apply_selected_agent_model_update, apply_selected_conversation_update,
+    RemoteUpdateGuard, apply_auto_approve_agent_actions_update, apply_input_mode_update,
+    apply_selected_agent_model_update, apply_selected_conversation_update,
     build_selected_conversation_update,
 };
 use crate::terminal::shared_session::sharer::network::{
@@ -93,14 +84,8 @@ fn should_skip_sharer_op(is_ambient_session: bool, op: &CrdtOperation) -> bool {
 }
 
 /// Honors an already-authorized agent prompt. Callers must have already checked that
-/// `participant_id` may submit this prompt. Routes to exactly one of three destinations:
-/// - A live CLI-harness PTY, when one is already running for this pane.
-/// - `PendingCliHarnessPromptQueue`, when this pane's task is configured for (registered
-///   against) a third-party CLI harness whose session hasn't started a live PTY yet. This must
-///   never fall through to the Oz path below: a 3rd-party-harness task has no local
-///   `AIConversation` representation, so doing so would spawn a wrong, native "canonical"
-///   conversation for the run (see `PendingCliHarnessPromptQueue`'s doc comment).
-/// - The Oz harness, via `BlocklistAIController`, for every other (genuinely native) case.
+/// `participant_id` may submit this prompt. Routes to the Oz harness via
+/// `BlocklistAIController`.
 fn accept_agent_prompt(
     terminal_view: &ViewHandle<TerminalView>,
     request: AgentPromptRequest,
@@ -108,52 +93,6 @@ fn accept_agent_prompt(
     ctx: &mut AppContext,
 ) {
     let terminal_view_id = terminal_view.id();
-    let has_active_cli_agent = CLIAgentSessionsModel::as_ref(ctx)
-        .session(terminal_view_id)
-        .is_some();
-    if has_active_cli_agent {
-        log::info!(
-            "event=prompt_routed terminal_id={terminal_view_id:?} participant_id={participant_id} destination=live_cli",
-        );
-        // Reuse the rich input submit pipeline so agent-specific
-        // strategies are applied. Bypasses the rich-input-UI side effects
-        // (telemetry, draft clear, editor buffer clear, pending-image consumption).
-        terminal_view.update(ctx, |view, ctx| {
-            view.submit_text_to_cli_agent_pty(request.prompt.clone(), ctx);
-        });
-        return;
-    }
-
-    // `register_cli_session` runs at harness setup time, before the harness process is
-    // launched (see its call site in `AgentDriver::subscribe_to_cli_agent_session_events`), so
-    // this is true independent of whether the CLI-harness session above has actually started a
-    // live PTY yet.
-    if let Some(task_id) =
-        LocalAgentTaskSyncModel::as_ref(ctx).cli_harness_task_id_for_terminal_view(terminal_view_id)
-    {
-        log::info!(
-            "event=prompt_routed terminal_id={terminal_view_id:?} participant_id={participant_id} task_id={task_id} destination=pending_cli",
-        );
-        if !request.attachments.is_empty() {
-            log::warn!(
-                "accept_agent_prompt: dropping {} file attachment(s) from a shared-session \
-                 prompt queued for task {task_id}'s not-yet-started CLI-harness session; \
-                 attachment delivery to a CLI harness PTY is not supported",
-                request.attachments.len()
-            );
-        }
-        PendingCliHarnessPromptQueue::handle(ctx).update(ctx, |queue, _ctx| {
-            queue.queue(
-                task_id,
-                QueuedCliHarnessPrompt {
-                    prompt: request.prompt.clone(),
-                    participant_id: participant_id.clone(),
-                },
-            );
-        });
-        return;
-    }
-
     // warp-server-injected follow-ups carry the query itself. Viewer-typed prompts and older
     // relays leave it unset; those are attributed to the viewer from presence so the server
     // never records them as the sharer's own input. A payload that does not decode is sent
@@ -288,7 +227,6 @@ pub(crate) fn create_terminal_view_surface(
             initial_input_config,
             conversation_restoration,
             Some(inactive_pty_reads_rx),
-            false,
             ctx,
         )
     });
@@ -937,20 +875,6 @@ impl TerminalManager<TerminalView> {
                     }
                 };
 
-                // Include CLI agent session state in initial context so
-                // late-joining viewers see the footer immediately.
-                let terminal_view_id = terminal_view.id();
-                let cli_agent_session = {
-                    let sessions_model = CLIAgentSessionsModel::as_ref(ctx);
-                    match sessions_model.session(terminal_view_id) {
-                        Some(session) => CLIAgentSessionState::Active {
-                            cli_agent: session.agent.to_serialized_name(),
-                            is_rich_input_open: sessions_model.is_input_open(terminal_view_id),
-                        },
-                        None => CLIAgentSessionState::Inactive,
-                    }
-                };
-
                 let universal_developer_input_context = UniversalDeveloperInputContext {
                     input_mode: Some(input_config.into()),
                     selected_conversation,
@@ -958,7 +882,7 @@ impl TerminalManager<TerminalView> {
                     selected_model: None,
                     long_running_command_agent_interaction_state,
                     long_running_command_agent_interaction,
-                    cli_agent_session,
+                    cli_agent_session: session_sharing_protocol::common::CLIAgentSessionState::Inactive,
                 };
 
                 let team_uid = ResolvedTeamScope::from_scope(
@@ -1070,9 +994,6 @@ impl TerminalManager<TerminalView> {
                 if FeatureFlag::AgentSharedSessions.is_enabled() {
                     Self::stream_historical_agent_conversations(&terminal_view, &model, ctx);
                 }
-
-                // `LocalAgentTaskSyncModel` fires the (task_id,
-                // session_id) link in response to the event emitted above.
             }
             NetworkEvent::FailedToCreateSharedSession {
                 reason,
@@ -1432,7 +1353,7 @@ impl TerminalManager<TerminalView> {
             } => {
                 // Unconditional receipt log: recorded regardless of how this prompt is
                 // eventually routed or rejected below (feature-flag gate, permission checks,
-                // live PTY / PendingCliHarnessPromptQueue / Oz routing), so every received
+                // Oz routing), so every received
                 // shared-session prompt is observable for diagnosing lost or misrouted prompts.
                 log::info!(
                     "Received shared-session agent prompt request id={id:?} \
@@ -1504,30 +1425,6 @@ impl TerminalManager<TerminalView> {
                         return;
                     }
 
-                    // REMOTE-2661: a no-token prompt is how a debug conversation bootstraps
-                    // into a retained setup-failure session. The sharer only knows the
-                    // participant's firebase_uid from presence, not a credential, so this must
-                    // be authorized by the server before being honored.
-                    if request.server_conversation_token.is_none() {
-                        let task_id = model.lock().ambient_agent_task_id().filter(|task_id| {
-                            AgentConversationsModel::as_ref(ctx)
-                                .get_task_data(task_id)
-                                .is_some_and(|task| task.is_setup_failure_debug_session_open())
-                        });
-                        if task_id.is_some() {
-                            log::warn!(
-                                "Rejecting a no-token agent prompt while retaining a setup-failed run (REMOTE-2661): authorization needs a workload token this client cannot issue"
-                            );
-                            network.update(ctx, |network, _ctx| {
-                                network.send_agent_prompt_rejection(
-                                    id.clone(),
-                                    participant_id.clone(),
-                                    AgentPromptFailureReason::InsufficientPermissions,
-                                );
-                            });
-                            return;
-                        }
-                    }
                 }
 
                 accept_agent_prompt(&terminal_view, request.clone(), participant_id.clone(), ctx);
@@ -1660,17 +1557,6 @@ impl TerminalManager<TerminalView> {
                     apply_auto_approve_agent_actions_update(
                         &weak_view_handle,
                         auto_approve,
-                        &active_remote_update,
-                        ctx,
-                    );
-                }
-
-                // Apply CLI agent rich input state from the viewer.
-                if let Some(ref cli_agent_session) = context_update.cli_agent_session {
-                    let weak_view_handle = terminal_view.downgrade();
-                    apply_cli_agent_state_update(
-                        &weak_view_handle,
-                        cli_agent_session,
                         &active_remote_update,
                         ctx,
                     );
@@ -1828,8 +1714,6 @@ impl TerminalManager<TerminalView> {
             Lifetime::Ephemeral
         };
 
-        // Clone before the subscribe_to_view closure moves the original.
-        let sharer_remote_update_guard_for_cli = sharer_remote_update_guard.clone();
         ctx.subscribe_to_view(terminal_view, move |view, event, ctx| match event {
             TerminalViewEvent::StartSharingCurrentSession {
                 scrollback_type,
@@ -2007,54 +1891,6 @@ impl TerminalManager<TerminalView> {
                 }
             }
             _ => (),
-        });
-
-        // Broadcast CLI agent session lifecycle events to viewers.
-        let session_sharer_for_cli = shared_session_model.clone();
-        let cli_guard = sharer_remote_update_guard_for_cli;
-        let terminal_view_id = terminal_view.id();
-        ctx.subscribe_to_model(&CLIAgentSessionsModel::handle(ctx), move |_, event, ctx| {
-            if event.terminal_view_id() != terminal_view_id || !cli_guard.should_broadcast() {
-                return;
-            }
-            let Some(network) = session_sharer_for_cli.borrow().as_ref().cloned() else {
-                return;
-            };
-            let update = match event {
-                CLIAgentSessionsModelEvent::Started { agent, .. } => {
-                    UniversalDeveloperInputContextUpdate {
-                        cli_agent_session: Some(CLIAgentSessionState::Active {
-                            cli_agent: agent.to_serialized_name(),
-                            is_rich_input_open: false,
-                        }),
-                        ..Default::default()
-                    }
-                }
-                CLIAgentSessionsModelEvent::InputSessionChanged {
-                    agent,
-                    new_input_state,
-                    ..
-                } => UniversalDeveloperInputContextUpdate {
-                    cli_agent_session: Some(CLIAgentSessionState::Active {
-                        cli_agent: agent.to_serialized_name(),
-                        is_rich_input_open: matches!(
-                            new_input_state,
-                            &CLIAgentInputState::Open { .. }
-                        ),
-                    }),
-                    ..Default::default()
-                },
-                CLIAgentSessionsModelEvent::Ended { .. } => UniversalDeveloperInputContextUpdate {
-                    cli_agent_session: Some(CLIAgentSessionState::Inactive),
-                    ..Default::default()
-                },
-                // StatusChanged / SessionUpdated are enriched by OSC events;
-                // no protocol send needed.
-                _ => return,
-            };
-            network.update(ctx, |network, _| {
-                network.send_universal_developer_input_context_update(update);
-            });
         });
     }
 

@@ -23,7 +23,6 @@ use std::time::Duration;
 // Re-export types that were moved to the ai and ai_types crates.
 pub use ai::agent::action::*;
 pub use ai::agent::action_result::*;
-use ai::agent::orchestration_config::{OrchestrationConfig, OrchestrationConfigStatus};
 pub use ai::agent::{AIAgentCitation, FileLocations};
 use ai::skills::ParsedSkill;
 pub use ai_types::{AIAgentActionId, EntrypointType, PassiveSuggestionTriggerType};
@@ -48,8 +47,8 @@ use super::llms::LLMId;
 use crate::TelemetryEvent;
 use crate::ai::block_context::BlockContext;
 use crate::ai::blocklist::block::view_impl::output::are_all_text_sections_empty;
+use crate::ai::execution_context::WarpAiExecutionContext;
 use crate::ai::skills::SkillDescriptor;
-use crate::ai_assistant::execution_context::WarpAiExecutionContext;
 use crate::code::editor_management::CodeSource;
 use crate::code_review::comments::{
     AttachedReviewComment as CodeReviewComment, ReviewCommentBatch,
@@ -2916,14 +2915,11 @@ pub enum UserQueryMode {
     #[default]
     Normal,
     Plan,
-    Orchestrate,
 }
 
 pub fn extract_user_query_mode(query: String) -> (String, UserQueryMode) {
     if let Some(query) = commands::strip_command_prefix(&query, commands::PLAN_NAME) {
         (query, UserQueryMode::Plan)
-    } else if let Some(query) = commands::strip_command_prefix(&query, commands::ORCHESTRATE_NAME) {
-        (query, UserQueryMode::Orchestrate)
     } else {
         (query, UserQueryMode::Normal)
     }
@@ -2940,7 +2936,6 @@ pub fn display_user_query_with_mode(mode: UserQueryMode, query: &str) -> String 
     match mode {
         UserQueryMode::Normal => query.to_owned(),
         UserQueryMode::Plan => format!("{} {query}", commands::PLAN.name),
-        UserQueryMode::Orchestrate => format!("{} {query}", commands::ORCHESTRATE.name),
     }
 }
 
@@ -3008,12 +3003,6 @@ pub enum AIAgentInput {
     InitProjectRules {
         context: Arc<[AIAgentContext]>,
         display_query: Option<String>,
-    },
-
-    CreateEnvironment {
-        context: Arc<[AIAgentContext]>,
-        display_query: Option<String>,
-        repo_paths: Vec<String>,
     },
 
     TriggerPassiveSuggestion {
@@ -3088,15 +3077,6 @@ pub enum AIAgentInput {
         context: Arc<[AIAgentContext]>,
     },
 
-    /// Piggybacked orchestration config update from the plan card.
-    /// Sent on the next outbound request after the user edits the
-    /// config block or toggles approval.
-    OrchestrationConfigUpdate {
-        plan_id: String,
-        config: OrchestrationConfig,
-        status: OrchestrationConfigStatus,
-    },
-
     /// Reports that the run was woken; the server injects any pending agent messages into the
     /// turn.
     AgentWake,
@@ -3165,7 +3145,6 @@ impl Display for AIAgentInput {
             Self::ActionResult { result, .. } => write!(f, "ActionResult: {result}"),
             Self::ResumeConversation { .. } => write!(f, "ResumeConversation"),
             Self::InitProjectRules { .. } => write!(f, "InitProjectRules"),
-            Self::CreateEnvironment { .. } => write!(f, "CreateEnvironment"),
             Self::TriggerPassiveSuggestion { .. } => write!(f, "TriggerSuggestPrompt"),
             Self::CreateNewProject { .. } => write!(f, "CreateNewProject"),
             Self::CloneRepository { .. } => write!(f, "CloneRepository"),
@@ -3192,7 +3171,6 @@ impl Display for AIAgentInput {
                 write!(f, "EventsFromAgents({} events)", events.len())
             }
             Self::PassiveSuggestionResult { .. } => write!(f, "PassiveSuggestionResult"),
-            Self::OrchestrationConfigUpdate { .. } => write!(f, "OrchestrationConfigUpdate"),
             Self::AgentWake => write!(f, "AgentWake"),
         }
     }
@@ -3215,8 +3193,7 @@ impl AIAgentInput {
                 clone_repo_url: url,
                 ..
             } => Some(url.query.clone()),
-            Self::InitProjectRules { display_query, .. }
-            | Self::CreateEnvironment { display_query, .. } => display_query.clone(),
+            Self::InitProjectRules { display_query, .. } => display_query.clone(),
             Self::CodeReview { .. } => Some("Address these comments".to_string()),
             Self::InvokeSkill {
                 skill, user_query, ..
@@ -3255,7 +3232,6 @@ impl AIAgentInput {
             | Self::MessagesReceivedFromAgents { .. }
             | Self::EventsFromAgents { .. }
             | Self::PassiveSuggestionResult { .. }
-            | Self::OrchestrationConfigUpdate { .. }
             | Self::AgentWake => None,
         }
     }
@@ -3350,7 +3326,6 @@ impl AIAgentInput {
             | Self::AutoCodeDiffQuery { context, .. }
             | Self::ResumeConversation { context, .. }
             | Self::InitProjectRules { context, .. }
-            | Self::CreateEnvironment { context, .. }
             | Self::TriggerPassiveSuggestion { context, .. }
             | Self::CreateNewProject { context, .. }
             | Self::CloneRepository { context, .. }
@@ -3361,7 +3336,6 @@ impl AIAgentInput {
             Self::SummarizeConversation { context, .. } => Some(context),
             Self::MessagesReceivedFromAgents { .. }
             | Self::EventsFromAgents { .. }
-            | Self::OrchestrationConfigUpdate { .. }
             | Self::AgentWake => None,
         }
     }
@@ -3383,7 +3357,6 @@ impl AIAgentInput {
             | Self::AutoCodeDiffQuery { .. }
             | Self::ResumeConversation { .. }
             | Self::InitProjectRules { .. }
-            | Self::CreateEnvironment { .. }
             | Self::CreateNewProject { .. }
             | Self::CloneRepository { .. }
             | Self::CodeReview { .. }
@@ -3393,7 +3366,6 @@ impl AIAgentInput {
             | Self::MessagesReceivedFromAgents { .. }
             | Self::EventsFromAgents { .. }
             | Self::PassiveSuggestionResult { .. }
-            | Self::OrchestrationConfigUpdate { .. }
             | Self::AgentWake => None,
         }
     }
@@ -3407,9 +3379,7 @@ impl AIAgentInput {
     pub fn has_custom_display_query(&self) -> bool {
         matches!(
             self,
-            AIAgentInput::InitProjectRules { .. }
-                | AIAgentInput::CreateEnvironment { .. }
-                | AIAgentInput::InvokeSkill { .. }
+            AIAgentInput::InitProjectRules { .. } | AIAgentInput::InvokeSkill { .. }
         )
     }
 }

@@ -22,10 +22,9 @@ use crate::agent::action_result::{
     EditDocumentsResult, FetchConversationResult, FileGlobResult, FileGlobV2Result, GrepResult,
     InsertReviewCommentsResult, ReadDocumentsResult, ReadFilesResult, ReadMCPResourceResult,
     ReadShellCommandOutputResult, ReadSkillResult, RequestCommandOutputResult,
-    RequestComputerUseResult, RequestFileEditsResult, RunAgentsResult, SearchCodebaseResult,
-    SendMessageToAgentResult, StartRecordingResult, StopRecordingResult,
-    SuggestNewConversationResult, SuggestPromptResult, TransferShellCommandControlToUserResult,
-    UploadArtifactResult, UseComputerResult, WaitForEventsResult,
+    RequestComputerUseResult, RequestFileEditsResult, SearchCodebaseResult, StartRecordingResult,
+    StopRecordingResult, SuggestNewConversationResult, SuggestPromptResult,
+    TransferShellCommandControlToUserResult, UploadArtifactResult, UseComputerResult,
     WriteToLongRunningShellCommandResult,
 };
 use crate::agent::{AIAgentCitation, FileLocations};
@@ -177,12 +176,6 @@ pub enum AIAgentActionType {
     FetchConversation {
         conversation_id: String,
     },
-
-    SendMessageToAgent {
-        addresses: Vec<String>,
-        subject: String,
-        message: String,
-    },
     /// Transfer control of a running shell command to the user.
     TransferShellCommandControlToUser {
         /// The reason provided by the agent for transferring control.
@@ -192,82 +185,6 @@ pub enum AIAgentActionType {
     AskUserQuestion {
         questions: Vec<AskUserQuestionItem>,
     },
-
-    /// AI requested batched orchestration of one-or-more child agents that
-    /// share run-wide configuration (model, harness, execution mode).
-    /// The full per-child prompt is computed at dispatch time as
-    /// `base_prompt + "\n\n" + agent_run_configs[i].prompt` (or just
-    /// `base_prompt` when the per-agent `prompt` is empty).
-    RunAgents(RunAgentsRequest),
-
-    /// Synthesized from a server-emitted Message::ToolCall::WaitForEvents;
-    /// dispatched by WaitForEventsExecutor.
-    WaitForEvents {
-        /// tool_call_id of the unresolved WaitForEvents call; used to
-        /// match inbound resume signals.
-        tool_call_id: String,
-        /// 0 means "unset" (prost flat-scalar convention); the executor
-        /// falls back to a default.
-        idle_timeout_seconds: i32,
-    },
-}
-
-/// Run-wide + per-agent configuration for a `RunAgents` tool call.
-///
-/// Mirrors the proto `RunAgents` message. Server-resolved fields
-/// (`model_id`, `harness_type`, `execution_mode`'s remote details) are
-/// folded in by the server's final tool-call re-emission once the
-/// payload is complete; the client renders the full layout from a
-/// fully-resolved instance only.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RunAgentsRequest {
-    pub summary: String,
-    pub base_prompt: String,
-    pub skills: Vec<SkillReference>,
-    pub model_id: String,
-    pub harness_type: String,
-    pub execution_mode: RunAgentsExecutionMode,
-    pub agent_run_configs: Vec<RunAgentsAgentRunConfig>,
-    pub plan_id: String,
-    /// Resolved client-side at dispatch time; not serialized to the wire.
-    pub harness_auth_secret_name: Option<String>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum RunAgentsExecutionMode {
-    Local,
-    Remote {
-        environment_id: String,
-        worker_host: String,
-        computer_use_enabled: bool,
-        /// Runner UID selecting the children's compute config (docker
-        /// image, instance shape, setup commands). Empty means "no
-        /// override" — fall back to the environment's default runner then
-        /// system defaults.
-        runner_id: String,
-    },
-}
-
-impl RunAgentsExecutionMode {
-    pub fn is_remote(&self) -> bool {
-        matches!(self, Self::Remote { .. })
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RunAgentsAgentRunConfig {
-    pub name: String,
-    pub prompt: String,
-    pub title: String,
-    /// Optional UID of the named agent (service account) this child run
-    /// should execute as. Empty means the child runs as the caller. Only
-    /// meaningful for factory agents dispatching sibling factory agents;
-    /// requires remote execution and is enforced server-side at dispatch.
-    pub agent_identity_uid: String,
-    /// Optional model override for this specific child agent. When non-empty,
-    /// overrides the batch-level `model_id` for this child only. When empty,
-    /// the child inherits the batch-level model.
-    pub model_id: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -400,9 +317,6 @@ impl AIAgentActionType {
             Self::FetchConversation { .. } => {
                 AIAgentActionResultType::FetchConversation(FetchConversationResult::Cancelled)
             }
-            Self::SendMessageToAgent { .. } => {
-                AIAgentActionResultType::SendMessageToAgent(SendMessageToAgentResult::Cancelled)
-            }
             Self::TransferShellCommandControlToUser { .. } => {
                 AIAgentActionResultType::TransferShellCommandControlToUser(
                     TransferShellCommandControlToUserResult::Cancelled,
@@ -410,10 +324,6 @@ impl AIAgentActionType {
             }
             Self::AskUserQuestion { .. } => {
                 AIAgentActionResultType::AskUserQuestion(AskUserQuestionResult::Cancelled)
-            }
-            Self::RunAgents(_) => AIAgentActionResultType::RunAgents(RunAgentsResult::Cancelled),
-            Self::WaitForEvents { .. } => {
-                AIAgentActionResultType::WaitForEvents(WaitForEventsResult::Cancelled)
             }
         }
     }
@@ -454,17 +364,12 @@ impl AIAgentActionType {
             Self::StopRecording { .. } => "Stop recording".to_string(),
             Self::ReadSkill(_) => "Read skill".to_string(),
             Self::FetchConversation { .. } => "Fetch conversation".to_string(),
-            Self::SendMessageToAgent { subject, .. } => format!("Send message: {subject}"),
             Self::TransferShellCommandControlToUser { .. } => {
                 "Transfer shell command control to user".to_string()
             }
             Self::AskUserQuestion { questions } => {
                 format!("Ask user {} question(s)", questions.len())
             }
-            Self::RunAgents(req) => {
-                format!("Orchestrate {} agent(s)", req.agent_run_configs.len())
-            }
-            Self::WaitForEvents { .. } => "Wait for events".to_string(),
         }
     }
 }
@@ -631,38 +536,11 @@ impl Display for AIAgentActionType {
             AIAgentActionType::FetchConversation { conversation_id } => {
                 write!(f, "FetchConversation: {conversation_id}")
             }
-            AIAgentActionType::SendMessageToAgent {
-                addresses, subject, ..
-            } => {
-                write!(
-                    f,
-                    "SendMessageToAgent: to=[{}] subject={subject}",
-                    addresses.join(", ")
-                )
-            }
             AIAgentActionType::TransferShellCommandControlToUser { reason } => {
                 write!(f, "TransferShellCommandControlToUser: {reason}")
             }
             AIAgentActionType::AskUserQuestion { questions } => {
                 write!(f, "AskUserQuestion: {} question(s)", questions.len())
-            }
-            AIAgentActionType::RunAgents(req) => {
-                let names = req
-                    .agent_run_configs
-                    .iter()
-                    .map(|c| c.name.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "Orchestrate: summary='{}' agents=[{names}]", req.summary,)
-            }
-            AIAgentActionType::WaitForEvents {
-                tool_call_id,
-                idle_timeout_seconds,
-            } => {
-                write!(
-                    f,
-                    "WaitForEvents: tool_call_id={tool_call_id} idle_timeout_seconds={idle_timeout_seconds}"
-                )
             }
         }
     }

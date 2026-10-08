@@ -242,14 +242,6 @@ fn usage_label_uses_dollars_wording_when_unit_is_dollars_and_flag_enabled() {
         usage_label(UsageLabelKind::Total, Some(36.0), UsageDisplayUnit::Dollars),
         "Usage charged (total)"
     );
-    assert_eq!(
-        usage_label(
-            UsageLabelKind::DetailsPanel,
-            Some(36.0),
-            UsageDisplayUnit::Dollars
-        ),
-        "Usage"
-    );
 }
 
 #[test]
@@ -271,14 +263,6 @@ fn usage_label_uses_credits_wording_when_unit_is_credits() {
     assert_eq!(
         usage_label(UsageLabelKind::Total, None, UsageDisplayUnit::Credits),
         "Credits spent (total)"
-    );
-    assert_eq!(
-        usage_label(
-            UsageLabelKind::DetailsPanel,
-            None,
-            UsageDisplayUnit::Credits
-        ),
-        "Credits used"
     );
 }
 

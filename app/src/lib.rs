@@ -101,7 +101,6 @@ mod workspaces;
 // in the warp::integration_testing::assertions module (or a sub-module).  These
 // functions will allow us to keep types internal to this crate and expose a
 // simpler API for integration tests to consume.
-pub mod ai_assistant;
 pub mod appearance;
 pub mod channel;
 pub mod editor;
@@ -131,7 +130,6 @@ use ::ai::project_context::model::ProjectContextModel;
 pub use ai::agent::todos::AIAgentTodoList;
 pub use ai::agent::{AIAgentActionResultType, FileEdit, TodoOperation};
 use ai::agent_conversations_model::AgentConversationsModel;
-use ai::agent_management::AgentNotificationsModel;
 use ai::blocklist::{BlocklistAIHistoryModel, BlocklistAIPermissions};
 use ai::chatgpt_subscription::ChatGPTSubscriptionModel;
 use ai::execution_profiles::editor::ExecutionProfileEditorManager;
@@ -174,7 +172,6 @@ pub mod workflows;
 pub mod workspace;
 
 use std::borrow::Cow;
-use std::collections::HashSet;
 use std::ops::Deref;
 #[cfg(feature = "local_fs")]
 use std::path::PathBuf;
@@ -222,13 +219,9 @@ use workspace::sync_inputs::SyncedInputState;
 
 use self::features::FeatureFlag;
 use crate::ai::AIRequestUsageModel;
-use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
 use crate::ai::blocklist::RecordingController;
-use crate::ai::connected_self_hosted_workers::ConnectedSelfHostedWorkersModel;
 use crate::ai::document::ai_document_model::AIDocumentModel;
 use crate::ai::facts::manager::AIFactManager;
-use crate::ai::harness_availability::HarnessAvailabilityModel;
 use crate::ai::llms::LLMPreferences;
 use crate::ai::mcp::{MCPGalleryManager, TemplatableMCPServerManager};
 use crate::ai::outline::RepoOutlines;
@@ -259,7 +252,6 @@ use crate::notebooks::manager::NotebookManager;
 use crate::notification::NotificationContext;
 use crate::palette::PaletteMode;
 use crate::persistence::PersistenceWriter;
-use crate::persistence::model::AgentConversationData;
 use crate::projects::ProjectManagementModel;
 use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::root_view::{
@@ -284,7 +276,6 @@ use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::suggestions::ignored_suggestions_model::IgnoredSuggestionsModel;
 use crate::system::SystemStats;
 use crate::tab::TabShortcutModifierState;
-use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::keys::TerminalKeybindings;
 use crate::terminal::resizable_data::ResizableData;
 use crate::terminal::view::inline_banner::ByoLlmAuthBannerSessionState;
@@ -304,19 +295,6 @@ use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 
 /// Our embedded application assets.
 pub static ASSETS: warp_assets::Assets = warp_assets::Assets;
-
-fn determine_agent_source(
-    launch_mode: &LaunchMode,
-) -> Option<crate::ai::ambient_agents::AgentSource> {
-    match launch_mode {
-        LaunchMode::App { .. } | LaunchMode::Test { .. } => {
-            Some(crate::ai::ambient_agents::AgentSource::CloudMode)
-        }
-        // RemoteServerProxy and RemoteServerDaemon are headless server
-        // processes that don't use the agent subsystem.
-        LaunchMode::RemoteServerProxy | LaunchMode::RemoteServerDaemon { .. } => None,
-    }
-}
 
 #[cfg(feature = "local_fs")]
 fn daemon_codebase_index_snapshot_storage(launch_mode: &LaunchMode) -> Option<SnapshotStorage> {
@@ -1092,8 +1070,6 @@ pub(crate) fn initialize_app(
     let auth_state = Arc::new(AuthState::initialize_logged_out(ctx));
     timer.mark_interval_end("AUTH_MANAGER_SET_USER");
 
-    let agent_source = determine_agent_source(launch_mode);
-
     // NetworkLogModel must be registered before ServerApiProvider so that
     // `NetworkLogModel::install_on_clients` can reach it when forwarding items
     // captured by the HTTP client hooks.
@@ -1110,7 +1086,7 @@ pub(crate) fn initialize_app(
     let server_api_provider = ctx.add_singleton_model({
         let auth_state = auth_state.clone();
         let iap_state = iap_state.clone();
-        move |ctx| ServerApiProvider::new(auth_state, agent_source, iap_state, ctx)
+        move |ctx| ServerApiProvider::new(auth_state, iap_state, ctx)
     });
 
     let server_api = server_api_provider.as_ref(ctx).get();
@@ -1619,7 +1595,6 @@ pub(crate) fn initialize_app(
     ai::blocklist::init(ctx);
     ai::blocklist::block::status_bar::init(ctx);
     drive::sharing::dialog::init(ctx);
-    ai_assistant::panel::init(ctx);
     env_vars::env_var_collection_block::init(ctx);
     context_chips::display_menu::init(ctx);
     context_chips::node_version_popup::init(ctx);
@@ -1635,7 +1610,6 @@ pub(crate) fn initialize_app(
 
     ctx.add_singleton_model(|_| RelaunchModel::new());
     ctx.add_singleton_model(|_| ChangelogModel::new(server_api.clone()));
-    ctx.add_singleton_model(|_| GitHubAuthNotifier::new());
     ctx.add_singleton_model(|_| NetworkStatus::new());
     ctx.add_singleton_model(|_| SystemStats::new());
     ctx.add_singleton_model(|_| KeybindingChangedNotifier::new());
@@ -1680,7 +1654,6 @@ pub(crate) fn initialize_app(
             time_of_next_force_object_refresh,
         )
     });
-    ctx.add_singleton_model(ai::cloud_environments::CloudEnvironmentCatalog::new);
 
     let unsynced_actions: Vec<(CloudObjectTypeAndId, ObjectAction)> = object_actions
         .iter()
@@ -1705,22 +1678,6 @@ pub(crate) fn initialize_app(
         )
     });
 
-    // Seed the orchestration pin set from persisted conversation data
-    // before the conversations vec is consumed by the singletons below.
-    // Each conversation's `AgentConversationData.pinned` is the source of
-    // truth; the singleton mirrors them in memory for fast cross-pane lookups.
-    let initial_pinned_conversations: HashSet<AIConversationId> = multi_agent_conversations
-        .iter()
-        .filter_map(|conv| {
-            let data =
-                serde_json::from_str::<AgentConversationData>(&conv.conversation.conversation_data)
-                    .ok()?;
-            if !data.pinned {
-                return None;
-            }
-            AIConversationId::try_from(conv.conversation.conversation_id.clone()).ok()
-        })
-        .collect();
     {
         let conversations = &multi_agent_conversations;
         ctx.add_singleton_model(move |_| {
@@ -1737,32 +1694,12 @@ pub(crate) fn initialize_app(
     // Per-conversation queued prompts. Registered after the history model
     // since it subscribes to history events for cleanup.
     ctx.add_singleton_model(ai::blocklist::QueuedQueryModel::new);
-    // Cross-pane UI state for the orchestration pill bar. Registered
-    // after the history model since it subscribes to history events.
-    ctx.add_singleton_model(move |ctx| {
-        ai::blocklist::agent_view::orchestration_pill_bar_model::OrchestrationPillBarModel::new(
-            initial_pinned_conversations,
-            ctx,
-        )
-    });
     // Conversations restore lazily from the local DB on demand; startup only
     // loads metadata.
     ctx.add_singleton_model(|_| RestoredAgentConversations::new());
-    ctx.add_singleton_model(|_| CLIAgentSessionsModel::new());
     // ActiveAgentViewsModel is used to track active agent conversations and notify listeners when they change.
     ctx.add_singleton_model(|_| ActiveAgentViewsModel::new());
-    ctx.add_singleton_model(AgentNotificationsModel::new);
     ctx.add_singleton_model(BlocklistAIPermissions::new);
-    ctx.add_singleton_model(ai::blocklist::orchestration_events::OrchestrationEventService::new);
-    ctx.add_singleton_model(
-        ai::blocklist::local_agent_task_sync_model::LocalAgentTaskSyncModel::new,
-    );
-    ctx.add_singleton_model(
-        ai::blocklist::pending_cli_harness_prompt_queue::PendingCliHarnessPromptQueue::new,
-    );
-    ctx.add_singleton_model(
-        ai::blocklist::orchestration_event_streamer::OrchestrationEventStreamer::new,
-    );
 
     if launch_mode.supports_indexing() {
         ctx.add_singleton_model(RepoOutlines::new);
@@ -1949,8 +1886,6 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(LocalWorkflows::new);
 
     ctx.add_singleton_model(LLMPreferences::new);
-    ctx.add_singleton_model(HarnessAvailabilityModel::new);
-    ctx.add_singleton_model(ConnectedSelfHostedWorkersModel::new);
 
     timer.mark_interval_end("SINGLETON_MODELS_REGISTERED");
 
@@ -2005,10 +1940,6 @@ pub(crate) fn initialize_app(
     // Index global rules (e.g. ~/.agents/AGENTS.md) on a background task so
     // they are available to subsequent agent queries.
     ProjectContextModel::handle(ctx).update(ctx, |me, ctx| me.index_global_rules(ctx));
-    #[cfg(all(not(target_family = "wasm"), feature = "local_fs"))]
-    {
-        ctx.add_singleton_model(ai::remote_agent_context::RemoteAgentContext::new);
-    }
 
     let lsp_http_client = server_api_provider.as_ref(ctx).get_http_client();
     ctx.add_singleton_model(|ctx| {
@@ -2434,15 +2365,6 @@ fn on_close_window_cancelled(
     }
 }
 
-fn is_cloud_agent_web_home_launch_url(url: &Url) -> bool {
-    url.scheme() == ChannelState::url_scheme()
-        && url.host_str() == Some("action")
-        && url.path() == "/new_cloud_agent_conversation"
-        && url
-            .query_pairs()
-            .any(|(key, value)| key == "source" && value == "web_home")
-}
-
 #[::tracing::instrument(skip_all, fields(tags.cloud_agent = true))]
 fn launch(ctx: &mut warpui::AppContext, app_state: Option<AppState>, launch_mode: LaunchMode) {
     IntervalTimer::handle(ctx).update(ctx, |timer, _ctx| {
@@ -2461,12 +2383,6 @@ fn launch(ctx: &mut warpui::AppContext, app_state: Option<AppState>, launch_mode
 
     match launch_mode {
         LaunchMode::App { .. } | LaunchMode::Test { .. } => {
-            let should_skip_restore = launch_mode
-                .args()
-                .urls
-                .iter()
-                .any(is_cloud_agent_web_home_launch_url);
-            let app_state = if should_skip_restore { None } else { app_state };
             // Attempt to restore windows from the persisted application state.
             let arg = OpenFromRestoredArg { app_state };
             ctx.dispatch_global_action("root_view:open_from_restored", &arg);

@@ -43,15 +43,6 @@ pub static ATTACH_AS_AGENT_MODE_CONTEXT_TEXT: LazyLock<&'static str> =
 /// Label we use for the the command palette action to create a new local Warp Agent pane.
 pub static NEW_AGENT_PANE_LABEL: LazyLock<&'static str> = LazyLock::new(|| "New Agent Pane");
 
-/// Claude/Anthropic brand color (official brand orange #D97757).
-/// Reference: https://github.com/anthropics/skills/blob/main/skills/brand-guidelines/SKILL.md
-pub const CLAUDE_ORANGE: ColorU = ColorU {
-    r: 0xD9,
-    g: 0x77,
-    b: 0x57,
-    a: 0xFF,
-};
-
 /// Returns the color to be used for various AI signifiers
 /// input with AI mode).
 pub fn ai_brand_color(theme: &WarpTheme) -> ColorU {
@@ -421,7 +412,6 @@ pub enum UsageLabelKind {
     LastResponse,
     Total,
     Plain,
-    DetailsPanel,
 }
 
 /// Matches the label to the unit [`format_usage`] will render.
@@ -431,22 +421,14 @@ pub fn usage_label(
     unit: UsageDisplayUnit,
 ) -> String {
     let unit = effective_usage_unit(unit, cost_in_cents);
-    let base = match (kind, unit) {
-        (UsageLabelKind::DetailsPanel, UsageDisplayUnit::Credits) => "Credits used",
-        (UsageLabelKind::DetailsPanel, UsageDisplayUnit::Dollars) => "Usage",
-        (
-            UsageLabelKind::LastResponse | UsageLabelKind::Total | UsageLabelKind::Plain,
-            UsageDisplayUnit::Credits,
-        ) => "Credits spent",
-        (
-            UsageLabelKind::LastResponse | UsageLabelKind::Total | UsageLabelKind::Plain,
-            UsageDisplayUnit::Dollars,
-        ) => "Usage charged",
+    let base = match unit {
+        UsageDisplayUnit::Credits => "Credits spent",
+        UsageDisplayUnit::Dollars => "Usage charged",
     };
     let suffix = match kind {
         UsageLabelKind::LastResponse => " (last response)",
         UsageLabelKind::Total => " (total)",
-        UsageLabelKind::Plain | UsageLabelKind::DetailsPanel => "",
+        UsageLabelKind::Plain => "",
     };
     format!("{base}{suffix}")
 }

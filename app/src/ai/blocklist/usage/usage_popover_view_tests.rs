@@ -723,7 +723,7 @@ fn format_tool_call_count_uses_plural_for_zero_calls() {
 /// conversation's provider cost starts at a known zero in dollars mode.
 #[test]
 fn conversation_total_text_shows_em_dash_without_usage_data() {
-    let conversation = AIConversation::new(false, false);
+    let conversation = AIConversation::new(false);
     assert_eq!(
         conversation_total_text(&conversation, UsageDisplayUnit::Credits),
         EM_DASH
@@ -769,7 +769,7 @@ fn conversation_total_text_shows_em_dash_for_token_only_metadata() {
 /// conversation's credits total.
 #[test]
 fn conversation_total_text_falls_back_to_credits_spent() {
-    let mut conversation = AIConversation::new(false, false);
+    let mut conversation = AIConversation::new(false);
     conversation.set_credits_spent_for_test(12.5);
 
     assert_eq!(
@@ -780,7 +780,7 @@ fn conversation_total_text_falls_back_to_credits_spent() {
 
 #[test]
 fn conversation_total_text_uses_the_charged_usage_totals() {
-    let mut conversation = AIConversation::new(false, false);
+    let mut conversation = AIConversation::new(false);
     conversation.set_credits_spent_for_test(12.5);
     conversation.set_charged_usage_for_test(Some(ChargedUsageTotals {
         input_cost_in_cents: 21.0,
@@ -979,9 +979,9 @@ fn usage_popover_reacts_to_its_conversations_usage_events() {
         let (conversation_id, other_conversation_id) = app.update(|ctx| {
             BlocklistAIHistoryModel::handle(ctx).update(ctx, |model, ctx| {
                 let conversation_id =
-                    model.start_new_conversation(terminal.id(), false, false, false, ctx);
+                    model.start_new_conversation(terminal.id(), false, false, ctx);
                 let other_conversation_id =
-                    model.start_new_conversation(terminal.id(), false, false, false, ctx);
+                    model.start_new_conversation(terminal.id(), false, false, ctx);
                 (conversation_id, other_conversation_id)
             })
         });

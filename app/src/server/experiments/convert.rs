@@ -30,10 +30,6 @@ impl Display for ServerExperiment {
             Self::PromptSuggestionsViaMaaOutOfBandExperiment => {
                 "PROMPT_SUGGESTIONS_VIA_MAA_OOB_EXPERIMENT"
             }
-            Self::OzMultiHarnessControl => "OZ_MULTI_HARNESS_CONTROL",
-            Self::OzMultiHarnessExperiment => "OZ_MULTI_HARNESS_EXPERIMENT",
-            Self::MacosRunnersControl => "MACOS_RUNNERS_CONTROL",
-            Self::MacosRunnersExperiment => "MACOS_RUNNERS_EXPERIMENT",
             #[cfg(test)]
             Self::TestExperiment => "TEST_EXPERIMENT",
         };
@@ -61,10 +57,6 @@ impl ServerExperiment {
             }
             "PROMPT_SUGGESTIONS_VIA_MAA_CONTROL" => Ok(Self::PromptSuggestionsViaMaaControl),
             "PROMPT_SUGGESTIONS_VIA_MAA_EXPERIMENT" => Ok(Self::PromptSuggestionsViaMaaExperiment),
-            "OZ_MULTI_HARNESS_CONTROL" => Ok(Self::OzMultiHarnessControl),
-            "OZ_MULTI_HARNESS_EXPERIMENT" => Ok(Self::OzMultiHarnessExperiment),
-            "MACOS_RUNNERS_CONTROL" => Ok(Self::MacosRunnersControl),
-            "MACOS_RUNNERS_EXPERIMENT" => Ok(Self::MacosRunnersExperiment),
             s => Err(anyhow::anyhow!(
                 "String doesn't match any server experiment variant {s}"
             )),
@@ -98,10 +90,6 @@ impl TryFrom<Experiment> for ServerExperiment {
             Experiment::PromptSuggestionsViaMaaOob => {
                 Ok(Self::PromptSuggestionsViaMaaOutOfBandExperiment)
             }
-            Experiment::OzMultiHarnessControl => Ok(Self::OzMultiHarnessControl),
-            Experiment::OzMultiHarnessExperiment => Ok(Self::OzMultiHarnessExperiment),
-            Experiment::MacosRunnersControl => Ok(Self::MacosRunnersControl),
-            Experiment::MacosRunnersExperiment => Ok(Self::MacosRunnersExperiment),
             // Experiments that we no longer support on the client.
             e => Err(anyhow::anyhow!(
                 "Server-side enabled experiment '{e:?}' is no longer supported by the client."

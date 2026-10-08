@@ -4969,7 +4969,7 @@ impl SettingsWidget for UseLatestUserPromptAsConversationTitleInTabNamesWidget {
     type View = AppearanceSettingsPageView;
 
     fn search_terms(&self) -> &str {
-        "latest user prompt conversation title tab names vertical tabs oz third-party agent"
+        "latest user prompt conversation title tab names vertical tabs oz agent"
     }
 
     fn render(
@@ -5006,7 +5006,7 @@ impl SettingsWidget for UseLatestUserPromptAsConversationTitleInTabNamesWidget {
                 })
                 .finish(),
             Some(
-                "Show the latest user prompt instead of the generated conversation title for Oz and third-party agent sessions in vertical tabs."
+                "Show the latest user prompt instead of the generated conversation title for Oz agent sessions in vertical tabs."
                     .to_string(),
             ),
         )

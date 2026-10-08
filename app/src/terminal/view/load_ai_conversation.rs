@@ -26,9 +26,7 @@ use crate::ai::blocklist::agent_view::{
     AgentViewEntryBlockParams, AgentViewEntryOrigin, DismissalStrategy, EphemeralMessage,
 };
 use crate::ai::blocklist::block::cli_controller::CLISubagentController;
-use crate::ai::blocklist::history_model::{
-    BlocklistAIHistoryModel, CLIAgentConversation, CloudConversationData,
-};
+use crate::ai::blocklist::history_model::{BlocklistAIHistoryModel, CloudConversationData};
 use crate::ai::blocklist::model::AIBlockModelImpl;
 use crate::ai::blocklist::{
     AIBlock, BlocklistAIActionModel, BlocklistAIContextModel, BlocklistAIController,
@@ -86,9 +84,6 @@ pub enum ConversationRestorationInNewPaneType {
     Historical {
         conversation: AIConversation,
         should_use_live_appearance: bool,
-        /// The ambient agent task ID, if this is an ambient agent conversation.
-        /// Used to display the session ended tombstone.
-        ambient_agent_task_id: Option<crate::ai::ambient_agents::AmbientAgentTaskId>,
     },
 
     /// Fork an existing conversation into this new pane.
@@ -102,12 +97,6 @@ pub enum ConversationRestorationInNewPaneType {
         /// `ephemeral_message_model.current_message().is_none()` in
         /// `BlocklistAIStatusBar::render`) isn't suppressed by the hint.
         has_initial_query: bool,
-    },
-
-    /// Load a CLI agent conversation from its downloaded snapshot.
-    HistoricalCLIAgent {
-        conversation: CLIAgentConversation,
-        should_use_live_appearance: bool,
     },
 }
 
@@ -127,7 +116,7 @@ impl ConversationRestorationInNewPaneType {
             Self::Forked {
                 has_initial_query, ..
             } => !has_initial_query,
-            Self::Historical { .. } | Self::HistoricalCLIAgent { .. } => true,
+            Self::Historical { .. } => true,
         }
     }
 
@@ -136,10 +125,6 @@ impl ConversationRestorationInNewPaneType {
         match self {
             Self::Forked { .. } => true,
             Self::Historical {
-                should_use_live_appearance,
-                ..
-            }
-            | Self::HistoricalCLIAgent {
                 should_use_live_appearance,
                 ..
             } => FeatureFlag::AgentView.is_enabled() || *should_use_live_appearance,
@@ -152,9 +137,6 @@ impl ConversationRestorationInNewPaneType {
         match self {
             Self::Historical { conversation, .. } | Self::Forked { conversation, .. } => {
                 conversation.initial_working_directory()
-            }
-            Self::HistoricalCLIAgent { conversation, .. } => {
-                conversation.metadata.working_directory.clone()
             }
             Self::Startup { .. } => None,
         }
@@ -174,9 +156,7 @@ impl ConversationRestorationInNewPaneType {
             Self::Forked { conversation, .. } => conversation
                 .current_working_directory()
                 .or_else(|| conversation.initial_working_directory()),
-            Self::Startup { .. } | Self::Historical { .. } | Self::HistoricalCLIAgent { .. } => {
-                self.initial_working_directory()
-            }
+            Self::Startup { .. } | Self::Historical { .. } => self.initial_working_directory(),
         }
     }
 }
@@ -255,9 +235,6 @@ impl TerminalView {
                         .and_then(|metadata| metadata.working_directory.clone())
                 })
             }
-            CloudConversationData::CLIAgent(cli_conversation) => {
-                cli_conversation.metadata.working_directory.clone()
-            }
         };
 
         let Some(target_dir) = target_dir else {
@@ -307,15 +284,6 @@ impl TerminalView {
                             ctx,
                         );
                     }
-                    CloudConversationData::CLIAgent(cli_conversation) => {
-                        if FeatureFlag::AgentHarness.is_enabled() {
-                            me.restore_cli_agent_block_snapshot(cli_conversation.block);
-                        } else {
-                            log::warn!(
-                                "AgentHarness flag is disabled; ignoring CLI agent block snapshot"
-                            );
-                        }
-                    }
                 }
 
                 on_restored(me, ctx);
@@ -348,18 +316,6 @@ impl TerminalView {
                 restore_and_continue(self, restore_context_state, ctx);
             }
         }
-    }
-
-    /// Inserts a CLI agent block snapshot into the terminal model.
-    ///
-    /// CLI agent conversations are represented by a harness-specific transcript and
-    /// a snapshot of the block contents. When restoring a CLI agent conversation, we
-    /// display the block snapshot as if it were restored session contents.
-    fn restore_cli_agent_block_snapshot(&mut self, block: SerializedBlock) {
-        self.model
-            .lock()
-            .block_list_mut()
-            .insert_restored_block(&block);
     }
 
     /// Restore AI documents from exchanges by processing CreateDocuments and EditDocuments actions.
@@ -671,12 +627,6 @@ impl TerminalView {
             }
             ConversationRestorationInNewPaneType::Forked { conversation, .. } => {
                 vec![RestoredAIConversation::new(conversation)]
-            }
-            ConversationRestorationInNewPaneType::HistoricalCLIAgent { conversation, .. } => {
-                if FeatureFlag::AgentHarness.is_enabled() {
-                    self.restore_cli_agent_block_snapshot(conversation.block);
-                }
-                return;
             }
         };
         if restored_conversations.is_empty() {
@@ -1016,7 +966,6 @@ impl TerminalView {
                 &params.cli_subagent_controller,
                 &params.model_events_handle,
                 self.agent_view_controller.clone(),
-                self.ambient_agent_view_model.clone(),
                 self.view_handle.clone(),
                 params.terminal_view_id,
                 ctx,

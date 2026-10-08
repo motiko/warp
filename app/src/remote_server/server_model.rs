@@ -55,8 +55,8 @@ use super::proto::{
     ResolveConflictResponse, ResolveConflictSuccess, ResyncCodebase, RipgrepSearchRequest,
     RunCommandError, RunCommandErrorCode, RunCommandRequest, RunCommandResponse, RunCommandSuccess,
     SaveBuffer, SaveBufferResponse, SaveBufferSuccess, ServerMessage, SessionBootstrapped,
-    TextEdit, UpdateGitHubPrInfo, UpdateGitHubRepoInfo, UpdateGitStatus, UploadHandoffSnapshot,
-    WriteFile, WriteFileResponse, WriteFileSuccess, client_message, delete_file_response,
+    TextEdit, UpdateGitHubPrInfo, UpdateGitHubRepoInfo, UpdateGitStatus, WriteFile,
+    WriteFileResponse, WriteFileSuccess, client_message, delete_file_response,
     discard_files_response, get_diff_state_response, get_fragment_metadata_from_hash_response,
     git_commit_chain_response, git_create_pr_response, git_generate_commit_message_response,
     git_get_committed_branch_files_response, git_push_response, host_scoped_request, notification,
@@ -85,7 +85,6 @@ const MAX_BRANCH_COUNT_CAP: usize = 500;
 pub type ConnectionId = uuid::Uuid;
 use super::protocol::RequestId;
 use crate::ai::agent::FileLocations;
-use crate::ai::blocklist::handoff::snapshot::upload_result_to_proto;
 use crate::ai::blocklist::{ReadFileContextResult, read_local_file_context};
 use crate::ai::skills::{
     BundledSkill, SkillManager, SkillManagerEvent, bundled_skill_snapshot_protos,
@@ -929,9 +928,6 @@ impl ServerModel {
                     }
                     Some(host_scoped_request::Message::ResyncCodebase(m)) => {
                         self.handle_resync_codebase(m, &request_id, conn_id, ctx)
-                    }
-                    Some(host_scoped_request::Message::UploadHandoffSnapshot(m)) => {
-                        self.handle_upload_handoff_snapshot(m, &request_id)
                     }
                     Some(host_scoped_request::Message::GitCommitChain(m)) => {
                         self.handle_git_commit_chain(m, &request_id, conn_id, ctx)
@@ -2855,29 +2851,6 @@ impl ServerModel {
                 }
             }
         }
-    }
-
-    /// Handles `UploadHandoffSnapshot` by gathering the workspace snapshot
-    /// from the daemon's local filesystem and uploading it to GCS.
-    ///
-    /// Extracts the `AIClient` and HTTP client from `ServerApiProvider`, then
-    /// spawns the async gather+upload pipeline. Returns an
-    /// `UploadHandoffSnapshotResponse` with the token on success.
-    fn handle_upload_handoff_snapshot(
-        &mut self,
-        msg: UploadHandoffSnapshot,
-        request_id: &RequestId,
-    ) -> HandlerOutcome {
-        log::info!(
-            "Rejecting UploadHandoffSnapshot ({} paths, request_id={request_id}): snapshot upload is not supported",
-            msg.paths.len(),
-        );
-        let response = upload_result_to_proto(Err(anyhow::anyhow!(
-            "Handoff snapshot upload is not supported by this server"
-        )));
-        HandlerOutcome::Sync(server_message::Message::UploadHandoffSnapshotResponse(
-            response,
-        ))
     }
 
     /// Handles `GetBranches` — request/response.

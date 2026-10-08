@@ -12,9 +12,6 @@ pub use cloud_object_models::{
     AgentModeCommandExecutionPredicate, DEFAULT_COMMAND_EXECUTION_ALLOWLIST,
     DEFAULT_COMMAND_EXECUTION_DENYLIST,
 };
-use indexmap::IndexMap;
-use regex::Regex;
-use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use settings::{
     RespectUserSyncSetting, Setting, SupportedPlatforms, SyncToCloud, define_settings_group,
@@ -27,8 +24,7 @@ use warpui::{AppContext, Entity, ModelContext, SingletonEntity, UpdateModel, Wea
 
 use crate::ai::execution_profiles::ExecutionProfilesConfig;
 use crate::ai::request_usage_model::RequestLimitInfo;
-use crate::settings::PrivacySettings;
-use crate::terminal::{CLIAgent, TerminalView};
+use crate::terminal::TerminalView;
 use crate::workspaces::user_workspaces::{TeamScope, UserWorkspaces};
 
 pub enum FocusedTerminalInfoEvent {
@@ -119,8 +115,6 @@ pub enum DefaultSessionMode {
     Terminal,
     /// New sessions start in agent view.
     Agent,
-    /// New sessions start in cloud (ambient) agent mode.
-    CloudAgent,
     /// New sessions open a user-defined tab config.
     /// The specific config is identified by the companion `default_tab_config_path` setting.
     TabConfig,
@@ -146,7 +140,6 @@ impl DefaultSessionMode {
         match self {
             DefaultSessionMode::Terminal => "Terminal",
             DefaultSessionMode::Agent => "Agent",
-            DefaultSessionMode::CloudAgent => "Cloud agent",
             DefaultSessionMode::TabConfig => "Tab Config",
             DefaultSessionMode::DockerSandbox => "Local Docker Sandbox",
         }
@@ -555,87 +548,6 @@ pub enum AgentModeCodingPermissionsType {
     /// The specific filepaths are backed by the
     /// [`AISettings::agent_mode_coding_file_read_allowlist`] setting.
     AllowReadingSpecificFiles,
-}
-
-/// Maps custom toolbar command regex patterns to CLI agent names.
-/// Keys are regex patterns (insertion-ordered), values are serialized CLIAgent names (e.g. "Claude").
-/// An empty string value means "Any CLI Agent" (CLIAgent::Unknown).
-///
-/// Uses `IndexMap` to preserve insertion order so the settings UI list is deterministic.
-/// Supports backward-compatible deserialization from the legacy `Vec<String>` format,
-/// where each string is converted to a key with an empty agent value.
-#[derive(Debug, Clone, Default, PartialEq, Serialize)]
-#[serde(transparent)]
-pub struct ToolbarCommandMap(IndexMap<String, String>);
-
-impl ToolbarCommandMap {
-    pub(crate) fn new(map: IndexMap<String, String>) -> Self {
-        Self(map)
-    }
-}
-
-impl<'de> Deserialize<'de> for ToolbarCommandMap {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum MapOrVec {
-            Map(IndexMap<String, String>),
-            Vec(Vec<String>),
-        }
-
-        match MapOrVec::deserialize(deserializer) {
-            Ok(MapOrVec::Map(map)) => Ok(ToolbarCommandMap::new(map)),
-            Ok(MapOrVec::Vec(vec)) => {
-                let map = vec
-                    .into_iter()
-                    .map(|pattern| (pattern, String::new()))
-                    .collect();
-                Ok(ToolbarCommandMap::new(map))
-            }
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl schemars::JsonSchema for ToolbarCommandMap {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        std::borrow::Cow::Borrowed("ToolbarCommandMap")
-    }
-
-    fn json_schema(r#gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        r#gen.subschema_for::<HashMap<String, String>>()
-    }
-}
-
-impl std::ops::Deref for ToolbarCommandMap {
-    type Target = IndexMap<String, String>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl settings_value::SettingsValue for ToolbarCommandMap {
-    fn to_file_value(&self) -> serde_json::Value {
-        serde_json::to_value(&self.0).unwrap_or_default()
-    }
-
-    fn from_file_value(value: &serde_json::Value) -> Option<Self> {
-        // Try map format first (using from_value to preserve insertion order), then legacy array format.
-        if value.is_object()
-            && let Ok(map) = serde_json::from_value::<IndexMap<String, String>>(value.clone())
-        {
-            return Some(ToolbarCommandMap::new(map));
-        }
-        if let Some(arr) = value.as_array() {
-            let result: IndexMap<String, String> = arr
-                .iter()
-                .filter_map(|v| v.as_str().map(|s| (s.to_string(), String::new())))
-                .collect();
-            return Some(ToolbarCommandMap::new(result));
-        }
-        None
-    }
 }
 
 define_settings_group!(AISettings, settings: [
@@ -1172,89 +1084,6 @@ define_settings_group!(AISettings, settings: [
         description: "Whether Warp credits can be used as a fallback for user-provided models.",
     }
 
-    // Whether to render the CLI agent footer for commands like Claude, Codex, Gemini, etc.
-    // This is independent of the "Use Agent" footer setting.
-    should_render_cli_agent_footer: ShouldRenderCLIAgentToolbar {
-        type: bool,
-        default: true,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.third_party.should_render_cli_agent_toolbar",
-        description: "Whether to show the CLI agent footer for coding agent commands.",
-    }
-    // When enabled and a CLI agent session has a plugin listener, rich input
-    // auto-closes when the session enters a Blocked state (the agent requires
-    // direct keyboard interaction) and auto-opens when it leaves Blocked.
-    auto_toggle_rich_input: AutoToggleRichInput {
-        type: bool,
-        default: true,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.third_party.auto_toggle_composer",
-        description: "Whether CLI agent Rich Input automatically closes and reopens based on the agent's blocked state.",
-    }
-
-    // When enabled and a CLI agent session has a plugin listener, rich input
-    // auto-opens once when the session starts or when the listener is registered.
-    auto_open_rich_input_on_cli_agent_start: AutoOpenRichInputOnCLIAgentStart {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.third_party.auto_open_composer_on_cli_agent_start",
-        description: "Whether CLI agent Rich Input automatically opens when a CLI agent session starts.",
-    }
-
-    // When enabled and a CLI agent session does NOT have a plugin listener,
-    // rich input auto-closes after the user submits a prompt.
-    // When the plugin IS present, this setting has no effect (auto-show/hide
-    // from auto_toggle_rich_input handles rich input lifecycle).
-    auto_dismiss_rich_input_after_submit: AutoDismissRichInputAfterSubmit {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.third_party.auto_dismiss_composer_after_submit",
-        description: "Whether CLI agent Rich Input automatically closes after the user submits a prompt.",
-    }
-
-    // When enabled, the Rich Input editor submits on Ctrl+Enter instead of Enter.
-    // Enter inserts a newline; Ctrl+Enter submits.
-    submit_on_ctrl_enter: SubmitRichInputOnCtrlEnter {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.third_party.submit_on_ctrl_enter",
-        description: "When enabled, the Rich Input editor submits on Ctrl+Enter instead of Enter. Enter inserts a newline.",
-    }
-
-    // Maps custom toolbar command regex patterns to specific CLI agents.
-    // Keys are regex patterns matched against the full command string.
-    // Values are serialized CLIAgent names (empty string = any agent).
-    // Supports migration from the legacy Vec<String> format.
-    cli_agent_footer_enabled_commands: CLIAgentToolbarEnabledCommands {
-        type: ToolbarCommandMap,
-        default: ToolbarCommandMap::default(),
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.third_party.cli_agent_toolbar_enabled_commands",
-        max_table_depth: 1,
-        description: "Maps custom toolbar command patterns to specific CLI agents.",
-    }
-
     // This is not a user-visible setting - it tracks whether a paid user has dismissed the
     // agent management help page by clicking "View Agents".
     //
@@ -1285,19 +1114,6 @@ define_settings_group!(AISettings, settings: [
         surface: settings::SettingSurfaces::GUI,
         private: false,
         toml_path: "general.default_tab_config_path",
-    }
-
-    // Whether computer use is enabled for cloud agent conversations started from the Warp app.
-    // This setting is only used when the AI autonomy setting is AlwaysAsk or not set.
-    cloud_agent_computer_use_enabled: CloudAgentComputerUseEnabled {
-        type: bool,
-        default: warp_core::channel::ChannelState::channel().is_dogfood(),
-        supported_platforms: SupportedPlatforms::DESKTOP,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.warp_agent.other.cloud_agent_computer_use_enabled",
-        description: "Whether computer use is enabled for cloud agent conversations.",
     }
 
 
@@ -1370,76 +1186,6 @@ define_settings_group!(AISettings, settings: [
     }
 
 
-    // Controls whether agent notifications (mailbox button, toasts, notification items) are shown.
-    show_agent_notifications: ShowAgentNotifications {
-        type: bool,
-        default: true,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.warp_agent.other.show_agent_notifications",
-        description: "Whether agent notifications are shown.",
-    }
-
-    // Per-agent, per-host tracking of whether the user dismissed the plugin install chip.
-    // Keys are "<agent_prefix>" for local sessions or "<agent_prefix>@<host>" for remote.
-    // Local-only so dismissal doesn't sync across devices.
-    plugin_install_chip_dismissed_map: PluginInstallChipDismissedMap {
-        type: HashMap<String, bool>,
-        default: HashMap::default(),
-        supported_platforms: SupportedPlatforms::DESKTOP,
-        sync_to_cloud: SyncToCloud::Never,
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
-    }
-
-    // Per-agent, per-host tracking of the MINIMUM_PLUGIN_VERSION for which the user
-    // dismissed the plugin update chip. Empty/absent means not dismissed.
-    // Keys are "<agent_prefix>" for local sessions or "<agent_prefix>@<host>" for remote.
-    // Local-only so dismissal doesn't sync across devices.
-    plugin_update_chip_dismissed_for_version_map: PluginUpdateChipDismissedForVersionMap {
-        type: HashMap<String, String>,
-        default: HashMap::default(),
-        supported_platforms: SupportedPlatforms::DESKTOP,
-        sync_to_cloud: SyncToCloud::Never,
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
-    }
-
-    should_force_disable_cloud_handoff: ShouldForceDisableCloudHandoff {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::DESKTOP,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.warp_agent.other.should_force_disable_cloud_handoff",
-        description: "Whether to force-disable local-to-cloud handoff.",
-    }
-
-    should_force_disable_ampersand_handoff: ShouldForceDisableAmpersandHandoff {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::DESKTOP,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.warp_agent.other.should_force_disable_ampersand_handoff",
-        description: "Whether to force-disable the & prefix for cloud handoff compose mode.",
-    }
-
-    auto_handoff_on_sleep_enabled: AutoHandoffOnSleepEnabled {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::MAC,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::GUI,
-        private: false,
-        toml_path: "agents.warp_agent.other.auto_handoff_on_sleep_enabled",
-        description: "Whether Warp automatically hands off local agent conversations to cloud when the computer is about to sleep.",
-    }
-
     // Not a user-visible setting - it tracks which one-time feature-intro popups the
     // user has already seen, keyed by the feature-intro id (see `FEATURE_INTROS`).
     //
@@ -1460,7 +1206,6 @@ impl AISettings {
     pub fn register_and_subscribe_to_events(app: &mut AppContext) {
         Self::register(app);
         app.add_singleton_model(FocusedTerminalInfo::new);
-        CompiledCommandsForCodingAgentToolbar::register(app);
 
         app.update_model(&Self::handle(app), |_me, ctx| {
             ctx.subscribe_to_model(&FocusedTerminalInfo::handle(ctx), |_me, _, event, ctx| {
@@ -1515,8 +1260,8 @@ impl AISettings {
         match mode {
             // Terminal and TabConfig don't require AI.
             DefaultSessionMode::Terminal | DefaultSessionMode::TabConfig => mode,
-            // Agent and CloudAgent require AI to be enabled.
-            DefaultSessionMode::Agent | DefaultSessionMode::CloudAgent => {
+            // Agent requires AI to be enabled.
+            DefaultSessionMode::Agent => {
                 if self.is_any_ai_enabled(app) {
                     mode
                 } else {
@@ -1634,40 +1379,6 @@ impl AISettings {
 
     pub fn is_orchestration_enabled(&self, app: &warpui::AppContext) -> bool {
         self.is_any_ai_enabled(app)
-    }
-
-    /// Returns true when local-to-cloud handoff is effectively enabled.
-    /// False when the user/org has disabled it, cloud conversations are off,
-    /// or AI is globally off.
-    pub fn is_cloud_handoff_enabled(&self, app: &warpui::AppContext) -> bool {
-        if !self.is_any_ai_enabled(app) || *self.should_force_disable_cloud_handoff {
-            return false;
-        }
-        if !FeatureFlag::OzHandoff.is_enabled()
-            || !FeatureFlag::HandoffLocalCloud.is_enabled()
-            || !cfg!(all(feature = "local_fs", not(target_family = "wasm")))
-        {
-            return false;
-        }
-        let privacy = PrivacySettings::as_ref(app);
-        if !privacy.is_cloud_conversation_storage_enabled {
-            return false;
-        }
-        !matches!(
-            UserWorkspaces::as_ref(app).get_cloud_conversation_storage_enablement_setting(),
-            crate::workspaces::workspace::AdminEnablementSetting::Disable
-        )
-    }
-    pub fn is_ampersand_handoff_enabled(&self, app: &warpui::AppContext) -> bool {
-        self.is_cloud_handoff_enabled(app) && !*self.should_force_disable_ampersand_handoff
-    }
-
-    pub fn is_auto_handoff_on_sleep_enabled(&self, app: &warpui::AppContext) -> bool {
-        self.is_cloud_handoff_enabled(app)
-            && self
-                .auto_handoff_on_sleep_enabled
-                .is_supported_on_current_platform()
-            && *self.auto_handoff_on_sleep_enabled
     }
 
     /// Determines whether a quota reset banner should be displayed to the user.
@@ -1861,63 +1572,6 @@ impl AISettings {
         self.is_any_ai_enabled(app) && *self.show_code_suggestion_speedbump
     }
 
-    pub fn add_cli_agent_footer_enabled_command(
-        &mut self,
-        command: &str,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let command = command.trim();
-        if command.is_empty() {
-            return;
-        }
-        if self
-            .cli_agent_footer_enabled_commands
-            .value()
-            .contains_key(command)
-        {
-            return;
-        }
-
-        let mut map = self.cli_agent_footer_enabled_commands.value().0.clone();
-        map.insert(command.to_string(), String::new());
-        report_if_error!(
-            self.cli_agent_footer_enabled_commands
-                .set_value(ToolbarCommandMap::new(map), ctx)
-        );
-    }
-
-    pub fn remove_cli_agent_footer_enabled_command(
-        &mut self,
-        command: &str,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let command = command.trim();
-        let mut map = self.cli_agent_footer_enabled_commands.value().0.clone();
-        map.shift_remove(command);
-        report_if_error!(
-            self.cli_agent_footer_enabled_commands
-                .set_value(ToolbarCommandMap::new(map), ctx)
-        );
-    }
-
-    pub fn set_cli_agent_for_command(
-        &mut self,
-        pattern: &str,
-        agent: Option<CLIAgent>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let mut map = self.cli_agent_footer_enabled_commands.value().0.clone();
-        if !map.contains_key(pattern) {
-            return;
-        }
-        let value = agent.map(|a| a.to_serialized_name()).unwrap_or_default();
-        map.insert(pattern.to_string(), value);
-        report_if_error!(
-            self.cli_agent_footer_enabled_commands
-                .set_value(ToolbarCommandMap::new(map), ctx)
-        );
-    }
-
     /// Whether the feature-intro popover with the given id key has been seen.
     pub fn is_feature_intro_seen(&self, key: &str) -> bool {
         self.seen_feature_intro_ids
@@ -1936,102 +1590,7 @@ impl AISettings {
         map.insert(key.to_owned(), true);
         report_if_error!(self.seen_feature_intro_ids.set_value(map, ctx));
     }
-
-    /// Whether the plugin install chip was dismissed for the given agent/host.
-    pub fn is_plugin_install_chip_dismissed(&self, key: &str) -> bool {
-        self.plugin_install_chip_dismissed_map
-            .get(key)
-            .copied()
-            .unwrap_or(false)
-    }
-
-    /// Mark the plugin install chip as dismissed for the given agent/host.
-    pub fn dismiss_plugin_install_chip(&mut self, key: &str, ctx: &mut ModelContext<Self>) {
-        let mut map = self.plugin_install_chip_dismissed_map.clone();
-        map.insert(key.to_owned(), true);
-        report_if_error!(self.plugin_install_chip_dismissed_map.set_value(map, ctx));
-    }
-
-    /// Returns the minimum plugin version for which the update chip was dismissed
-    /// for the given agent/host, or an empty string if not dismissed.
-    pub fn plugin_update_chip_dismissed_version(&self, key: &str) -> &str {
-        self.plugin_update_chip_dismissed_for_version_map
-            .get(key)
-            .map(String::as_str)
-            .unwrap_or("")
-    }
-
-    /// Record that the user dismissed the update chip for the given agent/host at
-    /// the specified minimum version.
-    pub fn dismiss_plugin_update_chip(
-        &mut self,
-        key: &str,
-        version: String,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let mut map = self.plugin_update_chip_dismissed_for_version_map.clone();
-        map.insert(key.to_owned(), version);
-        report_if_error!(
-            self.plugin_update_chip_dismissed_for_version_map
-                .set_value(map, ctx)
-        );
-    }
 }
-
-/// Singleton model that caches compiled regexes for the `cli_agent_footer_enabled_commands`
-/// setting. Each entry pairs a compiled regex with the CLI agent it maps to.
-pub struct CompiledCommandsForCodingAgentToolbar {
-    regexes: Vec<(Regex, CLIAgent)>,
-}
-
-impl CompiledCommandsForCodingAgentToolbar {
-    fn parse(app: &AppContext) -> Vec<(Regex, CLIAgent)> {
-        AISettings::as_ref(app)
-            .cli_agent_footer_enabled_commands
-            .value()
-            .iter()
-            .filter_map(|(pattern, agent_name)| {
-                let regex = Regex::new(pattern).ok()?;
-                let agent = CLIAgent::from_serialized_name(agent_name);
-                Some((regex, agent))
-            })
-            .collect()
-    }
-
-    fn register(app: &mut AppContext) {
-        let handle = app.add_singleton_model(|ctx| Self {
-            regexes: Self::parse(ctx),
-        });
-        let ai_settings = AISettings::handle(app);
-        app.subscribe_to_model(&ai_settings, move |_, event, ctx| {
-            if matches!(
-                event,
-                AISettingsChangedEvent::CLIAgentToolbarEnabledCommands { .. }
-            ) {
-                let regexes = Self::parse(ctx);
-                handle.update(ctx, |me, _| {
-                    me.regexes = regexes;
-                });
-            }
-        });
-    }
-
-    /// Returns the CLI agent assigned to the first matching pattern, or `None`
-    /// if no pattern matches the command.
-    pub fn matched_agent(app: &AppContext, command: &str) -> Option<CLIAgent> {
-        Self::as_ref(app)
-            .regexes
-            .iter()
-            .find(|(regex, _)| regex.is_match(command))
-            .map(|(_, agent)| *agent)
-    }
-}
-
-impl Entity for CompiledCommandsForCodingAgentToolbar {
-    type Event = ();
-}
-
-impl SingletonEntity for CompiledCommandsForCodingAgentToolbar {}
 
 #[cfg(test)]
 #[path = "ai_tests.rs"]

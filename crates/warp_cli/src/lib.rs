@@ -10,7 +10,6 @@ use warp_core::channel::ChannelState;
 #[cfg(windows)]
 mod process_handle;
 
-pub mod agent;
 pub mod completions;
 pub mod local_control;
 

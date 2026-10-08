@@ -50,7 +50,7 @@ use super::imported_comments::render_imported_comments;
 use super::todos::{render_completed_todo_items, render_todos};
 use super::{
     CONTENT_HORIZONTAL_PADDING, CONTENT_ITEM_VERTICAL_MARGIN, WithContentItemSpacing,
-    add_highlights_to_rich_text, orchestration, render_autonomy_checkbox_setting_speedbump_footer,
+    add_highlights_to_rich_text, render_autonomy_checkbox_setting_speedbump_footer,
     render_citation_chips,
 };
 use crate::ai::agent::api::ServerConversationToken;
@@ -68,8 +68,6 @@ use crate::ai::agent::{
     StartRecordingResult, StopRecordingResult, SubagentCall, SubagentType,
     SuggestNewConversationResult, SummarizationType, TodoOperation, UploadArtifactResult,
 };
-use crate::ai::agent_conversations_model::AgentConversationsModel;
-use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::blocklist::action_model::AIActionStatus;
 use crate::ai::blocklist::block::model::{AIBlockModel, AIBlockModelHelper, AIBlockOutputStatus};
 use crate::ai::blocklist::block::view_impl::common::{
@@ -96,7 +94,6 @@ use crate::ai::blocklist::inline_action::requested_action::{
     render_requested_action_row, render_requested_action_row_for_text,
 };
 use crate::ai::blocklist::inline_action::requested_command::RequestedCommand;
-use crate::ai::blocklist::inline_action::run_agents_card_view::RunAgentsCardView;
 use crate::ai::blocklist::inline_action::search_codebase::SearchCodebaseView;
 use crate::ai::blocklist::inline_action::suggested_unit_tests::SuggestedUnitTestsView;
 use crate::ai::blocklist::inline_action::web_fetch::WebFetchView;
@@ -106,7 +103,6 @@ use crate::ai::blocklist::secret_redaction::SecretRedactionState;
 use crate::ai::blocklist::usage::request_metadata_turn_view::{
     RequestMetadataTurnView, turn_panel_tooltip_text_for_data,
 };
-use crate::ai::blocklist::usage::rollup::compute_orchestration_rollup;
 use crate::ai::blocklist::view_util::{
     FAILED_OUTPUT_USAGE_NOTICE_TEXT, format_usage, should_show_failed_output_usage_notice,
 };
@@ -122,8 +118,6 @@ use crate::code::editor_management::CodeSource;
 use crate::settings::AISettings;
 use crate::settings_view::SettingsSection;
 use crate::terminal::ShellLaunchData;
-#[cfg(not(target_family = "wasm"))]
-use crate::terminal::input::slash_commands::fork_button_action;
 use crate::terminal::model::session::active_session::ActiveSession;
 use crate::terminal::shared_session::SharedSessionStatus;
 use crate::ui_components::blended_colors;
@@ -193,19 +187,11 @@ pub(crate) struct Props<'a> {
     pub(super) shared_session_status: &'a SharedSessionStatus,
     pub(super) terminal_view_id: EntityId,
     pub(super) is_conversation_transcript_viewer: bool,
-    #[cfg(not(target_family = "wasm"))]
-    pub(super) is_cloud_agent_context: bool,
     pub(super) aws_bedrock_credentials_error_view:
         Option<&'a ViewHandle<AwsBedrockCredentialsErrorView>>,
     pub(super) gemini_enterprise_credentials_error_view:
         Option<&'a ViewHandle<GeminiEnterpriseCredentialsErrorView>>,
     pub(super) imported_comments: &'a HashMap<AIAgentActionId, ImportedCommentGroup>,
-    /// Per-orchestrate-action card view. Each `RunAgentsCardView` owns
-    /// its own edit state, button + picker handles, and in-flight
-    /// spawning snapshot; AIBlock just lazily creates the view per
-    /// `AIAgentActionId` and embeds it via `ChildView` when the action
-    /// is rendered. Multi-card lifecycle = AIBlock lifecycle.
-    pub(crate) run_agents_card_views: &'a HashMap<AIAgentActionId, ViewHandle<RunAgentsCardView>>,
     #[cfg(feature = "local_fs")]
     pub(crate) resolved_code_block_paths:
         &'a HashMap<std::path::PathBuf, Option<std::path::PathBuf>>,
@@ -215,9 +201,6 @@ pub(crate) struct Props<'a> {
     pub(super) thinking_display_mode: crate::settings::ThinkingDisplayMode,
     pub(super) conversation_has_imported_comments: bool,
     pub(super) ask_user_question_view: Option<&'a ViewHandle<AskUserQuestionView>>,
-    /// `true` when this block belongs to a cloud agent pane that is still in its setup phase
-    /// (running environment startup commands before the first agent turn).
-    pub(super) is_cloud_agent_pre_first_exchange: bool,
 }
 
 /// A `UseComputer` call whose actions are all no-ops (typically a single
@@ -303,7 +286,6 @@ pub(super) fn render(props: Props, app: &AppContext) -> Box<dyn Element> {
                         && !is_output_for_static_prompt_suggestions
                         && !is_conversation_in_progress
                         && request_type.is_active()
-                        && !props.is_cloud_agent_pre_first_exchange
                         && !status.error().is_some_and(|e| {
                             e.is_invalid_api_key() || e.is_chatgpt_subscription_error()
                         });
@@ -839,44 +821,6 @@ pub(super) fn render(props: Props, app: &AppContext) -> Box<dyn Element> {
                                 .add_child(render_request_computer_use(props, id, request, app));
                         }
                         AIAgentOutputMessageType::Action(AIAgentAction {
-                            action: AIAgentActionType::RunAgents(_req),
-                            id,
-                            ..
-                        }) => {
-                            // Embed the per-action `RunAgentsCardView`
-                            // via `ChildView`. The view renders a
-                            // "Configuring agents..." placeholder while
-                            // streaming, then transitions to the full
-                            // confirmation card once complete.
-                            should_render_footer = false;
-                            should_render_suggestions = false;
-                            if let Some(card_view) = props.run_agents_card_views.get(id) {
-                                output_items.add_child(ChildView::new(card_view).finish());
-                            }
-                        }
-                        AIAgentOutputMessageType::Action(AIAgentAction {
-                            action:
-                                AIAgentActionType::SendMessageToAgent {
-                                    addresses,
-                                    subject,
-                                    message,
-                                },
-                            id,
-                            ..
-                        }) => {
-                            should_render_footer = false;
-                            should_render_suggestions = false;
-                            output_items.add_child(orchestration::render_send_message(
-                                props,
-                                id,
-                                addresses,
-                                subject,
-                                message,
-                                &output_message.id,
-                                app,
-                            ));
-                        }
-                        AIAgentOutputMessageType::Action(AIAgentAction {
                             action: AIAgentActionType::InsertCodeReviewComments { repo_path, .. },
                             id,
                             ..
@@ -950,13 +894,7 @@ pub(super) fn render(props: Props, app: &AppContext) -> Box<dyn Element> {
                                 );
                             }
                         }
-                        AIAgentOutputMessageType::MessagesReceivedFromAgents { messages } => {
-                            output_items.add_child(
-                                orchestration::render_messages_received_from_agents(
-                                    messages, props, app,
-                                ),
-                            );
-                        }
+                        AIAgentOutputMessageType::MessagesReceivedFromAgents { .. } => {}
                         AIAgentOutputMessageType::DebugOutput { text } => {
                             if ChannelState::enable_debug_features()
                                 && let Some(element) = render_collapsible_debug_output(
@@ -1033,18 +971,7 @@ pub(super) fn render(props: Props, app: &AppContext) -> Box<dyn Element> {
                                 })
                                 .or_else(|| {
                                     let target_id = agent_run_id.as_ref()?;
-                                    let title = target_id
-                                        .parse::<AmbientAgentTaskId>()
-                                        .ok()
-                                        .and_then(|task_id| {
-                                            AgentConversationsModel::as_ref(app)
-                                                .get_task_data(&task_id)
-                                        })
-                                        .map(|task| truncate_from_end(&task.title, 40));
-                                    Some((
-                                        "agent run",
-                                        title.unwrap_or_else(|| truncate_from_end(target_id, 40)),
-                                    ))
+                                    Some(("agent run", truncate_from_end(target_id, 40)))
                                 });
 
                             let done = is_finished || is_cancelled;
@@ -3652,12 +3579,7 @@ fn render_response_footer(props: Props, app: &AppContext) -> Option<Box<dyn Elem
 
     #[cfg(not(target_family = "wasm"))]
     if !props.is_conversation_transcript_viewer {
-        let fork_button_tooltip = fork_button_action(
-            props.model.conversation_id(app),
-            props.is_cloud_agent_context,
-            app,
-        )
-        .tooltip;
+        let fork_button_tooltip = "Fork conversation";
 
         let ui_builder = appearance.ui_builder().clone();
         let fork_button = icon_button(
@@ -3773,39 +3695,15 @@ fn render_usage_button(props: Props, app: &AppContext) -> Box<dyn Element> {
         return Empty::new().finish();
     };
 
-    // Optional orchestration credit rollup. When the conversation has at
-    // least one locally-loaded descendant with credits spent, the pill's
-    // headline number and "has any usage" suppression check both switch
-    // over to the orchestration total (PRODUCT invariants 11, 11b). The
-    // `(+N)` last-block annotation below stays bound to the
-    // orchestrator's own credits. The rollup helper returns `None` for
-    // conversations with no descendants, so callers that aren't
-    // orchestrators pay only the cost of one descendant-index probe.
-    let rollup =
-        compute_orchestration_rollup(conversation.id(), BlocklistAIHistoryModel::as_ref(app));
-
     // If this conversation has no usage metadata (e.g. a forked conversation from
     // mid-way through a prior conversation where the server did not send
     // ConversationUsageMetadata), avoid rendering the usage button entirely.
-    let headline_credits = rollup
-        .as_ref()
-        .map(|r| r.total_credits)
-        .unwrap_or_else(|| conversation.credits_spent());
-    // Only the rollup path (summed across sub-agents) has a matching
-    // aggregated cost figure; a non-orchestrator conversation's own dollar
-    // cost comes from its usage totals directly.
-    let headline_cost_in_cents = rollup
-        .as_ref()
-        .map(|r| r.total_cost_in_cents)
-        .unwrap_or_else(|| conversation.usage_totals().total_cost_in_cents());
-    // Same rollup-vs-own-totals split as `headline_cost_in_cents`, for the
-    // token count shown alongside it.
-    let headline_tokens = rollup.as_ref().map(|r| r.total_tokens).unwrap_or_else(|| {
-        conversation
-            .usage_totals()
-            .charged_usage
-            .map(|usage| usage.total_tokens())
-    });
+    let headline_credits = conversation.credits_spent();
+    let headline_cost_in_cents = conversation.usage_totals().total_cost_in_cents();
+    let headline_tokens = conversation
+        .usage_totals()
+        .charged_usage
+        .map(|usage| usage.total_tokens());
     let has_any_usage = headline_credits > 0.0
         || conversation.credits_spent_for_last_block().is_some()
         || !conversation.token_usage().is_empty()
@@ -3840,9 +3738,6 @@ fn render_usage_button(props: Props, app: &AppContext) -> Box<dyn Element> {
             && total_credits_spent != credits_spent_for_last_block
             && props.model.status(app).error().is_none()
         {
-            // The last-block figure has no rollup equivalent: it stays
-            // bound to the orchestrator's own last block, same as
-            // `credits_spent_for_last_block` above.
             let last_block_charged_usage = conversation.charged_usage_for_last_block();
             let last_block_text = format_usage(
                 credits_spent_for_last_block,

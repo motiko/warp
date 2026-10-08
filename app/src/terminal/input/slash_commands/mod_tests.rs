@@ -1,27 +1,18 @@
 use super::slash_command_is_submitted_as_prompt;
-use crate::features::FeatureFlag;
-use crate::search::slash_command_menu::static_commands::{
-    Availability, SlashCommandKind, commands,
-};
+use crate::search::slash_command_menu::static_commands::{SlashCommandKind, commands};
 
-const BASELINE_AVAILABILITY: Availability = Availability::AGENT_VIEW
-    .union(Availability::AI_ENABLED)
-    .union(Availability::NO_LRC_CONTROL);
-
-/// The centralized classifier must mark only the prompt-submitting commands (/compact, /plan,
-/// /orchestrate) as "submitted as a prompt". Every other slash command emits an immediate action
+/// The centralized classifier must mark only the prompt-submitting commands (/compact, /plan) as
+/// "submitted as a prompt". Every other slash command emits an immediate action
 /// and must be treated as "run now" by the prompt-queue gate and the shared-session viewer path.
 #[test]
 fn slash_command_is_submitted_as_prompt_only_for_prompt_commands() {
     assert!(slash_command_is_submitted_as_prompt(&commands::COMPACT));
     assert!(slash_command_is_submitted_as_prompt(&commands::PLAN));
-    assert!(slash_command_is_submitted_as_prompt(&commands::ORCHESTRATE));
 
     for command in [
         &*commands::FORK,
         &*commands::FORK_AND_COMPACT,
         &commands::FORK_FROM,
-        &*commands::CONTINUE_LOCALLY,
         &*commands::COMPACT_AND,
         &*commands::MODEL,
         &commands::REWIND,
@@ -50,7 +41,6 @@ fn commands_have_typed_identities() {
             SlashCommandKind::ExportToClipboard,
         ),
         (&*commands::EXPORT_TO_FILE, SlashCommandKind::ExportToFile),
-        (&*commands::MOVE_TO_CLOUD, SlashCommandKind::MoveToCloud),
     ] {
         assert_eq!(
             command.kind, expected,
@@ -58,9 +48,6 @@ fn commands_have_typed_identities() {
             command.name
         );
     }
-
-    let command = &*commands::ORCHESTRATE;
-    assert_eq!(command.kind, SlashCommandKind::Orchestrate);
 }
 
 #[test]
@@ -68,34 +55,6 @@ fn model_command_is_not_a_prompt_command() {
     assert_eq!(commands::MODEL.kind, SlashCommandKind::Model);
     assert!(!slash_command_is_submitted_as_prompt(&commands::MODEL));
     assert!(commands::MODEL.argument.is_none());
-}
-
-#[test]
-fn not_cloud_agent_commands_are_only_active_outside_cloud_mode() {
-    let local_context = BASELINE_AVAILABILITY | Availability::NOT_CLOUD_AGENT;
-    assert!(commands::AGENT.is_active(local_context));
-    assert!(commands::NEW.is_active(local_context));
-
-    let cloud_context = BASELINE_AVAILABILITY;
-    assert!(!commands::AGENT.is_active(cloud_context));
-    assert!(!commands::NEW.is_active(cloud_context));
-
-    let _cloud_mode_input_v2 = FeatureFlag::CloudModeInputV2.override_enabled(true);
-    let cloud_mode_v2_context = BASELINE_AVAILABILITY | Availability::CLOUD_MODE_V2_COMPOSER;
-    assert!(!commands::AGENT.is_active(cloud_mode_v2_context));
-    assert!(!commands::NEW.is_active(cloud_mode_v2_context));
-}
-
-#[test]
-fn cloud_mode_v2_commands_are_active_only_in_cloud_mode_v2_context() {
-    let cloud_context = BASELINE_AVAILABILITY;
-    assert!(!commands::HARNESS.is_active(cloud_context));
-
-    let _cloud_mode_input_v2 = FeatureFlag::CloudModeInputV2.override_enabled(true);
-    let cloud_mode_v2_context = BASELINE_AVAILABILITY | Availability::CLOUD_MODE_V2_COMPOSER;
-    assert!(commands::PLAN.is_active(cloud_mode_v2_context));
-    assert!(commands::MODEL.is_active(cloud_mode_v2_context));
-    assert!(commands::HARNESS.is_active(cloud_mode_v2_context));
 }
 
 #[cfg(all(feature = "local_fs", windows))]

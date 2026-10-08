@@ -68,15 +68,14 @@ use super::{
     PersistenceScope, StartedCommandMetadata, WriterHandles, schema,
 };
 use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::mcp::templatable_installation::VariableValue;
 use crate::ai::mcp::{TemplatableMCPServer, TemplatableMCPServerInstallation};
 use crate::app_state::{
-    AIFactPaneSnapshot, AmbientAgentPaneSnapshot, AppState, BranchSnapshot, CodePaneSnapShot,
-    CodePaneTabSnapshot, CodeReviewPaneSnapshot, EnvVarCollectionPaneSnapshot, LeafContents,
-    LeafSnapshot, LeftPanelSnapshot, NotebookPaneSnapshot, PaneFlex, PaneNodeSnapshot,
-    RightPanelSnapshot, SettingsPaneSnapshot, SplitDirection, TabGroupSnapshot, TabSnapshot,
-    TerminalPaneSnapshot, WindowSnapshot, WorkflowPaneSnapshot,
+    AIFactPaneSnapshot, AppState, BranchSnapshot, CodePaneSnapShot, CodePaneTabSnapshot,
+    CodeReviewPaneSnapshot, EnvVarCollectionPaneSnapshot, LeafContents, LeafSnapshot,
+    LeftPanelSnapshot, NotebookPaneSnapshot, PaneFlex, PaneNodeSnapshot, RightPanelSnapshot,
+    SettingsPaneSnapshot, SplitDirection, TabGroupSnapshot, TabSnapshot, TerminalPaneSnapshot,
+    WindowSnapshot, WorkflowPaneSnapshot,
 };
 use crate::auth::UserUid;
 use crate::auth::auth_manager::PersistedCurrentUserInformation;
@@ -974,10 +973,7 @@ fn save_app_state(conn: &mut SqliteConnection, app_state: &AppState) -> Result<(
                 left_panel_open: Some(window.left_panel_open),
                 vertical_tabs_panel_open: Some(window.vertical_tabs_panel_open),
                 fullscreen_state: window.fullscreen_state as i32,
-                agent_management_filters: window
-                    .agent_management_filters
-                    .as_ref()
-                    .and_then(|f| serde_json::to_string(f).ok()),
+                agent_management_filters: None,
                 team_uid: window.team_uid.map(Into::into),
             };
             diesel::insert_into(schema::windows::dsl::windows)
@@ -1198,7 +1194,6 @@ fn save_pane_state(
         LeafContents::Settings(_) => SETTINGS_PANE_KIND,
         LeafContents::AIFact(_) => AI_FACT_PANE_KIND,
         LeafContents::CodeReview(_) => CODE_REVIEW_PANE_KIND,
-        LeafContents::AmbientAgent(_) => AMBIENT_AGENT_PANE_KIND,
         LeafContents::ExecutionProfileEditor | LeafContents::CustomRouterEditor => {
             EXECUTION_PROFILE_EDITOR_PANE_KIND
         }
@@ -1418,17 +1413,6 @@ fn save_pane_state(
                     .execute(conn)?;
             }
         },
-        LeafContents::AmbientAgent(snapshot) => {
-            let ambient_agent_pane = model::NewAmbientAgentPane {
-                id,
-                uuid: snapshot.uuid.clone(),
-                task_id: snapshot.task_id.map(|t| t.to_string()),
-            };
-
-            diesel::insert_into(schema::ambient_agent_panes::dsl::ambient_agent_panes)
-                .values(ambient_agent_pane)
-                .execute(conn)?;
-        }
         LeafContents::NetworkLog => {
             // Unreachable: filtered by `is_persisted` in `save_app_state`.
         }
@@ -2399,21 +2383,19 @@ fn read_node(conn: &mut SqliteConnection, node: model::PaneNode) -> Result<PaneN
                         title: ai_document_pane.title,
                     })
                 }
-                AMBIENT_AGENT_PANE_KIND => {
-                    let pane = schema::ambient_agent_panes::dsl::ambient_agent_panes
-                        .find(node.id)
-                        .select(model::AmbientAgentPane::as_select())
-                        .first(conn)?;
-
-                    let task_id = pane
-                        .task_id
-                        .and_then(|id_str| id_str.parse::<AmbientAgentTaskId>().ok());
-
-                    LeafContents::AmbientAgent(AmbientAgentPaneSnapshot {
-                        uuid: pane.uuid,
-                        task_id,
-                    })
-                }
+                // Cloud agent panes are no longer supported; restore them as fresh terminals.
+                AMBIENT_AGENT_PANE_KIND => LeafContents::Terminal(TerminalPaneSnapshot {
+                    uuid: Uuid::new_v4().as_bytes().to_vec(),
+                    cwd: None,
+                    shell_launch_data: None,
+                    is_active: false,
+                    is_read_only: false,
+                    input_config: None,
+                    llm_model_override: None,
+                    active_profile_id: None,
+                    conversation_ids_to_restore: Vec::new(),
+                    active_conversation_id: None,
+                }),
                 other => bail!("Unrecognized pane kind: {other}"),
             };
 
@@ -2464,8 +2446,6 @@ fn box_persisted_generic_string_object(
         PersistedGenericStringObject::MCPServer(object) => Box::new(object),
         PersistedGenericStringObject::TemplatableMCPServer(object) => Box::new(object),
         PersistedGenericStringObject::AIExecutionProfile(object) => Box::new(object),
-        PersistedGenericStringObject::CloudEnvironment(object) => Box::new(object),
-        PersistedGenericStringObject::ScheduledAmbientAgent(object) => Box::new(object),
     }
 }
 
@@ -2695,9 +2675,6 @@ fn read_sqlite_data(
                         fullscreen_state: fullscreen_state_val,
                         left_panel_width,
                         right_panel_width,
-                        agent_management_filters: window
-                            .agent_management_filters
-                            .and_then(|s| serde_json::from_str(&s).ok()),
                         tab_groups: tab_groups_snapshots,
                     }
                 },

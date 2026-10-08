@@ -29,16 +29,6 @@ use crate::persistence::model::{
 };
 use crate::server::server_api::ServerApiProvider;
 use crate::server::server_api::ai::AIClient;
-use crate::terminal::model::block::SerializedBlock;
-
-/// A conversation transcript from a CLI agent harness (e.g. Claude Code).
-#[derive(Debug, Clone)]
-pub struct CLIAgentConversation {
-    /// Server metadata about this conversation.
-    pub metadata: ServerAIConversationMetadata,
-    /// A snapshot of the final agent block state.
-    pub block: SerializedBlock,
-}
 
 /// Representation of the conversation data that can be fetched from cloud storage.
 ///
@@ -47,8 +37,6 @@ pub enum CloudConversationData {
     /// A conversation produced by the Oz harness, which we can materialize into the
     /// [`AIConversation`] data model.
     Oz(Box<AIConversation>),
-    /// A conversation produced by an external CLI agent harness.
-    CLIAgent(Box<CLIAgentConversation>),
 }
 
 /// Converts an `AgentConversation` from the database to an `AIConversation`.
@@ -145,33 +133,10 @@ pub async fn load_conversation_from_server(
                     }
                 }
                 AIAgentHarness::ClaudeCode | AIAgentHarness::Gemini | AIAgentHarness::Codex => {
-                    if !FeatureFlag::AgentHarness.is_enabled() {
-                        log::warn!(
-                            "Ignoring non-Oz conversation {conversation_id}: AgentHarness flag is disabled"
-                        );
-                        return None;
-                    }
-                    // Fetch snapshot data for third-party harness conversations.
-                    match server_api
-                        .get_block_snapshot(server_conversation_token)
-                        .await
-                    {
-                        Ok(block) => {
-                            log::info!("Loaded CLI agent block snapshot for {conversation_id}");
-                            Some(CloudConversationData::CLIAgent(Box::new(
-                                CLIAgentConversation {
-                                    metadata: server_metadata,
-                                    block,
-                                },
-                            )))
-                        }
-                        Err(e) => {
-                            log::warn!(
-                                "Failed to fetch block snapshot for {conversation_id}: {e:#}"
-                            );
-                            None
-                        }
-                    }
+                    log::warn!(
+                        "Ignoring conversation {conversation_id}: third-party harness transcripts are not supported"
+                    );
+                    None
                 }
                 AIAgentHarness::Unknown => {
                     log::warn!(
