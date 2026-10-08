@@ -22,8 +22,6 @@ pub enum FeatureFlag {
 
     RuntimeFeatureFlags,
 
-    /// Enables cloud object related features for an explicit allowlist of team testers.
-    CloudObjects,
 
     /// If `true`, fetch updated Warp channel versions from the Warp server endpoint instead of
     /// from GCP directly.
@@ -60,8 +58,6 @@ pub enum FeatureFlag {
     /// to get a sense of PTY throughput over time.
     RecordPtyThroughput,
 
-    /// Whether to fetch generic string objects from the server.
-    FetchGenericStringObjects,
 
     /// Enables a setting on Intel Dual-GPU Macs to enable use of the integrated GPU over the
     /// discrete GPU.
@@ -110,14 +106,10 @@ pub enum FeatureFlag {
     /// Adds Alacritty as a supported terminal to import settings from.
     AlacrittySettingsImport,
 
-    /// Enable dynamic enum parameter types for workflow arguments
-    DynamicWorkflowEnums,
 
     /// Enables next action prediction within Warp, powered by AI.
     AgentPredict,
 
-    /// Enables receiving shared Warp Drive objects.
-    SharedWithMe,
 
     /// Enables workflows for use with Agent Mode.
     AgentModeWorkflows,
@@ -144,8 +136,6 @@ pub enum FeatureFlag {
     /// completion specs.
     NativeShellCompletions,
 
-    /// Adds aliases for executing Warp Drive workflows.
-    WorkflowAliases,
 
     SshDragAndDrop,
     DragTabsToWindows,
@@ -191,8 +181,6 @@ pub enum FeatureFlag {
     /// Enables Kitty image rendering
     KittyImages,
 
-    /// Enables support for Warp Packs.
-    WarpPacks,
 
     /// Enables the revised AI analytics policy banner.
     ///
@@ -304,8 +292,6 @@ pub enum FeatureFlag {
     /// Enables code symbols in AI context menu
     AIContextMenuCode,
 
-    /// Enables Warp Drive objects (like workflows) as context in AI context menu
-    DriveObjectsAsContext,
 
     /// Expands code diff edits to replace the current pane instead of opening in a new tab.
     ExpandEditToPane,

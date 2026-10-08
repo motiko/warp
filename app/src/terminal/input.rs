@@ -27,7 +27,6 @@ use diesel::SqliteConnection;
 use futures::FutureExt as _;
 use futures::stream::AbortHandle;
 use itertools::Itertools;
-use lazy_static::lazy_static;
 use ordered_float::Float;
 use parking_lot::FairMutex;
 #[cfg(feature = "local_fs")]
@@ -63,8 +62,7 @@ use warpui::elements::{
 };
 pub use warpui::elements::{ParentElement as _, Stack};
 pub use warpui::geometry::vector::{Vector2F, vec2f};
-use warpui::keymap::{BindingDescription, EditableBinding, FixedBinding, Keystroke};
-use warpui::platform::OperatingSystem;
+use warpui::keymap::{BindingDescription, EditableBinding, FixedBinding};
 use warpui::presenter::ChildView;
 use warpui::text_layout::TextStyle;
 use warpui::units::IntoPixels;
@@ -77,7 +75,7 @@ use self::decorations::InputBackgroundJobOptions;
 use super::alias::is_expandable_alias;
 use super::event::{BlockCompletedEvent, BlockType, UserBlockCompleted};
 use super::ligature_settings::LigatureSettings;
-use super::model::block::{BlockId, BlockMetadata, BlocklistEnvVarMetadata};
+use super::model::block::{BlockId, BlockMetadata};
 use super::model::completions::ShellCompletion;
 use super::model::session::{Session, SessionId, Sessions};
 use super::prompt_render_helper::{
@@ -99,9 +97,6 @@ use super::{History, HistoryEntry, SizeInfo, TerminalModel, prompt, should_right
 use crate::ASSETS;
 use crate::appearance::{Appearance, AppearanceEvent};
 use crate::channel::{Channel, ChannelState};
-use crate::cloud_object::model::persistence::CloudModel;
-use crate::cloud_object::model::view::CloudViewModel;
-use crate::cloud_object::{CloudObject, Space};
 #[cfg(feature = "local_fs")]
 use crate::code::editor_management::CodeSource;
 use crate::completer::SessionContext;
@@ -117,7 +112,6 @@ use crate::editor::{
     TextRun, default_cursor_colors, position_id_for_cached_point, position_id_for_cursor,
     position_id_for_first_cursor,
 };
-use crate::env_vars::EnvVarCollectionExt;
 use crate::features::FeatureFlag;
 use crate::input_suggestions::{
     Event as InputSuggestionsEvent, HistoryInputSuggestion, InputSuggestions,
@@ -131,9 +125,8 @@ use crate::prefix::longest_common_prefix;
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::search::QueryFilter;
 use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGISTRY;
-use crate::server::ids::SyncId;
 use crate::server::telemetry::{
-    CommandXRayTrigger, EnvVarTelemetryMetadata, PaletteSource, TelemetryEvent,
+    CommandXRayTrigger, PaletteSource, TelemetryEvent,
     WorkflowTelemetryMetadata,
 };
 use crate::session_management::SessionNavigationPromptElements;
@@ -170,21 +163,18 @@ use crate::voltron::{
     Voltron, VoltronEvent, VoltronFeatureView, VoltronFeatureViewHandle, VoltronFeatureViewMeta,
     VoltronItem, VoltronMetadata,
 };
-use crate::workflows::aliases::WorkflowAliases;
 use crate::workflows::command_parser::{
     WorkflowArgumentIndex, WorkflowDisplayData, compute_workflow_display_data,
     compute_workflow_display_data_for_history_command,
     compute_workflow_display_data_with_overrides,
 };
 use crate::workflows::info_box::{
-    WORKFLOW_PARAMETER_HIGHLIGHT_COLOR, WorkflowsInfoBoxViewEvent, WorkflowsMoreInfoView,
+    WORKFLOW_PARAMETER_HIGHLIGHT_COLOR, WorkflowsMoreInfoView,
 };
 use crate::workflows::local_workflows::LocalWorkflows;
-use crate::workflows::workflow_enum::EnumVariants;
 use crate::workflows::{self, WorkflowSelectionSource, WorkflowSource, WorkflowType};
 use crate::workspace::sync_inputs::SyncedInputState;
 use crate::workspace::{CommandSearchOptions, InitContent, ToastStack, WorkspaceAction};
-use crate::workspaces::user_workspaces::UserWorkspaces;
 #[allow(unused_imports)]
 use crate::{ServerApiProvider, cmd_or_ctrl_shift, send_telemetry_from_ctx};
 
@@ -248,15 +238,6 @@ const MIN_BUFFER_LEN_TO_SHOW_COMPLETIONS_WHILE_TYPING: usize = 2;
 
 const AI_COMMAND_SEARCH_TRIGGER: &str = "#";
 
-const DYNAMIC_ENUM_GENERATE_MESSAGE: &str = "Run the following command to generate variants:";
-const DYNAMIC_ENUM_RUN_MESSAGE: &str = "Run command";
-const DYNAMIC_ENUM_PENDING_MESSAGE: &str = "Command pending...";
-const DYNAMIC_ENUM_FAILURE_MESSAGE: &str = "Command failed";
-const DYNAMIC_ENUM_NO_RESULTS_MESSAGE: &str = "Command returned no results";
-const DYNAMIC_ENUM_MENU_PADDING: f32 = 10.;
-const DYNAMIC_ENUM_MENU_HEIGHT_OFFSET: f32 = 25.;
-const DYNAMIC_ENUM_HORIZONTAL_TEXT_PADDING: f32 = 5.;
-
 cfg_if::cfg_if! {
     if #[cfg(target_os = "macos")] {
     } else {
@@ -265,31 +246,12 @@ cfg_if::cfg_if! {
     }
 }
 
-lazy_static! {
-    static ref RUN_DYNAMIC_ENUM_COMMAND_KEYSTROKE: Keystroke = if OperatingSystem::get().is_mac() {
-        Keystroke {
-            cmd: true,
-            key: "enter".to_owned(),
-            ..Default::default()
-        }
-    } else {
-        Keystroke {
-            ctrl: true,
-            shift: true,
-            key: "enter".to_owned(),
-            ..Default::default()
-        }
-    };
-}
-
 #[derive(PartialEq, Eq, Copy, Clone, Serialize)]
 pub enum TelemetryInputSuggestionsMode {
     HistoryFuzzySearch,
     CompletionSuggestions,
     HistoryUp,
     NaturalLanguageCommandSearch,
-    StaticWorkflowEnumSuggestions,
-    DynamicWorkflowEnumSuggestions,
     SlashCommands,
     InlineHistoryMenu,
 }
@@ -372,40 +334,6 @@ pub enum InputSuggestionsMode {
         menu_position: TabCompletionsMenuPosition,
     },
 
-    StaticWorkflowEnumSuggestions {
-        /// The suggested values for the workflow argument.
-        suggestions: Vec<String>,
-
-        /// Where the menu should be positioned.
-        menu_position: TabCompletionsMenuPosition,
-
-        /// The selected ranges for every instance of the argument.
-        selected_ranges: Vec<Range<ByteOffset>>,
-
-        /// Store the cursor point of the end of the first selected argument.
-        cursor_point: BufferPoint,
-    },
-
-    DynamicWorkflowEnumSuggestions {
-        /// The suggested values for the workflow argument.
-        suggestions: Vec<String>,
-
-        /// Where the menu should be positioned.
-        menu_position: TabCompletionsMenuPosition,
-
-        /// The selected ranges for every instance of the argument.
-        selected_ranges: Vec<Range<ByteOffset>>,
-
-        /// Store the cursor point of the end of the first selected argument.
-        cursor_point: BufferPoint,
-
-        /// Store the current state of the dynamic enum suggestions menu.
-        dynamic_enum_status: DynamicEnumSuggestionStatus,
-
-        /// The command associated with the dynamic enum.
-        command: String,
-    },
-
     SlashCommands,
 
     /// Inline history menu mode for selecting commands from history.
@@ -413,18 +341,6 @@ pub enum InputSuggestionsMode {
 
     /// Mode indicating that no suggestion UI is being shown.
     Closed,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum DynamicEnumSuggestionStatus {
-    /// When the command has not yet been approved to run on the users laptop
-    Unapproved,
-    /// The command is running asynchronously, but has not yet finished so we do not have suggestions to display
-    Pending,
-    /// The command succeeded; display suggested variants
-    Success,
-    /// The command failed
-    Failure,
 }
 
 impl InputSuggestionsMode {
@@ -447,8 +363,6 @@ impl InputSuggestionsMode {
             InputSuggestionsMode::SlashCommands => Some("Search commands"),
             InputSuggestionsMode::HistoryUp { .. }
             | InputSuggestionsMode::CompletionSuggestions { .. }
-            | InputSuggestionsMode::StaticWorkflowEnumSuggestions { .. }
-            | InputSuggestionsMode::DynamicWorkflowEnumSuggestions { .. }
             | InputSuggestionsMode::InlineHistoryMenu
             | InputSuggestionsMode::Closed => None,
         }
@@ -467,12 +381,6 @@ impl InputSuggestionsMode {
             InputSuggestionsMode::CompletionSuggestions { .. } => {
                 TelemetryInputSuggestionsMode::CompletionSuggestions
             }
-            InputSuggestionsMode::StaticWorkflowEnumSuggestions { .. } => {
-                TelemetryInputSuggestionsMode::StaticWorkflowEnumSuggestions
-            }
-            InputSuggestionsMode::DynamicWorkflowEnumSuggestions { .. } => {
-                TelemetryInputSuggestionsMode::DynamicWorkflowEnumSuggestions
-            }
             InputSuggestionsMode::SlashCommands => TelemetryInputSuggestionsMode::SlashCommands,
             InputSuggestionsMode::InlineHistoryMenu => {
                 TelemetryInputSuggestionsMode::InlineHistoryMenu
@@ -487,10 +395,6 @@ impl InputSuggestionsMode {
 pub enum CommandExecutionSource {
     /// A normal command execution request.
     User,
-
-    EnvVarCollection {
-        metadata: BlocklistEnvVarMetadata,
-    },
 }
 
 fn render_prompt_chip_shell_command(
@@ -702,10 +606,6 @@ struct WorkflowsState {
     selected_workflow_state: Option<SelectedWorkflowState>,
 }
 
-struct EnvVarCollectionState {
-    selected_env_vars: Option<SyncId>,
-}
-
 /// State when a workflow is selected.
 #[derive(Clone)]
 struct SelectedWorkflowState {
@@ -721,9 +621,6 @@ struct SelectedWorkflowState {
     /// Map of arguments to the corresponding index of highlights. This is necessary so that we can
     /// select all instances of an argument when a user changes the selected argument.
     argument_index_to_highlight_index: HashMap<WorkflowArgumentIndex, Vec<usize>>,
-
-    /// Map of arguments with enum variants to those variants, which are used as suggested inputs to the argument.
-    argument_index_to_enum_variants: HashMap<WorkflowArgumentIndex, EnumVariants>,
 
     workflow_source: WorkflowSource,
     workflow_type: WorkflowType,
@@ -812,7 +709,6 @@ impl CompleterData {
                 current_session,
                 self.command_registry.clone(),
                 current_working_directory,
-                app,
             )
         })
     }
@@ -1029,7 +925,6 @@ pub struct Input {
     view_id: EntityId,
     input_render_state_model_handle: ModelHandle<InputRenderStateModel>,
     workflows_state: WorkflowsState,
-    env_var_collection_state: EnvVarCollectionState,
     voltron_view: ViewHandle<Voltron>,
     is_voltron_open: bool,
     command_x_ray_description: Option<Arc<Description>>,
@@ -1634,10 +1529,6 @@ impl Input {
             selected_workflow_state: None,
         };
 
-        let env_var_collection_state = EnvVarCollectionState {
-            selected_env_vars: None,
-        };
-
         let last_word_insertion = LastWordInsertion {
             insert_command_from_history_index: 0,
             is_latest_editor_event: false,
@@ -1665,13 +1556,10 @@ impl Input {
             },
         );
 
-        let slash_command_team_context_resolver =
-            UserWorkspaces::team_context_resolver(ctx.handle());
         let slash_command_data_source = ctx.add_model(|ctx| {
             let args = slash_commands::GuiDataSourceArgs {
                 active_session: active_session.clone(),
                 terminal_view_id,
-                team_context_resolver: slash_command_team_context_resolver.clone(),
             };
             GuiSlashCommandDataSource::new(args, ctx)
         });
@@ -1724,7 +1612,6 @@ impl Input {
             view_id,
             input_render_state_model_handle,
             workflows_state,
-            env_var_collection_state,
             voltron_view,
             is_voltron_open: false,
             command_x_ray_description: None,
@@ -1814,16 +1701,12 @@ impl Input {
                     .as_ref()
                     .and_then(|linked_workflow_data| linked_workflow_data.linked_workflow(ctx))
                 {
-                    // TODO(ben): We should include the chosen env vars in the history
-                    // entry.
-                    let env_vars = workflow_type.as_workflow().default_env_vars();
                     self.insert_workflow_into_input(
                         workflow_type,
                         workflow_source,
                         WorkflowSelectionSource::UpArrowHistory,
                         None,
                         Some(command),
-                        env_vars,
                         /*should_show_more_info_view=*/ false,
                         ctx,
                     );
@@ -1880,8 +1763,6 @@ impl Input {
 
         ctx.notify();
     }
-
-    // Auto-attach the last block for this query.
 
     fn handle_prompt_event(&mut self, event: &PromptDisplayEvent, ctx: &mut ViewContext<Self>) {
         match event {
@@ -2084,10 +1965,6 @@ impl Input {
             .as_ref(ctx)
             .start_byte_index_of_first_selection(ctx)
     }
-
-    // Returns the appropriate hint/placeholder text to render in an empty input when Agent Mode is
-    // enabled (the feature flag, not the specific AI input mode). This method ensures that hint text
-    // is cached when needed for new conversations.
 
     fn handle_input_settings_event(
         &mut self,
@@ -2492,13 +2369,6 @@ impl Input {
             .active_block_mut()
             .set_home_dir(home_dir);
 
-        let env_var_collection_id = self.env_var_collection_state.selected_env_vars;
-        self.model
-            .lock()
-            .block_list_mut()
-            .active_block_mut()
-            .set_cloud_env_var_state(env_var_collection_id);
-
         let did_execute = if self
             .model
             .lock()
@@ -2539,14 +2409,8 @@ impl Input {
         did_execute
     }
 
-    fn clear_selected_env_var_collection(&mut self) {
-        self.env_var_collection_state.selected_env_vars = None;
-    }
-
     /// Closes the workflows panel.
     fn clear_selected_workflow(&mut self, ctx: &mut ViewContext<Self>) {
-        // Clear the env var state if we had one.
-        self.clear_selected_env_var_collection();
 
         // `take()` closes the Workflows panel because the panel is only
         // rendered if `selected_workflow_state` is Some(..).
@@ -2654,22 +2518,13 @@ impl Input {
                 workflow,
                 workflow_source,
             } => {
-                let workflow_id = workflow.server_id();
                 let workflow_source = *workflow_source;
-                let space = workflow_id.and_then(|id| {
-                    CloudViewModel::as_ref(ctx)
-                        .object_space(&id.to_string(), ctx)
-                        .map(Into::into)
-                });
 
                 send_telemetry_from_ctx!(
                     TelemetryEvent::WorkflowSelected(WorkflowTelemetryMetadata {
                         workflow_source,
                         workflow_categories: workflow.as_workflow().tags().cloned(),
                         workflow_selection_source: WorkflowSelectionSource::Voltron,
-                        workflow_id,
-                        workflow_space: space,
-                        enum_ids: workflow.as_workflow().get_server_enum_ids()
                     }),
                     ctx
                 );
@@ -2699,17 +2554,6 @@ impl Input {
         self.workflows_state.selected_workflow_state.is_some()
     }
 
-    pub fn workflows_info_box_open_workflow_cloud_id(&self) -> Option<SyncId> {
-        if let Some(state) = &self.workflows_state.selected_workflow_state {
-            match &state.workflow_type {
-                WorkflowType::Cloud(workflow) => Some(workflow.id),
-                _ => None,
-            }
-        } else {
-            None
-        }
-    }
-
     pub fn show_workflows_info_box_on_workflow_selection(
         &mut self,
         workflow_type: WorkflowType,
@@ -2718,14 +2562,12 @@ impl Input {
         argument_override: Option<HashMap<String, String>>,
         ctx: &mut ViewContext<Input>,
     ) {
-        let env_vars = workflow_type.as_workflow().default_env_vars();
         self.insert_workflow_into_input(
             workflow_type,
             workflow_source,
             workflow_selection_source,
             argument_override,
             None,
-            env_vars,
             true,
             ctx,
         );
@@ -2739,14 +2581,12 @@ impl Input {
         workflow_selection_source: WorkflowSelectionSource,
         ctx: &mut ViewContext<Input>,
     ) {
-        let env_vars = workflow_type.as_workflow().default_env_vars();
         self.insert_workflow_into_input(
             workflow_type,
             workflow_source,
             workflow_selection_source,
             None,
             Some(history_command),
-            env_vars,
             true,
             ctx,
         );
@@ -2789,7 +2629,6 @@ impl Input {
         workflow_selection_source: WorkflowSelectionSource,
         argument_overrides: Option<HashMap<String, String>>,
         history_command: Option<&str>,
-        selected_env_vars: Option<SyncId>,
         should_show_more_info_view: bool,
         ctx: &mut ViewContext<Input>,
     ) {
@@ -2798,19 +2637,6 @@ impl Input {
         self.editor.update(ctx, |editor, ctx| {
             editor.clear_buffer(ctx);
         });
-
-        if let Some(env_vars_command) = selected_env_vars
-            .as_ref()
-            .and_then(|id| self.env_vars_command_prefix(id, ctx))
-        {
-            self.editor.update(ctx, |editor, ctx| {
-                editor.system_insert(
-                    &env_vars_command,
-                    PlainTextEditorViewAction::SystemInsert,
-                    ctx,
-                )
-            });
-        }
 
         // The workflow may or may not come from a history command. If it does, the history command may or may not match
         // the template of the original workflow. If it does match, we have extra display data to show (such as the indices in
@@ -2847,7 +2673,6 @@ impl Input {
                 command_with_replaced_arguments,
                 replaced_ranges,
                 argument_index_to_highlight_index_map,
-                argument_index_to_object_id_map,
                 ..
             }) => {
                 let text_style_ranges = replaced_ranges
@@ -2871,20 +2696,6 @@ impl Input {
                     );
                 });
 
-                // Get enum variants
-                let cloud_model = CloudModel::as_ref(ctx);
-                let enum_variants_map = argument_index_to_object_id_map
-                    .iter()
-                    .filter_map(|(index, object_id)| {
-                        cloud_model
-                            .get_workflow_enum(object_id)
-                            .map(|workflow_enum| {
-                                workflow_enum.model().string_model.variants.clone()
-                            })
-                            .map(|variants| (*index, variants))
-                    })
-                    .collect();
-
                 self.workflows_state.selected_workflow_state = Some(SelectedWorkflowState {
                     more_info_view: self.create_workflows_info_view(
                         workflow_type.clone(),
@@ -2892,7 +2703,6 @@ impl Input {
                         ctx,
                     ),
                     argument_index_to_highlight_index: argument_index_to_highlight_index_map,
-                    argument_index_to_enum_variants: enum_variants_map,
                     workflow_source,
                     workflow_type,
                     workflow_selection_source,
@@ -2915,7 +2725,6 @@ impl Input {
                         ctx,
                     ),
                     argument_index_to_highlight_index: HashMap::new(),
-                    argument_index_to_enum_variants: HashMap::new(),
                     workflow_source,
                     workflow_type,
                     workflow_selection_source,
@@ -2923,20 +2732,6 @@ impl Input {
                 });
             }
         };
-
-        self.env_var_collection_state.selected_env_vars = selected_env_vars;
-
-        // Ensure the env var selector dropdown is consistent with the selected env vars.
-        if let Some(more_info_view) = self
-            .workflows_state
-            .selected_workflow_state
-            .as_ref()
-            .map(|state| &state.more_info_view)
-        {
-            more_info_view.update(ctx, |info_view, ctx| {
-                info_view.set_environment_variables_selection(selected_env_vars, ctx);
-            })
-        }
 
         // Emit the a11y content as the last step so that it overwrites any of the a11y content
         // emitted by the editor (if multiple `AccessibilityContent`s are emitted within the same
@@ -2951,7 +2746,7 @@ impl Input {
             WarpA11yRole::UserAction,
         ));
 
-        // Only highlight an argument and show enum suggestions if history suggestions are not active
+        // Only highlight an argument if history suggestions are not active
         if !matches!(
             self.suggestions_mode_model.as_ref(ctx).mode(),
             InputSuggestionsMode::HistoryUp { .. } | InputSuggestionsMode::InlineHistoryMenu,
@@ -2964,78 +2759,19 @@ impl Input {
         self.focus_input_box(ctx);
     }
 
-    /// Builds a prefix for applying env vars to a command in the current session.
-    fn env_vars_command_prefix(&self, env_vars_id: &SyncId, ctx: &AppContext) -> Option<String> {
-        let shell_type = self.active_session(ctx)?.shell().shell_type();
-        let env_vars = &CloudModel::as_ref(ctx)
-            .get_env_var_collection(env_vars_id)?
-            .model()
-            .string_model;
-
-        if shell_type == ShellType::Fish {
-            // Warp currently doesn't support newlines in Fish, just prepend the vars
-            let mut command = env_vars.export_variables_for_shell(ShellType::Fish);
-            command.push(' ');
-            Some(command)
-        } else {
-            // Add newlines at the end to separate the vars from the comment/command
-            Some(format!(
-                "# Environment variables\n{}\n\n",
-                env_vars.export_variables(" ", shell_type.into())
-            ))
-        }
-    }
-
     fn create_workflows_info_view(
         &mut self,
         workflow: WorkflowType,
         show_shift_tab_treatment: bool,
         ctx: &mut ViewContext<Input>,
     ) -> ViewHandle<WorkflowsMoreInfoView> {
-        let workflow_more_info_view = ctx.add_typed_action_view(|ctx| {
+        ctx.add_typed_action_view(|ctx| {
             WorkflowsMoreInfoView::new(
                 *InputSettings::as_ref(ctx).workflows_box_expanded.value(),
                 workflow,
                 show_shift_tab_treatment,
-                ctx,
             )
-        });
-
-        ctx.subscribe_to_view(&workflow_more_info_view, move |me, _, event, ctx| {
-            me.handle_workflow_more_info_event(event, ctx);
-        });
-
-        workflow_more_info_view
-    }
-
-    fn handle_workflow_more_info_event(
-        &mut self,
-        event: &WorkflowsInfoBoxViewEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            WorkflowsInfoBoxViewEvent::PrefixCommandWithEnvironmentVariables(env_vars) => {
-                self.reset_workflow_state(*env_vars, ctx);
-
-                // The ID may be `None` if the user is *clearing* environment variables.
-                if let Some(env_vars_id) = env_vars {
-                    let env_vars_object =
-                        CloudModel::as_ref(ctx).get_env_var_collection(env_vars_id);
-                    let telemetry_metadata = EnvVarTelemetryMetadata {
-                        object_id: env_vars_id.into_server().map(Into::into),
-                        team_uid: env_vars_object
-                            .and_then(|object| object.permissions.owner.into()),
-                        space: env_vars_object
-                            .map_or(Space::Personal, |object| object.space(ctx))
-                            .into(),
-                    };
-                    send_telemetry_from_ctx!(
-                        TelemetryEvent::EnvVarWorkflowParameterization(telemetry_metadata),
-                        ctx
-                    );
-                }
-            }
-        }
+        })
     }
 
     /// Returns the a11y text for a workflow that is selected. `None`, if there is no workflow
@@ -3125,16 +2861,13 @@ impl Input {
         )
     }
 
-    /// Highlight the currently selected workflow argument and open the enum suggestions menu if applicable.
+    /// Highlight the currently selected workflow argument.
     /// Takes in `text_style_ranges`, which contains ByteOffset Ranges of arguments in the input editor.
     fn highlight_selected_workflow_argument(
         &mut self,
         text_style_ranges: Vec<Range<ByteOffset>>,
         ctx: &mut ViewContext<Self>,
     ) {
-        let mut variants = None;
-        let mut selected_ranges = Vec::new();
-
         if let Some(active_workflow_state) = self.workflows_state.selected_workflow_state.as_ref() {
             active_workflow_state
                 .more_info_view
@@ -3149,10 +2882,6 @@ impl Input {
                         ) {
                             selected_workflow_state.set_argument_cycling_enabled(false);
                         } else {
-                            variants = active_workflow_state
-                                .argument_index_to_enum_variants
-                                .get(&selected_workflow_state.currently_selected_argument());
-
                             selected_workflow_state.set_argument_cycling_enabled(true);
                             // Get all of the highlighted ranges for the currently selected argument.
                             let byte_ranges = active_workflow_state
@@ -3165,7 +2894,6 @@ impl Input {
                                 });
 
                             if let Some(byte_ranges) = byte_ranges {
-                                selected_ranges = byte_ranges.clone().collect();
                                 editor.select_ranges_by_byte_offset(byte_ranges, ctx);
                             }
                         }
@@ -3173,72 +2901,9 @@ impl Input {
                 });
         }
 
-        if let Some(enum_variants) = variants {
-            self.populate_enum_suggestions_menu(enum_variants.clone(), selected_ranges, ctx);
-        } else {
-            self.suggestions_mode_model.update(ctx, |m, ctx| {
-                m.set_mode(InputSuggestionsMode::Closed, ctx);
-            });
-        }
-        ctx.notify();
-    }
-
-    fn populate_enum_suggestions_menu(
-        &mut self,
-        enum_variants: EnumVariants,
-        selected_ranges: Vec<Range<ByteOffset>>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        // If the newly highlighted argument has enum variants, populate the suggestions menu
-        let position = self.editor.as_ref(ctx).first_selection_end_to_point(ctx);
-
-        self.editor.update(ctx, |editor, ctx| {
-            editor.cache_buffer_point(
-                position,
-                COMPLETIONS_START_OF_REPLACEMENT_SPAN_POSITION_ID,
-                ctx,
-            );
+        self.suggestions_mode_model.update(ctx, |m, ctx| {
+            m.set_mode(InputSuggestionsMode::Closed, ctx);
         });
-
-        let variants = match enum_variants {
-            EnumVariants::Static(variants) => {
-                self.suggestions_mode_model.update(ctx, |m, ctx| {
-                    m.set_mode(
-                        InputSuggestionsMode::StaticWorkflowEnumSuggestions {
-                            suggestions: variants.clone(),
-                            menu_position: TabCompletionsMenuPosition::AtFirstCursor,
-                            selected_ranges,
-                            cursor_point: position,
-                        },
-                        ctx,
-                    );
-                });
-                variants
-            }
-            EnumVariants::Dynamic(command) => {
-                if FeatureFlag::DynamicWorkflowEnums.is_enabled() {
-                    self.suggestions_mode_model.update(ctx, |m, ctx| {
-                        m.set_mode(
-                            InputSuggestionsMode::DynamicWorkflowEnumSuggestions {
-                                suggestions: vec![],
-                                menu_position: TabCompletionsMenuPosition::AtFirstCursor,
-                                selected_ranges,
-                                cursor_point: position,
-                                dynamic_enum_status: DynamicEnumSuggestionStatus::Unapproved,
-                                command,
-                            },
-                            ctx,
-                        );
-                    });
-                }
-                vec![]
-            }
-        };
-
-        self.input_suggestions.update(ctx, |input, ctx| {
-            input.set_enum_variants(variants, ctx);
-        });
-
         ctx.notify();
     }
 
@@ -3322,16 +2987,12 @@ impl Input {
                                 linked_workflow_data.linked_workflow(ctx)
                             })
                         {
-                            // TODO(ben): We should include the chosen env vars in the history
-                            // entry.
-                            let env_vars = workflow_type.as_workflow().default_env_vars();
                             self.insert_workflow_into_input(
                                 workflow_type,
                                 workflow_source,
                                 WorkflowSelectionSource::UpArrowHistory,
                                 None,
                                 Some(selected_item.text()),
-                                env_vars,
                                 /*should_show_more_info_view=*/ false,
                                 ctx,
                             );
@@ -3359,10 +3020,6 @@ impl Input {
                             });
                             ctx.notify();
                         }
-                    }
-                    InputSuggestionsMode::StaticWorkflowEnumSuggestions { .. }
-                    | InputSuggestionsMode::DynamicWorkflowEnumSuggestions { .. } => {
-                        // If in the future we want to replace the selected arguments with suggestion options as we cycle, this is where we do it
                     }
                     InputSuggestionsMode::SlashCommands => {
                         // Slash commands selection is handled separately
@@ -3416,10 +3073,7 @@ impl Input {
 
     /// Resets the SelectedWorkflowState back to the original workflow, with its original arguments. This
     /// is useful when the command does not match the original workflow.
-    fn reset_workflow_state(&mut self, env_vars: Option<SyncId>, ctx: &mut ViewContext<Input>) {
-        // We want to also initially clear the stored selected env var.
-        self.clear_selected_env_var_collection();
-
+    fn reset_workflow_state(&mut self, ctx: &mut ViewContext<Input>) {
         if let Some(state) = self.workflows_state.selected_workflow_state.take() {
             self.insert_workflow_into_input(
                 state.workflow_type,
@@ -3427,7 +3081,6 @@ impl Input {
                 state.workflow_selection_source,
                 None,
                 None,
-                env_vars,
                 true,
                 ctx,
             )
@@ -3469,23 +3122,6 @@ impl Input {
                     executing,
                     ctx,
                 );
-                true
-            }
-            InputSuggestionsMode::StaticWorkflowEnumSuggestions {
-                selected_ranges, ..
-            }
-            | InputSuggestionsMode::DynamicWorkflowEnumSuggestions {
-                selected_ranges, ..
-            } => {
-                let selected_ranges = selected_ranges.clone();
-                self.editor.update(ctx, |editor, ctx| {
-                    editor.select_and_replace(
-                        suggestion,
-                        selected_ranges.iter().cloned(),
-                        PlainTextEditorViewAction::AcceptCompletionSuggestion,
-                        ctx,
-                    );
-                });
                 true
             }
             InputSuggestionsMode::SlashCommands => {
@@ -3660,8 +3296,6 @@ impl Input {
             }
             InputSuggestionsMode::HistoryUp { .. }
             | InputSuggestionsMode::CompletionSuggestions { .. }
-            | InputSuggestionsMode::StaticWorkflowEnumSuggestions { .. }
-            | InputSuggestionsMode::DynamicWorkflowEnumSuggestions { .. }
             | InputSuggestionsMode::Closed => false,
         };
 
@@ -3801,9 +3435,6 @@ impl Input {
     }
 
     fn clear_current_workflow(&mut self, ctx: &mut ViewContext<Input>) {
-        // Whenever we clear the workflow we also want to clear the env vars
-        self.clear_selected_env_var_collection();
-
         if let Some(state) = self.workflows_state.selected_workflow_state.take() {
             self.update_workflows_info_box_expanded_setting(ctx, &state);
         }
@@ -3823,8 +3454,6 @@ impl Input {
             }
             InputSuggestionsMode::HistoryUp { .. }
             | InputSuggestionsMode::CompletionSuggestions { .. }
-            | InputSuggestionsMode::StaticWorkflowEnumSuggestions { .. }
-            | InputSuggestionsMode::DynamicWorkflowEnumSuggestions { .. }
             | InputSuggestionsMode::InlineHistoryMenu
             | InputSuggestionsMode::Closed => false,
         };
@@ -4414,20 +4043,6 @@ impl Input {
                             }
                         }
                     }
-                    InputSuggestionsMode::StaticWorkflowEnumSuggestions {
-                        cursor_point, ..
-                    }
-                    | InputSuggestionsMode::DynamicWorkflowEnumSuggestions {
-                        cursor_point, ..
-                    } => {
-                        let cursor_point = *cursor_point;
-                        let point = self.editor.as_ref(ctx).first_selection_end_to_point(ctx);
-                        let should_close = point != cursor_point;
-
-                        if should_close {
-                            self.close_input_suggestions(/*should_focus_input=*/ true, ctx);
-                        }
-                    }
                     InputSuggestionsMode::HistoryUp { .. } => {
                         // In HistoryUp mode, we replace the buffer as options
                         // are selected.
@@ -4527,24 +4142,6 @@ impl Input {
                                 );
                             }
                         }
-                        InputSuggestionsMode::StaticWorkflowEnumSuggestions {
-                            cursor_point,
-                            ..
-                        }
-                        | InputSuggestionsMode::DynamicWorkflowEnumSuggestions {
-                            cursor_point,
-                            ..
-                        } => {
-                            let cursor_point = *cursor_point;
-                            let point = self.editor.as_ref(ctx).first_selection_end_to_point(ctx);
-                            let should_close = point != cursor_point;
-
-                            if should_close {
-                                self.close_input_suggestions(
-                                    /*should_focus_input=*/ true, ctx,
-                                );
-                            }
-                        }
                         InputSuggestionsMode::SlashCommands => {
                             let cursor_pos = self
                                 .editor
@@ -4615,7 +4212,7 @@ impl Input {
             }
             EditorEvent::Navigate(NavigationKey::Right) => {}
             EditorEvent::Enter => self.input_enter(ctx),
-            EditorEvent::CmdEnter => self.input_cmd_enter(ctx),
+            EditorEvent::CmdEnter => {}
             EditorEvent::CtrlEnter => {}
             EditorEvent::Escape => self.editor_escape(ctx),
             EditorEvent::CtrlC { .. } => {
@@ -5310,97 +4907,6 @@ impl Input {
         self.completions_abort_handle = Some(abort_handle);
     }
 
-    /// Asynchronously generates dynamic enum suggestions.
-    fn get_enum_suggestions_async(
-        &mut self,
-        command: String,
-        editor_snapshot: EditorSnapshot,
-        ctx: &mut ViewContext<'_, Input>,
-    ) {
-        if let Some(completion_context) = self.completion_session_context(ctx) {
-            self.suggestions_mode_model.update(ctx, |m, ctx| {
-                m.set_dynamic_enum_status(DynamicEnumSuggestionStatus::Pending, ctx);
-            });
-            let abort_handle = ctx
-                .spawn(
-                    async move {
-                        let variants = super::dynamic_enum_suggestions::run_dynamic_enum_command(
-                            command.as_str(),
-                            &completion_context,
-                        )
-                        .await;
-
-                        (variants, editor_snapshot)
-                    },
-                    move |input, (variants, editor_model), ctx| {
-                        input.handle_enum_completion_results(variants, editor_model, ctx);
-                    },
-                )
-                .abort_handle();
-
-            self.completions_abort_handle = Some(abort_handle);
-            ctx.notify();
-        }
-    }
-
-    /// When the command finishes running, update the input suggestions menu with the suggestions.
-    fn handle_enum_completion_results(
-        &mut self,
-        results: anyhow::Result<Vec<String>>,
-        editor_snapshot_when_completer_was_ran: EditorSnapshot,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let current_editor_model = self
-            .editor
-            .read(ctx, |editor, ctx| editor.snapshot_model(ctx));
-
-        let buffer_text = self.editor.as_ref(ctx).buffer_text(ctx);
-        // If the editor has changed since the completions trigger was hit-- noop since the
-        // suggestions are no longer valid. Note that we purposely ignore attributes such as text
-        // styles for the purposes of this check (we only care about the buffer text content and
-        // the cursor selections state).
-        if buffer_text != editor_snapshot_when_completer_was_ran.text()
-            || current_editor_model.selections()
-                != editor_snapshot_when_completer_was_ran.selections()
-        {
-            return;
-        }
-
-        let (variants, status) = match results {
-            Ok(variants) => (variants, DynamicEnumSuggestionStatus::Success),
-            Err(e) => {
-                log::warn!("Failed to generate dynamic enum suggestions: {e:?}");
-                (vec![], DynamicEnumSuggestionStatus::Failure)
-            }
-        };
-
-        self.input_suggestions.update(ctx, |input, ctx| {
-            input.set_enum_variants(variants.clone(), ctx);
-        });
-
-        if let InputSuggestionsMode::DynamicWorkflowEnumSuggestions {
-            menu_position,
-            selected_ranges,
-            cursor_point,
-            command,
-            ..
-        } = self.suggestions_mode_model.as_ref(ctx).mode()
-        {
-            let updated_mode = InputSuggestionsMode::DynamicWorkflowEnumSuggestions {
-                dynamic_enum_status: status,
-                suggestions: variants,
-                menu_position: *menu_position,
-                selected_ranges: selected_ranges.clone(),
-                cursor_point: *cursor_point,
-                command: command.clone(),
-            };
-            self.suggestions_mode_model.update(ctx, |model, ctx| {
-                model.set_mode(updated_mode, ctx);
-            });
-        }
-
-        ctx.notify();
-    }
 
     fn path_separators(&self, ctx: &AppContext) -> PathSeparators {
         self.active_session(ctx)
@@ -5808,7 +5314,6 @@ impl Input {
                         current_session,
                         CommandRegistry::global_instance(),
                         current_working_directory,
-                        ctx,
                     )
                 })
             })
@@ -5972,14 +5477,6 @@ impl Input {
                     return;
                 }
             }
-            self.input_suggestions.update(ctx, |suggestions, ctx| {
-                suggestions.select_next(ctx);
-            });
-        } else if matches!(
-            self.suggestions_mode_model.as_ref(ctx).mode(),
-            InputSuggestionsMode::StaticWorkflowEnumSuggestions { .. }
-                | InputSuggestionsMode::DynamicWorkflowEnumSuggestions { .. }
-        ) {
             self.input_suggestions.update(ctx, |suggestions, ctx| {
                 suggestions.select_next(ctx);
             });
@@ -6161,53 +5658,11 @@ impl Input {
             self.input_suggestions.update(ctx, |suggestions, ctx| {
                 suggestions.confirm(ctx);
             })
-        } else if matches!(
-            self.suggestions_mode_model.as_ref(ctx).mode(),
-            InputSuggestionsMode::StaticWorkflowEnumSuggestions { .. }
-                | InputSuggestionsMode::DynamicWorkflowEnumSuggestions { .. }
-        ) {
-            self.input_suggestions.update(ctx, |suggestions, ctx| {
-                suggestions.confirm(ctx);
-            });
         } else if self.should_insert_newline_on_enter(ctx) {
             self.editor.update(ctx, |editor, ctx| {
                 editor.user_initiated_insert("\n", PlainTextEditorViewAction::NewLine, ctx)
             });
         } else {
-            if FeatureFlag::WorkflowAliases.is_enabled() {
-                let mut command_string = self.editor.as_ref(ctx).buffer_text(ctx);
-                // If the alias was inserted from the completions menu, it will have trailing
-                // whitespace - trim it in-place.
-                command_string.truncate(command_string.trim_end().len());
-
-                if let Some(alias) = WorkflowAliases::as_ref(ctx).match_alias(&command_string) {
-                    if let Some(workflow) = CloudModel::as_ref(ctx).get_workflow(&alias.workflow_id)
-                    {
-                        let owner = workflow.clone().permissions.owner.into();
-
-                        let workflow_type = WorkflowType::Cloud(Box::new(workflow.clone()));
-                        let env_vars = alias.env_vars.or(workflow.model().data.default_env_vars());
-
-                        self.insert_workflow_into_input(
-                            workflow_type,
-                            owner,
-                            WorkflowSelectionSource::Alias,
-                            alias.arguments,
-                            None,
-                            env_vars,
-                            true,
-                            ctx,
-                        );
-                        return;
-                    } else {
-                        log::warn!(
-                            "Tried to execute workflow for id {:?} but it does not exist",
-                            alias.workflow_id
-                        );
-                    };
-                }
-            }
-
             let command = self.get_command(ctx);
             if !self.try_execute_command(&command, ctx) {
                 return;
@@ -6218,20 +5673,6 @@ impl Input {
             }
 
             self.model.lock().set_is_input_dirty(false);
-        }
-    }
-
-    fn input_cmd_enter(&mut self, ctx: &mut ViewContext<Self>) {
-        // NaturalLanguageCommandSearch has its own `cmd+enter` behaviour, not expected to execute here
-        let mode = self.suggestions_mode_model.as_ref(ctx).mode().clone();
-        if let InputSuggestionsMode::DynamicWorkflowEnumSuggestions {
-            dynamic_enum_status: DynamicEnumSuggestionStatus::Unapproved,
-            command,
-            ..
-        } = &mode
-        {
-            let editor_model = self.editor.read(ctx, |view, ctx| view.snapshot_model(ctx));
-            self.get_enum_suggestions_async(command.clone(), editor_model, ctx);
         }
     }
 
@@ -6436,7 +5877,7 @@ impl Input {
             .expect("session_id should be set (via bootstrap) before executing command");
 
         // If the SelectedWorkflowState is populated with a workflow, we count this as a workflow execution.
-        let (workflow_id, workflow_command) = {
+        let workflow_command = {
             match self.workflows_state.selected_workflow_state.as_ref() {
                 Some(selected_workflow_state) => {
                     send_telemetry_from_ctx!(
@@ -6449,47 +5890,23 @@ impl Input {
                                 .cloned(),
                             workflow_selection_source: selected_workflow_state
                                 .workflow_selection_source,
-                            // This is only `Some()` for WarpDrive workflows; we don't track
-                            // ID for execution of local workflows because they have no such
-                            // unique ID.
-                            workflow_id: selected_workflow_state.workflow_type.server_id(),
-                            workflow_space: match &selected_workflow_state.workflow_type {
-                                WorkflowType::Cloud(workflow) => Some(workflow.space(ctx).into()),
-                                _ => None,
-                            },
-                            enum_ids: selected_workflow_state
-                                .workflow_type
-                                .as_workflow()
-                                .get_server_enum_ids()
                         }),
                         ctx
                     );
 
-                    let workflow_type = &selected_workflow_state.workflow_type;
-                    let workflow_id = match workflow_type {
-                        WorkflowType::Cloud(workflow) => Some(workflow.id),
-                        _ => None,
-                    };
-
-                    // If the SelectedWorkflowState is populated, then we're always able to return the workflow command.
-                    // The case where workflow_id = None but workflow_command = Some() is when it's a local workflow, which
-                    // don't have ids and are tracked just by persisting the workflow contents. This is a little janky and would
-                    // be fixed if we could identify all workflows under a unified id system, not just cloud ones.
-                    (
-                        workflow_id,
-                        workflow_type
-                            .as_workflow()
-                            .command()
-                            .map(|command| command.to_owned()),
-                    )
+                    // Workflows are tracked in history by their templated command.
+                    selected_workflow_state
+                        .workflow_type
+                        .as_workflow()
+                        .command()
+                        .map(|command| command.to_owned())
                 }
-                None => (None, None),
+                None => None,
             }
         };
 
         ctx.emit(Event::ExecuteCommand(Box::new(ExecuteCommandEvent {
             command: command.to_string(),
-            workflow_id,
             session_id,
             workflow_command,
             should_add_command_to_history,
@@ -6583,15 +6000,9 @@ impl Input {
             .get(session_id)
             .and_then(|session| {
                 session.subshell_info().as_ref().map(|info| {
-                    if let Some(env_var_collection_name) = &info.env_var_collection_name {
-                        Some(SubshellRenderState::Flag(SubshellSource::EnvVarCollection(
-                            env_var_collection_name.to_owned(),
-                        )))
-                    } else {
-                        info.spawning_command.split_whitespace().next().map(|exec| {
-                            SubshellRenderState::Flag(SubshellSource::Command(exec.to_owned()))
-                        })
-                    }
+                    info.spawning_command.split_whitespace().next().map(|exec| {
+                        SubshellRenderState::Flag(SubshellSource::Command(exec.to_owned()))
+                    })
                 })
             })?;
 
@@ -6866,7 +6277,7 @@ impl TypedActionView for Input {
                 self.maybe_open_completion_suggestions(ctx);
             }
             InputAction::HideWorkflowInfoCard => self.hide_workflows_info_box(ctx),
-            InputAction::ResetWorkflowState => self.reset_workflow_state(None, ctx),
+            InputAction::ResetWorkflowState => self.reset_workflow_state(ctx),
             InputAction::ToggleClassicCompletionsMode => {
                 InputSettings::handle(ctx).update(ctx, |settings, ctx| {
                     if let Err(e) = settings.classic_completions_mode.toggle_and_save_value(ctx) {

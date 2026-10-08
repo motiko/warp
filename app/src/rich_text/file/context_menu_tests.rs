@@ -1,24 +1,19 @@
 use pathfinder_geometry::vector::vec2f;
-use string_offset::ByteOffset;
 use warp_core::ui::appearance::Appearance;
 use warp_editor::model::CoreEditorModel;
 use warpui::App;
 use warpui::platform::WindowStyle;
 
-use super::MenuSource;
+use super::FileNotebookView;
 use crate::auth::AuthStateProvider;
-use crate::cloud_object::model::persistence::CloudModel;
-use crate::cloud_object::model::view::CloudViewModel;
 use crate::editor::InteractionState;
 use crate::network::NetworkStatus;
-use crate::notebooks::notebook::NotebookView;
 use crate::pane_group::focus_state::{PaneFocusHandle, PaneGroupFocusState};
 use crate::pane_group::{BackingView as _, PaneId};
+use crate::rich_text::context_menu::MenuSource;
 use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::search::files::model::FileSearchModel;
-use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::server_api::ServerApiProvider;
-use crate::server::sync_queue::SyncQueue;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::test_util::settings::initialize_settings_for_tests;
 use crate::workspace::ActiveSession;
@@ -32,15 +27,11 @@ fn initialize_app(app: &mut App) {
 
     let global_resources = GlobalResourceHandles::mock(app);
     app.add_singleton_model(|_| GlobalResourceHandlesProvider::new(global_resources));
-    app.add_singleton_model(CloudModel::mock);
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(|_| Appearance::mock());
 
     app.add_singleton_model(UserWorkspaces::default_mock);
-    app.add_singleton_model(SyncQueue::mock);
     app.add_singleton_model(TeamTesterStatus::mock);
-    app.add_singleton_model(UpdateManager::mock);
-    app.add_singleton_model(CloudViewModel::mock);
     app.add_singleton_model(|_| UserProfiles::new(vec![]));
     app.add_singleton_model(|_| ServerApiProvider::new_for_test());
     app.add_singleton_model(|_| ActiveSession::default());
@@ -72,24 +63,24 @@ fn test_rich_text_actions() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let (_window_id, notebook) = app.add_window(WindowStyle::NotStealFocus, NotebookView::new);
+        let (_window_id, notebook) = app.add_window(WindowStyle::NotStealFocus, FileNotebookView::new);
 
         // With no selection, the only text action should be to paste.
         notebook.update(&mut app, |notebook, ctx| {
             let source = MenuSource::RichTextEditor {
                 parent_offset: vec2f(0., 0.),
-                editor: notebook.input_editor(),
+                editor: notebook.editor.clone(),
             };
-            notebook.context_menu().show_context_menu(source, ctx);
+            notebook.context_menu.show_context_menu(source, ctx);
             assert_eq!(
-                notebook.context_menu().item_names(ctx),
+                notebook.context_menu.item_names(ctx),
                 standard_menu_items(["Paste"])
             );
         });
 
         // Once text is selected, cut/copy become available.
         notebook.update(&mut app, |notebook, ctx| {
-            notebook.input_editor().update(ctx, |editor, ctx| {
+            notebook.editor.clone().update(ctx, |editor, ctx| {
                 editor.reset_with_markdown("Hello, World!", ctx);
                 editor
                     .model()
@@ -98,83 +89,27 @@ fn test_rich_text_actions() {
 
             let source = MenuSource::RichTextEditor {
                 parent_offset: vec2f(0., 0.),
-                editor: notebook.input_editor(),
+                editor: notebook.editor.clone(),
             };
-            notebook.context_menu().show_context_menu(source, ctx);
+            notebook.context_menu.show_context_menu(source, ctx);
             assert_eq!(
-                notebook.context_menu().item_names(ctx),
+                notebook.context_menu.item_names(ctx),
                 standard_menu_items(["Cut", "Copy", "Paste"])
             );
         });
 
         // If the editor is read-only, cut and paste are disabled.
         notebook.update(&mut app, |notebook, ctx| {
-            notebook.input_editor().update(ctx, |editor, ctx| {
+            notebook.editor.clone().update(ctx, |editor, ctx| {
                 editor.set_interaction_state(InteractionState::Selectable, ctx)
             });
             let source = MenuSource::RichTextEditor {
                 parent_offset: vec2f(0., 0.),
-                editor: notebook.input_editor(),
+                editor: notebook.editor.clone(),
             };
-            notebook.context_menu().show_context_menu(source, ctx);
+            notebook.context_menu.show_context_menu(source, ctx);
             assert_eq!(
-                notebook.context_menu().item_names(ctx),
-                standard_menu_items(["Copy"])
-            );
-        })
-    });
-}
-
-#[test]
-fn test_plain_text_actions() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let (_window_id, notebook) = app.add_window(WindowStyle::NotStealFocus, NotebookView::new);
-
-        // With no selection, the only text action should be to paste.
-        notebook.update(&mut app, |notebook, ctx| {
-            let source = MenuSource::TextEditor {
-                parent_offset: vec2f(0., 0.),
-                editor: notebook.title_editor(),
-            };
-            notebook.context_menu().show_context_menu(source, ctx);
-            assert_eq!(
-                notebook.context_menu().item_names(ctx),
-                standard_menu_items(["Paste"]),
-            );
-        });
-
-        // Once text is selected, cut/copy become available.
-        notebook.update(&mut app, |notebook, ctx| {
-            notebook.title_editor().update(ctx, |editor, ctx| {
-                editor.set_buffer_text("The Title", ctx);
-                editor.select_ranges_by_byte_offset([ByteOffset::zero()..ByteOffset::from(4)], ctx)
-            });
-
-            let source = MenuSource::TextEditor {
-                parent_offset: vec2f(0., 0.),
-                editor: notebook.title_editor(),
-            };
-            notebook.context_menu().show_context_menu(source, ctx);
-            assert_eq!(
-                notebook.context_menu().item_names(ctx),
-                standard_menu_items(["Cut", "Copy", "Paste"]),
-            );
-        });
-
-        // If the editor is read-only, cut and paste are disabled.
-        notebook.update(&mut app, |notebook, ctx| {
-            notebook.title_editor().update(ctx, |editor, ctx| {
-                editor.set_interaction_state(InteractionState::Selectable, ctx)
-            });
-            let source = MenuSource::TextEditor {
-                parent_offset: vec2f(0., 0.),
-                editor: notebook.title_editor(),
-            };
-            notebook.context_menu().show_context_menu(source, ctx);
-            assert_eq!(
-                notebook.context_menu().item_names(ctx),
+                notebook.context_menu.item_names(ctx),
                 standard_menu_items(["Copy"])
             );
         })
@@ -186,7 +121,7 @@ fn test_split_pane_actions() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let (_window_id, notebook) = app.add_window(WindowStyle::NotStealFocus, NotebookView::new);
+        let (_window_id, notebook) = app.add_window(WindowStyle::NotStealFocus, FileNotebookView::new);
 
         // Set up focus state to simulate being in a split pane.
         let pane_id = PaneId::dummy_pane_id();
@@ -204,13 +139,13 @@ fn test_split_pane_actions() {
 
         // In a split pane, all the management actions are available.
         notebook.update(&mut app, |notebook, ctx| {
-            let source = MenuSource::TextEditor {
+            let source = MenuSource::RichTextEditor {
                 parent_offset: vec2f(0., 0.),
-                editor: notebook.title_editor(),
+                editor: notebook.editor.clone(),
             };
-            notebook.context_menu().show_context_menu(source, ctx);
+            notebook.context_menu.show_context_menu(source, ctx);
             assert_eq!(
-                notebook.context_menu().item_names(ctx),
+                notebook.context_menu.item_names(ctx),
                 vec![
                     "Paste",
                     "----",
@@ -231,13 +166,13 @@ fn test_split_pane_actions() {
 
         // If not in a split pane, maximize and close actions are hidden.
         notebook.update(&mut app, |notebook, ctx| {
-            let source = MenuSource::TextEditor {
+            let source = MenuSource::RichTextEditor {
                 parent_offset: vec2f(0., 0.),
-                editor: notebook.title_editor(),
+                editor: notebook.editor.clone(),
             };
-            notebook.context_menu().show_context_menu(source, ctx);
+            notebook.context_menu.show_context_menu(source, ctx);
             assert_eq!(
-                notebook.context_menu().item_names(ctx),
+                notebook.context_menu.item_names(ctx),
                 vec![
                     "Paste",
                     "----",
@@ -256,21 +191,21 @@ fn test_copy_file_path_action() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
 
-        let (_window_id, notebook) = app.add_window(WindowStyle::NotStealFocus, NotebookView::new);
+        let (_window_id, notebook) = app.add_window(WindowStyle::NotStealFocus, FileNotebookView::new);
 
         // When a path is set, "Copy file path" appears as its own section, separated from the
         // text-action section (here "Paste") and the split-pane section.
         notebook.update(&mut app, |notebook, ctx| {
             notebook
-                .context_menu()
+                .context_menu
                 .set_copy_file_path(Some("/tmp/notes.md".to_string()));
             let source = MenuSource::RichTextEditor {
                 parent_offset: vec2f(0., 0.),
-                editor: notebook.input_editor(),
+                editor: notebook.editor.clone(),
             };
-            notebook.context_menu().show_context_menu(source, ctx);
+            notebook.context_menu.show_context_menu(source, ctx);
             assert_eq!(
-                notebook.context_menu().item_names(ctx),
+                notebook.context_menu.item_names(ctx),
                 vec![
                     "Paste",
                     "----",
@@ -287,19 +222,19 @@ fn test_copy_file_path_action() {
         // With an empty text-action section (read-only, no selection), "Copy file path" leads the
         // menu with no separator before it.
         notebook.update(&mut app, |notebook, ctx| {
-            notebook.input_editor().update(ctx, |editor, ctx| {
+            notebook.editor.clone().update(ctx, |editor, ctx| {
                 editor.set_interaction_state(InteractionState::Selectable, ctx)
             });
             notebook
-                .context_menu()
+                .context_menu
                 .set_copy_file_path(Some("/tmp/notes.md".to_string()));
             let source = MenuSource::RichTextEditor {
                 parent_offset: vec2f(0., 0.),
-                editor: notebook.input_editor(),
+                editor: notebook.editor.clone(),
             };
-            notebook.context_menu().show_context_menu(source, ctx);
+            notebook.context_menu.show_context_menu(source, ctx);
             assert_eq!(
-                notebook.context_menu().item_names(ctx),
+                notebook.context_menu.item_names(ctx),
                 vec![
                     "Copy file path",
                     "----",
@@ -314,14 +249,14 @@ fn test_copy_file_path_action() {
         // When no path is set, the item is absent (the default for non-file notebooks). The
         // editor is still read-only from above, so only the split-pane items remain.
         notebook.update(&mut app, |notebook, ctx| {
-            notebook.context_menu().set_copy_file_path(None);
+            notebook.context_menu.set_copy_file_path(None);
             let source = MenuSource::RichTextEditor {
                 parent_offset: vec2f(0., 0.),
-                editor: notebook.input_editor(),
+                editor: notebook.editor.clone(),
             };
-            notebook.context_menu().show_context_menu(source, ctx);
+            notebook.context_menu.show_context_menu(source, ctx);
             assert_eq!(
-                notebook.context_menu().item_names(ctx),
+                notebook.context_menu.item_names(ctx),
                 vec![
                     "Split pane right",
                     "Split pane left",

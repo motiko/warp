@@ -1,9 +1,28 @@
 use std::collections::HashMap;
 
-pub use cloud_object_models::UserProfileWithUID;
 use warpui::{Entity, SingletonEntity};
 
 use crate::auth::UserUid;
+
+/// A user profile, as stored in sqlite or received from the server.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UserProfileWithUID {
+    pub firebase_uid: UserUid,
+    pub display_name: Option<String>,
+    pub email: String,
+    pub photo_url: String,
+}
+
+impl From<warp_graphql::user::PublicUserProfile> for UserProfileWithUID {
+    fn from(value: warp_graphql::user::PublicUserProfile) -> Self {
+        UserProfileWithUID {
+            firebase_uid: UserUid::new(&value.uid),
+            display_name: value.display_name,
+            email: value.email.unwrap_or_default(),
+            photo_url: value.photo_url.unwrap_or_default(),
+        }
+    }
+}
 
 pub enum UserProfilesEvent {}
 
@@ -62,38 +81,9 @@ impl UserProfiles {
         }
     }
 
-    pub fn clear_profiles(&mut self) {
-        self.users_by_id.clear()
-    }
-
-    pub fn profile_for_uid(&self, uid: UserUid) -> Option<&UserProfileData> {
-        self.users_by_id.get(&uid)
-    }
-
-    pub fn displayable_identifier_for_uid(&self, uid: UserUid) -> Option<String> {
-        self.users_by_id
-            .get(&uid)
-            .map(UserProfileData::displayable_identifier)
-    }
-
-    /// Get the display name for the user with the given email address. If the user is unknown,
-    /// returns `None`.
-    pub fn displayable_identifier_for_email(&self, email: &str) -> Option<String> {
-        self.users_by_id
-            .values()
-            .find(|profile| profile.email == email)
-            .map(UserProfileData::displayable_identifier)
-    }
 }
 
 impl UserProfileData {
-    pub fn displayable_identifier(&self) -> String {
-        self.display_name
-            .as_ref()
-            .filter(|name| !name.is_empty())
-            .unwrap_or(&self.email)
-            .clone()
-    }
 }
 
 impl Entity for UserProfiles {

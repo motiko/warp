@@ -63,10 +63,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::RectSelection,
         #[cfg(feature = "alacritty_settings_import")]
         FeatureFlag::AlacrittySettingsImport,
-        #[cfg(feature = "dynamic_workflow_enums")]
-        FeatureFlag::DynamicWorkflowEnums,
-        #[cfg(feature = "shared_with_me")]
-        FeatureFlag::SharedWithMe,
         #[cfg(feature = "am_workflows")]
         FeatureFlag::AgentModeWorkflows,
         #[cfg(feature = "ai_rules")]
@@ -79,8 +75,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::FullScreenZenMode,
         #[cfg(feature = "minimalist_ui")]
         FeatureFlag::MinimalistUI,
-        #[cfg(feature = "workflow_aliases")]
-        FeatureFlag::WorkflowAliases,
         #[cfg(feature = "ssh_drag_and_drop")]
         FeatureFlag::SshDragAndDrop,
         #[cfg(feature = "drag_tabs_to_windows")]
@@ -103,8 +97,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::AutoupdateUIRevamp,
         #[cfg(all(not(windows), feature = "kitty_images"))]
         FeatureFlag::KittyImages,
-        #[cfg(feature = "warp_packs")]
-        FeatureFlag::WarpPacks,
         #[cfg(feature = "global_ai_analytics_banner")]
         FeatureFlag::GlobalAIAnalyticsBanner,
         #[cfg(feature = "global_ai_analytics_collection")]
@@ -215,8 +207,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::GetStartedTab,
         #[cfg(feature = "projects")]
         FeatureFlag::Projects,
-        #[cfg(feature = "drive_objects_as_context")]
-        FeatureFlag::DriveObjectsAsContext,
         #[cfg(feature = "pr_comments_v2")]
         FeatureFlag::PRCommentsV2,
         #[cfg(feature = "pr_comments_skill")]

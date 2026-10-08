@@ -12,8 +12,7 @@ use warpui::ui_components::components::UiComponent;
 use warpui::{AppContext, Element, SingletonEntity};
 
 use crate::appearance::Appearance;
-use crate::drive::DriveObjectType;
-use crate::drive::cloud_object_styling::warp_drive_icon_color;
+use crate::workflows::workflow_icon_color;
 use crate::search::command_palette::mixer::CommandPaletteItemAction;
 use crate::search::command_palette::render_util::{
     render_search_item_icon, render_search_item_icon_placeholder,
@@ -205,12 +204,10 @@ impl SearchItemIcon for BindingGroup {
             | Self::Folders
             | Self::Terminal
             | Self::Notifications
+            | Self::Notebooks
+            | Self::EnvVarCollection
             | Self::WarpAi => appearance.theme().foreground().into_solid(),
-            Self::Workflow => warp_drive_icon_color(appearance, DriveObjectType::Workflow),
-            Self::Notebooks => warp_drive_icon_color(appearance, DriveObjectType::Notebook),
-            Self::EnvVarCollection => {
-                warp_drive_icon_color(appearance, DriveObjectType::EnvVarCollection)
-            }
+            Self::Workflow => workflow_icon_color(appearance),
         }
     }
 }

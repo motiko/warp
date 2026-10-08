@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::{Context as _, Result, anyhow};
 use async_trait::async_trait;
-use cloud_objects::ids::ServerId;
+use crate::ids::ServerId;
 use cynic::{MutationBuilder, QueryBuilder};
 use firebase::FirebaseError;
 use instant::Duration;

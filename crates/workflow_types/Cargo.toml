@@ -7,7 +7,6 @@ publish.workspace = true
 license.workspace = true
 
 [dependencies]
-cloud_objects.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 warp-workflows.workspace = true

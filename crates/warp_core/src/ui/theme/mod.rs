@@ -343,16 +343,6 @@ impl Fill {
         }
     }
 
-    /// Convert this Fill into a solid color, taking the right color for horizontal gradients and
-    /// the midpoint color for vertical gradients.
-    pub fn into_solid_bias_right_color(self) -> ColorU {
-        match self {
-            Self::Solid(c) => c,
-            Self::HorizontalGradient(g) => g.right,
-            Self::VerticalGradient(g) => g.midcolor(),
-        }
-    }
-
     /// Convert this Fill into a version of itself whose color is adaptively faded based on the
     /// background brightness. Uses less aggressive fading on light backgrounds and more aggressive
     /// fading on dark backgrounds to maintain optimal contrast.

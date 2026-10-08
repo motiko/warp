@@ -20,7 +20,6 @@ use crate::terminal::input::slash_command_model::{
 use crate::terminal::input::slash_commands::AcceptSlashCommand;
 use crate::terminal::model::session::SessionType;
 use crate::terminal::model::session::active_session::{ActiveSession, ActiveSessionEvent};
-use crate::workspaces::user_workspaces::{TeamContext, TeamContextResolver};
 
 /// Event emitted when the set of active slash commands changes.
 #[derive(Debug, Clone, Copy)]
@@ -63,22 +62,17 @@ pub struct SlashCommandDataSourceState {
     terminal_view_id: EntityId,
     active_commands_by_id: HashMap<SlashCommandId, StaticCommand>,
     active_repo_root: Option<PathBuf>,
-    /// Resolves the team context of the window this data source's terminal surface belongs to,
-    /// minted by that surface at construction. See [`SlashCommandDataSource::team_context`].
-    team_context_resolver: TeamContextResolver,
 }
 impl SlashCommandDataSourceState {
     pub(super) fn new(
         active_session: ModelHandle<ActiveSession>,
         terminal_view_id: EntityId,
-        team_context_resolver: TeamContextResolver,
     ) -> Self {
         Self {
             active_session,
             terminal_view_id,
             active_commands_by_id: HashMap::new(),
             active_repo_root: None,
-            team_context_resolver,
         }
     }
 }
@@ -99,12 +93,6 @@ pub trait SlashCommandDataSource {
 
     fn terminal_view_id(&self) -> EntityId {
         self.state().terminal_view_id
-    }
-
-    /// The team context of the window this data source's terminal surface belongs to. Resolved
-    /// on demand so it follows the surface if it is ever moved between windows.
-    fn team_context<'a>(&self, app: &'a AppContext) -> TeamContext<'a> {
-        (self.state().team_context_resolver)(app)
     }
 
     fn active_commands(&self) -> impl Iterator<Item = (&SlashCommandId, &StaticCommand)> {

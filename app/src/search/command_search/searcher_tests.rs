@@ -415,7 +415,6 @@ fn test_history_score_stays_comparable_to_other_sources_raw_skim_scale() {
             author: None,
             author_url: None,
             shells: vec![],
-            environment_variables: None,
         };
         let fuzzy_matched_workflow =
             FuzzyMatchWorkflowResult::try_match("test", &weak_workflow, "")

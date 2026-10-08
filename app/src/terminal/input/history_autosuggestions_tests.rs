@@ -209,7 +209,7 @@ fn test_session_context(cwd: TypedPathBuf, app: &App) -> SessionContext {
         SessionInfo::new_for_test(),
         Arc::new(TestCommandExecutor::default()),
     );
-    app.read(|ctx| SessionContext::new(session, CommandRegistry::default().into(), cwd, ctx))
+    app.read(|_| SessionContext::new(session, CommandRegistry::default().into(), cwd))
 }
 
 #[test]

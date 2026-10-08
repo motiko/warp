@@ -30,7 +30,6 @@ GIT_DEPS=(
     "font-kit|rev=a04b225ecb639bb850f21d05212cfdc7465000f3|font-kit|Cargo.toml"
     "mermaid-to-svg|rev=8d3f789c2eb49335d7bf247a06bb649f59b6d4ed|mermaid_to_svg, dagre_rust|Cargo.toml"
     "notify|rev=91b719849bc04ef251bcb2cc61076b099204e970|notify-debouncer-full, notify, notify-types, file-id|Cargo.toml"
-    "session-sharing-protocol|rev=f86afe16e65a56ecb9c062c961fcd91167192e9f|session-sharing-protocol|Cargo.toml"
     "vte|rev=4b399c87b63ba88f45709edaa6383fc519f6c900|vte, vte_generate_state_changes, utf8parse|Cargo.toml"
     "workflows|rev=793a98ddda6ef19682aed66364faebd2829f0e01|warp-workflows, warp-workflows-types|Cargo.toml"
     "warp-proto-apis|rev=aad8b601abc02256ce6ea9648ff598ed0139a265|warp_multi_agent_api|Cargo.toml"

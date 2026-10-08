@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use cloud_objects::ids::ServerId;
+use crate::ids::ServerId;
 use futures::executor::block_on;
 use warp_core::channel::ChannelState;
 use warp_server_auth::auth_state::AuthState;

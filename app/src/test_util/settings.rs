@@ -25,13 +25,12 @@ pub fn initialize_settings_for_tests_with_mode(
     use warp_core::execution_mode::AppExecutionMode;
     use warp_core::semantic_selection::SemanticSelection;
 
-    use crate::drive::settings::WarpDriveSettings;
     use crate::search::command_search::settings::CommandSearchSettings;
     use crate::settings::app_icon::AppIconSettings;
     use crate::settings::manager::SettingsManager;
     use crate::settings::{
         AISettings, AccessibilitySettings, AliasExpansionSettings, AppEditorSettings,
-        BlockVisibilitySettings, ChangelogSettings, CloudPreferencesSettings, CodeSettings,
+        BlockVisibilitySettings, ChangelogSettings, CodeSettings,
         DebugSettings, EmacsBindingsSettings, FontSettings, GPUSettings, InputModeSettings,
         InputSettings, LocalControlSettings, NativePreferenceSettings, PaneSettings,
         SameLinePromptBlockSettings, ScrollSettings, SelectionSettings, SshSettings, ThemeSettings,
@@ -66,7 +65,6 @@ pub fn initialize_settings_for_tests_with_mode(
     BlockVisibilitySettings::register(app);
     BlockListSettings::register(app);
     ChangelogSettings::register(app);
-    CloudPreferencesSettings::register(app);
     CommandSearchSettings::register(app);
     DebugSettings::register(app);
     crate::settings::DefaultSessionSettings::register(app);
@@ -111,7 +109,6 @@ pub fn initialize_settings_for_tests_with_mode(
     ThemeSettings::register(app);
     UndoCloseSettings::register(app);
     VimBannerSettings::register(app);
-    WarpDriveSettings::register(app);
     WindowSettings::register(app);
     CodeSettings::register(app);
     SemanticSelection::register(app);

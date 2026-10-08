@@ -41,7 +41,7 @@ use crate::server::telemetry::PaletteSource;
 use crate::settings_view::{self, SettingsSection, flags};
 use crate::tab::{NewSessionMenuItem, uses_vertical_tabs};
 use crate::util::bindings::{self, CustomAction, cmd_or_ctrl_shift, is_binding_pty_compliant};
-use crate::{code, modal, notebooks, rich_text, tab_configs};
+use crate::{code, modal, rich_text, tab_configs};
 
 // Helper function to access panel header corner radius from other modules
 pub fn panel_header_corner_radius() -> warpui::elements::CornerRadius {
@@ -78,7 +78,6 @@ pub fn init(app: &mut AppContext) {
         WorkspaceAction::DispatchToSettingsTab(settings_action)
     });
     global_actions::init_global_actions(app);
-    notebooks::init(app);
     rich_text::init(app);
     code::init(app);
     sync_inputs::init(app);
@@ -904,16 +903,6 @@ pub fn init(app: &mut AppContext) {
     .with_group(bindings::BindingGroup::Navigation.as_str())
     .with_context_predicate(id!("Workspace"))
     .with_custom_action(CustomAction::ToggleResourceCenter)]);
-
-    if cfg!(not(target_family = "wasm")) {
-        app.register_editable_bindings([EditableBinding::new(
-            "workspace:export_all_warp_drive_objects",
-            "Export all Warp Drive objects",
-            WorkspaceAction::ExportAllWarpDriveObjects,
-        )
-        .with_group(bindings::BindingGroup::Settings.as_str())
-        .with_context_predicate(id!("Workspace") & id!(flags::ENABLE_WARP_DRIVE))]);
-    }
 
     // Warp Control CLI install/uninstall actions (macOS only)
     #[cfg(target_os = "macos")]

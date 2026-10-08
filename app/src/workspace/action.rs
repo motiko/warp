@@ -19,7 +19,6 @@ use super::view::WorkspaceBanner;
 use crate::palette::PaletteMode;
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::search;
-use crate::server::ids::SyncId;
 use crate::server::telemetry::{AddTabWithShellSource, PaletteSource};
 use crate::settings_view::{SettingsAction as SettingsTabAction, SettingsSection};
 use crate::tab::{NewSessionMenuItem, SelectedTabColor};
@@ -276,7 +275,6 @@ pub enum WorkspaceAction {
     ToggleErrorUnderlining,
     ToggleSyntaxHighlighting,
     CheckForUpdate,
-    ExportAllWarpDriveObjects,
     SetA11yVerbosityLevel(AccessibilityVerbosity),
     ToggleNotifications,
     ToggleTabColor {
@@ -295,7 +293,6 @@ pub enum WorkspaceAction {
     ShowCommandSearch(CommandSearchOptions),
     TriggerExternalCtrlTFileSearch,
     TriggerExternalAltCDirectorySearch,
-    CreatePersonalEnvVarCollection,
     ToggleMouseReporting,
     ToggleScrollReporting,
     ToggleFocusReporting,
@@ -364,8 +361,6 @@ pub enum WorkspaceAction {
     ToggleSyncTerminalInputsInTab,
     /// An action to force terminal input syncing off
     DisableTerminalInputSync,
-    HandleConflictingWorkflow(SyncId),
-    HandleConflictingEnvVarCollection(SyncId),
     OpenPromptEditor {
         open_source: PromptEditorOpenSource,
     },
@@ -421,9 +416,6 @@ pub enum WorkspaceAction {
     OpenFileInNewTab {
         full_path: PathBuf,
         line_and_column: Option<LineAndColumnArg>,
-    },
-    OpenNotebook {
-        id: SyncId,
     },
     RunWorkflow {
         workflow: Arc<WorkflowType>,
@@ -607,7 +599,6 @@ impl WorkspaceAction {
             | AddWindowWithShell { .. }
             | CloseWindow
             | ScrollToSettingsWidget { .. }
-            | OpenNotebook { .. }
             | RunWorkflow { .. }
             | OpenFileInNewTab { .. }
             | NewCodeFile
@@ -622,7 +613,6 @@ impl WorkspaceAction {
             | CopyVersion(_)
             | DownloadNewVersion
             | ConfigureKeybindingSettings { .. }
-            | ExportAllWarpDriveObjects
             | ShowSettings
             | ShowSettingsPage(_)
             | ShowSettingsPageWithSearch { .. }
@@ -667,7 +657,6 @@ impl WorkspaceAction {
             | ToggleMouseReporting
             | ToggleScrollReporting
             | ToggleFocusReporting
-            | CreatePersonalEnvVarCollection
             | OpenInExplorer { .. }
             | DragTab { .. }
             | StartTabDrag
@@ -702,8 +691,6 @@ impl WorkspaceAction {
             | ToggleSyncAllTerminalInputsInAllTabs
             | ToggleSyncTerminalInputsInTab
             | DisableTerminalInputSync
-            | HandleConflictingWorkflow(_)
-            | HandleConflictingEnvVarCollection(_)
             | OpenPromptEditor { .. }
             | OpenHeaderToolbarEditor
             | ShowHeaderToolbarContextMenu { .. }

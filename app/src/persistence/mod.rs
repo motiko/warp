@@ -21,7 +21,7 @@ use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, OnceLock};
 use std::thread::JoinHandle;
 
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local};
 use instant::Instant;
 use lsp::supported_servers::LSPServerType;
 use persistence::workspace_metadata::WorkspaceMetadata as CodeWorkspaceMetadata;
@@ -36,27 +36,17 @@ pub use sqlite::database_file_path_for_scope;
 pub use sqlite::establish_ro_connection;
 use warp_core::command::ExitCode;
 use warp_errors::report_error;
-use warp_graphql::scalars::time::ServerTimestamp;
 use warpui::{AppContext, Entity, SingletonEntity};
 
 use self::model::Project;
 use crate::app_state::AppState;
 use crate::auth::auth_manager::PersistedCurrentUserInformation;
-use crate::cloud_object::model::actions::ObjectAction;
-use crate::cloud_object::model::generic_string_model::CloudStringObject;
-use crate::cloud_object::{
-    CloudObject, CloudObjectMetadata, ObjectIdType, RevisionAndLastEditor, ServerCreationInfo,
-};
-use crate::drive::folders::CloudFolder;
-use crate::notebooks::CloudNotebook;
 use crate::projects::persisted_workspace::EnablementState;
 use crate::server::experiments::ServerExperiment;
-use crate::server::ids::SyncId;
 use crate::suggestions::ignored_suggestions_model::SuggestionType;
 use crate::terminal::history::PersistedCommand;
 use crate::terminal::model::block::SerializedBlock;
 use crate::terminal::model::session::SessionId;
-use crate::workflows::CloudWorkflow;
 use crate::workspaces::user_profiles::UserProfileWithUID;
 use crate::workspaces::workspace::{Workspace as WorkspaceMetadata, WorkspaceUid};
 
@@ -118,10 +108,6 @@ impl PersistedDataScope {
         self != PersistedDataScope::Daemon
     }
 
-    /// Pending object actions, which only the GUI consumes.
-    fn gui_only_data(self) -> bool {
-        matches!(self, PersistedDataScope::Full)
-    }
 }
 
 /// Initializes the persistence "subsystem".
@@ -251,14 +237,10 @@ pub struct PersistedData {
     /// [`PersistedDataScope`] excludes it entirely (the daemon).
     pub app_state: Option<AppState>,
 
-    /// Shareable objects.
-    pub cloud_objects: Vec<Box<dyn CloudObject>>,
     pub workspaces: Vec<WorkspaceMetadata>,
     pub current_workspace_uid: Option<WorkspaceUid>,
     pub command_history: Vec<PersistedCommand>,
     pub user_profiles: Vec<UserProfileWithUID>,
-    pub time_of_next_force_object_refresh: Option<DateTime<Utc>>,
-    pub object_actions: Vec<ObjectAction>,
     pub experiments: Vec<ServerExperiment>,
     pub codebase_indices: Vec<CodeWorkspaceMetadata>,
     pub workspace_language_servers: HashMap<PathBuf, HashMap<LSPServerType, EnablementState>>,
@@ -284,7 +266,6 @@ pub struct StartedCommandMetadata {
     pub hostname: Option<String>,
     pub session_id: Option<SessionId>,
     pub git_branch: Option<String>,
-    pub cloud_workflow_id: Option<SyncId>,
     pub workflow_command: Option<String>,
 }
 
@@ -301,35 +282,6 @@ pub enum ModelEvent {
     SaveBlock(BlockCompleted),
     DeleteBlocks(Vec<u8>),
     Snapshot(AppState),
-    UpsertWorkflows(Vec<CloudWorkflow>),
-    UpsertNotebooks(Vec<CloudNotebook>),
-    UpsertFolders(Vec<CloudFolder>),
-    MarkObjectAsSynced {
-        hashed_sqlite_id: String,
-        revision_and_editor: RevisionAndLastEditor,
-        metadata_ts: Option<ServerTimestamp>,
-    },
-    IncrementRetryCount(String),
-    UpsertGenericStringObject {
-        object: Box<dyn CloudStringObject>,
-    },
-    UpsertGenericStringObjects(Vec<Box<dyn CloudStringObject>>),
-    UpsertNotebook {
-        notebook: CloudNotebook,
-    },
-    UpsertWorkflow {
-        workflow: CloudWorkflow,
-    },
-    UpsertFolder {
-        folder: CloudFolder,
-    },
-    UpdateObjectAfterServerCreation {
-        client_id: String,
-        server_creation_info: ServerCreationInfo,
-    },
-    DeleteObjects {
-        ids: Vec<(SyncId, ObjectIdType)>,
-    },
     UpsertWorkspace {
         workspace: Box<WorkspaceMetadata>,
     },
@@ -338,10 +290,6 @@ pub enum ModelEvent {
     },
     SetCurrentWorkspace {
         workspace_uid: WorkspaceUid,
-    },
-    UpdateObjectMetadata {
-        id: String,
-        metadata: CloudObjectMetadata,
     },
     InsertCommand {
         metadata: StartedCommandMetadata,
@@ -353,9 +301,6 @@ pub enum ModelEvent {
         profiles: Vec<UserProfileWithUID>,
     },
     ClearUserProfiles,
-    RecordTimeOfNextRefresh {
-        timestamp: DateTime<Utc>,
-    },
     SaveExperiments {
         experiments: Vec<ServerExperiment>,
     },
@@ -365,12 +310,6 @@ pub enum ModelEvent {
     PauseAndRemoveDatabase,
     #[cfg(feature = "local_fs")]
     ReconstructAndResume,
-    InsertObjectAction {
-        object_action: ObjectAction,
-    },
-    SyncObjectActions {
-        actions_to_sync: Vec<ObjectAction>,
-    },
     /// Close the SQLite writer thread when the app is about to quit.
     Terminate,
     UpsertCurrentUserInformation {

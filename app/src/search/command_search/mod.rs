@@ -1,4 +1,3 @@
-mod env_var_collections;
 mod history;
 pub mod natural_language;
 mod natural_language_data_source;

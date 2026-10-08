@@ -17,6 +17,7 @@ use warp_completer::completer::{
 };
 use warp_completer::meta::Span;
 use warp_util::user_input::UserInput;
+use warpui::keymap::Keystroke;
 use warpui::platform::WindowStyle;
 use warpui::text::SelectionType;
 use warpui::{App, UpdateView, WindowId};
@@ -27,7 +28,6 @@ use super::*;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::AuthManager;
 use crate::changelog_model::ChangelogModel;
-use crate::cloud_object::model::persistence::CloudModel;
 use crate::context_chips::prompt::Prompt;
 use crate::editor::{DisplayPoint, EditorAction, Point, TextStyleOperation};
 use crate::input_suggestions::Item;
@@ -35,10 +35,7 @@ use crate::network::NetworkStatus;
 use crate::projects::persisted_workspace::PersistedWorkspace;
 use crate::search::files::model::FileSearchModel;
 use crate::search::slash_command_menu::static_commands::commands;
-use crate::server::cloud_objects::listener::Listener;
-use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::server_api::ServerApiProvider;
-use crate::server::sync_queue::SyncQueue;
 use crate::server::telemetry::context_provider::AppTelemetryContextProvider;
 use crate::settings::import::model::ImportedConfigModel;
 use crate::settings::{AliasExpansionSettings, AppEditorSettings, PrivacySettings};
@@ -231,14 +228,10 @@ pub fn initialize_app(app: &mut App) {
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(|_| SystemStats::new());
     app.add_singleton_model(|_| Prompt::mock());
-    app.add_singleton_model(SyncQueue::mock);
-    app.add_singleton_model(CloudModel::mock);
     app.add_singleton_model(ImportedConfigModel::new);
     app.add_singleton_model(UserWorkspaces::default_mock);
     app.add_singleton_model(TeamTesterStatus::mock);
     app.add_singleton_model(TeamUpdateManager::mock);
-    app.add_singleton_model(UpdateManager::mock);
-    app.add_singleton_model(Listener::mock);
     app.add_singleton_model(|_| Appearance::mock());
     app.add_singleton_model(PrivacySettings::mock);
     app.add_singleton_model(|_ctx| SyncedInputState::mock());
@@ -1450,7 +1443,6 @@ fn test_histignorespace_support_in_zsh() {
                 &ExecuteCommandEvent {
                     command: "cd".into(),
                     session_id,
-                    workflow_id: None,
                     workflow_command: None,
                     should_add_command_to_history: true,
                     source: CommandExecutionSource::User,
@@ -1465,7 +1457,6 @@ fn test_histignorespace_support_in_zsh() {
                 &ExecuteCommandEvent {
                     command: " ls".into(),
                     session_id,
-                    workflow_id: None,
                     workflow_command: None,
                     should_add_command_to_history: true,
                     source: CommandExecutionSource::User,

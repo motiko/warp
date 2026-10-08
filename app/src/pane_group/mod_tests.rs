@@ -17,18 +17,12 @@ use super::*;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::AuthManager;
 use crate::changelog_model::ChangelogModel;
-use crate::cloud_object::model::persistence::CloudModel;
 use crate::context_chips::prompt::Prompt;
 use crate::network::NetworkStatus;
-use crate::notebooks::manager::NotebookManager;
-use crate::notebooks::notebook::NotebookView;
 use crate::projects::persisted_workspace::PersistedWorkspace;
 use crate::rich_text::editor::keys::NotebookKeybindings;
 use crate::search::files::model::FileSearchModel;
-use crate::server::cloud_objects::listener::Listener;
-use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::server_api::ServerApiProvider;
-use crate::server::sync_queue::SyncQueue;
 use crate::server::telemetry::context_provider::AppTelemetryContextProvider;
 use crate::settings::PrivacySettings;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
@@ -62,13 +56,9 @@ fn initialize_app(app: &mut App) {
     app.add_singleton_model(|_ctx| PtySpawner::new_for_test());
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(|_| SystemStats::new());
-    app.add_singleton_model(SyncQueue::mock);
-    app.add_singleton_model(CloudModel::mock);
     app.add_singleton_model(UserWorkspaces::default_mock);
     app.add_singleton_model(TeamTesterStatus::mock);
     app.add_singleton_model(TeamUpdateManager::mock);
-    app.add_singleton_model(Listener::mock);
-    app.add_singleton_model(UpdateManager::mock);
     app.add_singleton_model(|_| DetectedRepositories::default());
     app.add_singleton_model(HomeDirectoryWatcher::new_for_test);
     app.add_singleton_model(DirectoryWatcher::new);
@@ -80,7 +70,6 @@ fn initialize_app(app: &mut App) {
     app.add_singleton_model(LocalWorkflows::new);
     app.add_singleton_model(|_| Prompt::mock());
     app.add_singleton_model(|_| ResizableData::default());
-    app.add_singleton_model(NotebookManager::mock);
     app.add_singleton_model(|_| ActiveSession::default());
     let global_resources = GlobalResourceHandles::mock(app);
     app.add_singleton_model(|_| GlobalResourceHandlesProvider::new(global_resources.clone()));
@@ -152,10 +141,6 @@ fn split_pane_state(panes: &PaneGroup, pane_id: PaneId, ctx: &AppContext) -> Spl
 
 fn is_active_session(panes: &PaneGroup, pane_id: PaneId, ctx: &AppContext) -> bool {
     panes.active_session_id(ctx).map(Into::into) == Some(pane_id)
-}
-
-fn new_notebook(ctx: &mut ViewContext<PaneGroup>) -> ViewHandle<NotebookView> {
-    ctx.add_typed_action_view(NotebookView::new)
 }
 
 struct PreAttachReturnsFalsePane {
@@ -292,10 +277,10 @@ fn test_active_session_id_reset_on_last_pane_close() {
                 terminal_id.as_terminal_pane_id()
             );
 
-            // Add a non-terminal pane (Notebook) so the pane group remains alive when terminal is closed.
+            // Add a non-terminal pane so the pane group remains alive when terminal is closed.
             panes.add_pane_with_direction(
                 Direction::Right,
-                NotebookPane::new(new_notebook(ctx), ctx),
+                FilePane::new(None, None, None, ctx),
                 false, /* focus_new_pane */
                 ctx,
             );
@@ -348,7 +333,7 @@ fn test_focus_notebook() {
             // Add a notebook to the left.
             panes.add_pane_with_direction(
                 Direction::Left,
-                NotebookPane::new(new_notebook(ctx), ctx),
+                FilePane::new(None, None, None, ctx),
                 true, /* focus_new_pane */
                 ctx,
             );
@@ -429,7 +414,7 @@ fn test_group_without_terminals() {
             // Add a notebook to the left.
             panes.add_pane_with_direction(
                 Direction::Left,
-                NotebookPane::new(new_notebook(ctx), ctx),
+                FilePane::new(None, None, None, ctx),
                 true, /* focus_new_pane */
                 ctx,
             );
@@ -462,7 +447,7 @@ fn test_close_active_session() {
             // Add a notebook to the left.
             panes.add_pane_with_direction(
                 Direction::Left,
-                NotebookPane::new(new_notebook(ctx), ctx),
+                FilePane::new(None, None, None, ctx),
                 true, /* focus_new_pane */
                 ctx,
             );
@@ -829,7 +814,7 @@ fn test_terminal_pane_headers() {
         pane_group.update(&mut app, |pane_group, ctx| {
             pane_group.add_pane_with_direction(
                 Direction::Left,
-                NotebookPane::new(new_notebook(ctx), ctx),
+                FilePane::new(None, None, None, ctx),
                 true, /* focus_new_pane */
                 ctx,
             );

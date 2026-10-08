@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use pane_group::{NotebookPane, PaneState, SplitPaneState, TerminalPaneId};
+use pane_group::{FilePane, PaneState, SplitPaneState, TerminalPaneId};
 #[cfg(feature = "local_fs")]
 use repo_metadata::CanonicalizedPath;
 #[cfg(feature = "local_fs")]
@@ -19,28 +19,20 @@ use warpui::{AddSingletonModel, App, ViewHandle};
 use watcher::HomeDirectoryWatcher;
 
 use super::*;
-use crate::cloud_object::Owner;
-use crate::cloud_object::model::persistence::CloudModel;
-use crate::cloud_object::model::view::CloudViewModel;
 use crate::context_chips::prompt::Prompt;
 use crate::editor::Event;
 use crate::gpu_state::GPUState;
 use crate::network::NetworkStatus;
-use crate::notebooks::notebook::NotebookView;
 use crate::pane_group::{Direction, PaneGroupAction, PaneId};
 use crate::projects::persisted_workspace::PersistedWorkspace;
 use crate::resource_center::ResourceCenterPage;
 use crate::rich_text::editor::keys::NotebookKeybindings;
-use crate::server::cloud_objects::listener::Listener;
-use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::experiments::ServerExperiments;
 use crate::server::server_api::ServerApiProvider;
 use crate::server::server_api::team::{MockTeamClient, TeamClient};
 use crate::server::server_api::workspace::MockWorkspaceClient;
-use crate::server::sync_queue::SyncQueue;
 use crate::server::telemetry::context_provider::AppTelemetryContextProvider;
 use crate::settings::PrivacySettings;
-use crate::settings::cloud_preferences_syncer::CloudPreferencesSyncer;
 use crate::settings_view::DisplayCount;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::suggestions::ignored_suggestions_model::IgnoredSuggestionsModel;
@@ -60,7 +52,7 @@ use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_profiles::UserProfiles;
 use crate::workspaces::user_workspaces::UserWorkspaces;
-use crate::{GlobalResourceHandlesProvider, ObjectActions, experiments, workspace};
+use crate::{GlobalResourceHandlesProvider, experiments, workspace};
 pub(crate) fn initialize_app(app: &mut App) {
     initialize_app_with_team_client(app, Arc::new(MockTeamClient::new()));
 }
@@ -79,8 +71,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(|_| SystemStats::new());
     app.add_singleton_model(|_| crate::tab::TabShortcutModifierState::new());
-    app.add_singleton_model(SyncQueue::mock);
-    app.add_singleton_model(CloudModel::mock);
     app.add_singleton_model(|ctx| {
         UserWorkspaces::mock(
             team_client,
@@ -92,9 +82,6 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     app.add_singleton_model(|_ctx| UserProfiles::new(Vec::new()));
     app.add_singleton_model(TeamTesterStatus::mock);
     app.add_singleton_model(TeamUpdateManager::mock);
-    app.add_singleton_model(UpdateManager::mock);
-    app.add_singleton_model(CloudViewModel::mock);
-    app.add_singleton_model(Listener::mock);
     app.add_singleton_model(|_| Appearance::mock());
     app.add_singleton_model(AppearanceManager::new);
     app.add_singleton_model(|_| DisplayCount::mock());
@@ -108,16 +95,7 @@ pub(crate) fn initialize_app_with_team_client(app: &mut App, team_client: Arc<dy
     app.add_singleton_model(UndoCloseStack::new);
     app.add_singleton_model(|_| ActiveSession::default());
     app.add_singleton_model(|_| WorkspaceToastStack);
-    app.add_singleton_model(|_| ObjectActions::new(Vec::new()));
     app.add_singleton_model(NotebookKeybindings::new);
-    app.add_singleton_model(NotebookManager::mock);
-    app.add_singleton_model(|ctx| {
-        CloudPreferencesSyncer::new(
-            false,                     // force_local_wins_on_startup
-            std::path::PathBuf::new(), // unused in tests that don't exercise the hash path
-            ctx,
-        )
-    });
     app.add_singleton_model(|_| SettingsPaneManager::new());
 
     app.add_singleton_model(|_| DetectedRepositories::default());
@@ -1612,84 +1590,6 @@ fn test_closing_tab_context_menu_restores_active_tab_focus() {
 }
 
 #[test]
-fn test_notebook_pane_tracking() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let workspace = mock_workspace(&mut app);
-
-        workspace.update(&mut app, |workspace, ctx| {
-            // Add a new notebook pane.
-            workspace.open_notebook(
-                &NotebookSource::New {
-                    title: None,
-                    owner: Owner::mock_current_user(),
-                    initial_folder_id: None,
-                },
-                &OpenWarpDriveObjectSettings::default(),
-                ctx,
-                true,
-            );
-
-            // Get the ID of the new notebook.
-            let pane_group = workspace
-                .get_pane_group_view(0)
-                .expect("Pane group does not exist")
-                .clone();
-            let notebook_view = pane_group
-                .as_ref(ctx)
-                .notebook_view_at_pane_index(0, ctx)
-                .expect("Notebook view was not created")
-                .clone();
-            let notebook_pane_id = pane_group
-                .as_ref(ctx)
-                .pane_id_from_index(0)
-                .expect("Notebook view should have been created");
-            let notebook_id = notebook_view
-                .as_ref(ctx)
-                .notebook_id(ctx)
-                .expect("Notebook should have an ID");
-
-            // The notebook should be registered with the NotebookManager.
-            let (window, locator) = NotebookManager::as_ref(ctx)
-                .find_pane(&NotebookSource::Existing(notebook_id))
-                .expect("Notebook pane should be registered");
-            assert_eq!(window, ctx.window_id());
-            assert_eq!(
-                locator,
-                PaneViewLocator {
-                    pane_group_id: pane_group.id(),
-                    pane_id: notebook_pane_id,
-                }
-            );
-
-            // Re-opening the notebook should not create a new view.
-            workspace.open_notebook(
-                &NotebookSource::Existing(notebook_id),
-                &OpenWarpDriveObjectSettings::default(),
-                ctx,
-                true,
-            );
-            assert_eq!(
-                ctx.views_of_type::<NotebookView>(ctx.window_id()),
-                Some(vec![notebook_view])
-            );
-
-            // Finally, closing the notebook pane should de-register it.
-            pane_group.update(ctx, |pane_group, ctx| {
-                pane_group.handle_action(&PaneGroupAction::RemoveActive, ctx)
-            });
-            assert_eq!(
-                NotebookManager::handle(ctx)
-                    .as_ref(ctx)
-                    .find_pane(&NotebookSource::Existing(notebook_id)),
-                None
-            );
-        });
-    });
-}
-
-#[test]
 fn test_set_active_terminal_input_contents_and_focus_app() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
@@ -1868,10 +1768,9 @@ fn test_focus_notebook() {
 
         let notebook_id = pane_group.update(&mut app, |panes, ctx| {
             // Add a notebook to the left.
-            let notebook_view = ctx.add_typed_action_view(NotebookView::new);
             panes.add_pane_with_direction(
                 Direction::Left,
-                NotebookPane::new(notebook_view, ctx),
+                FilePane::new(None, None, None, ctx),
                 true, /* focus_new_pane */
                 ctx,
             );
@@ -1985,10 +1884,9 @@ fn test_close_active_session() {
 
         let notebook_id = pane_group.update(&mut app, |panes, ctx| {
             // Add a notebook to the left.
-            let notebook_view = ctx.add_typed_action_view(NotebookView::new);
             panes.add_pane_with_direction(
                 Direction::Left,
-                NotebookPane::new(notebook_view, ctx),
+                FilePane::new(None, None, None, ctx),
                 true, /* focus_new_pane */
                 ctx,
             );

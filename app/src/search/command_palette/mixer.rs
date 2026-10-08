@@ -8,7 +8,6 @@ use warpui::{EntityId, WindowId};
 use crate::launch_configs::launch_config::LaunchConfig;
 use crate::search::command_palette::new_session::{NewSessionOption, NewSessionOptionId};
 use crate::search::mixer::SearchMixer;
-use crate::server::ids::SyncId;
 use crate::util::bindings::CommandBinding;
 use crate::workspace::PaneViewLocator;
 
@@ -19,15 +18,6 @@ pub enum CommandPaletteItemAction {
     /// A binding result was clicked.
     AcceptBinding {
         binding: Arc<CommandBinding>,
-    },
-    ExecuteWorkflow {
-        id: SyncId,
-    },
-    OpenNotebook {
-        id: SyncId,
-    },
-    InvokeEnvironmentVariables {
-        id: SyncId,
     },
     /// Navigate to the session identified by `pane_view`.
     NavigateToSession {
@@ -70,11 +60,6 @@ impl CommandPaletteItemAction {
             CommandPaletteItemAction::AcceptBinding { binding } => ItemSummary::Action {
                 binding_id: binding.id,
             },
-            CommandPaletteItemAction::OpenNotebook { id } => ItemSummary::Notebook { id: *id },
-            CommandPaletteItemAction::ExecuteWorkflow { id } => ItemSummary::Workflow { id: *id },
-            CommandPaletteItemAction::InvokeEnvironmentVariables { id } => {
-                ItemSummary::EnvVarCollection { id: *id }
-            }
             CommandPaletteItemAction::NavigateToSession {
                 pane_view_locator, ..
             } => ItemSummary::Session {
@@ -129,15 +114,6 @@ impl CommandPaletteItemAction {
 pub enum ItemSummary {
     Action {
         binding_id: BindingId,
-    },
-    Workflow {
-        id: SyncId,
-    },
-    EnvVarCollection {
-        id: SyncId,
-    },
-    Notebook {
-        id: SyncId,
     },
     Session {
         pane_view_locator: PaneViewLocator,

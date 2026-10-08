@@ -1,4 +1,3 @@
-use cloud_objects::ids::{GenericStringObjectId, SyncId};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
@@ -31,8 +30,6 @@ pub enum Workflow {
         author_url: Option<String>,
         #[serde(default)]
         shells: Vec<warp_workflows::Shell>,
-        #[serde(default)]
-        environment_variables: Option<SyncId>,
     },
 }
 
@@ -132,68 +129,6 @@ impl Workflow {
             .is_some_and(|first| first.eq_ignore_ascii_case(&c))
     }
 
-    /// Return a list of every enum ID referenced by this workflow.
-    pub fn get_enum_ids(&self) -> Vec<SyncId> {
-        self.arguments()
-            .iter()
-            .filter_map(|arg| match arg.arg_type {
-                ArgumentType::Enum { enum_id } => Some(enum_id),
-                ArgumentType::Text => None,
-            })
-            .collect()
-    }
-
-    /// Return a list of every enum ID that has been synced to the server, used for telemetry.
-    pub fn get_server_enum_ids(&self) -> Vec<GenericStringObjectId> {
-        self.arguments()
-            .iter()
-            .filter_map(|arg| match arg.arg_type {
-                ArgumentType::Enum { enum_id } => enum_id.into_server(),
-                ArgumentType::Text => None,
-            })
-            .map(Into::into)
-            .collect()
-    }
-
-    pub fn default_env_vars(&self) -> Option<SyncId> {
-        match self {
-            Workflow::Command {
-                environment_variables,
-                ..
-            } => *environment_variables,
-            Workflow::AgentMode { .. } => None,
-        }
-    }
-
-    /// Given two IDs, replace any instance of the old ID referenced by this workflow with the new ID.
-    /// Returns `true` if any instances of the old_id were present.
-    pub fn replace_object_id(&mut self, old_id: SyncId, new_id: SyncId) -> bool {
-        let mut changed = false;
-        let arguments = match self {
-            Self::Command { arguments, .. } => arguments,
-            Self::AgentMode { arguments, .. } => arguments,
-        };
-        for arg in arguments.iter_mut() {
-            match &mut arg.arg_type {
-                ArgumentType::Enum { enum_id } if *enum_id == old_id => {
-                    *enum_id = new_id;
-                    changed = true;
-                }
-                ArgumentType::Enum { .. } | ArgumentType::Text => {}
-            }
-        }
-        if let Self::Command {
-            environment_variables,
-            ..
-        } = self
-            && *environment_variables == Some(old_id)
-        {
-            *environment_variables = Some(new_id);
-            changed = true;
-        }
-        changed
-    }
-
     pub fn new(name: impl Into<String>, command: impl Into<String>) -> Self {
         Workflow::Command {
             name: name.into(),
@@ -205,7 +140,6 @@ impl Workflow {
             author: None,
             author_url: None,
             shells: Vec::new(),
-            environment_variables: None,
         }
     }
 
@@ -262,7 +196,6 @@ impl From<warp_workflows::Workflow> for Workflow {
             author: workflow.author,
             author_url: workflow.author_url,
             shells: workflow.shells,
-            environment_variables: None,
         }
     }
 }
@@ -333,10 +266,6 @@ impl Argument {
 pub enum ArgumentType {
     #[default]
     Text,
-    Enum {
-        /// The ID of the associated WorkflowEnum Generic String Object
-        enum_id: SyncId,
-    },
 }
 
 /// Custom deserialization for argument types, used to both `flatten` the argument type
@@ -348,24 +277,9 @@ fn deserialize_arg_type<'de, D>(deserializer: D) -> Result<ArgumentType, D::Erro
 where
     D: Deserializer<'de>,
 {
-    let value: Value = Deserialize::deserialize(deserializer)?;
-
-    let arg_type = match value.get("arg_type").and_then(|value| value.as_str()) {
-        Some("Text") => ArgumentType::Text,
-        Some("Enum") => {
-            let enum_id = value
-                .get("enum_id")
-                .ok_or(serde::de::Error::missing_field("enum_id"))?;
-            let deserialized_id = SyncId::deserialize(enum_id)
-                .map_err(|_| serde::de::Error::custom("Unable to parse enum_id"))?;
-            ArgumentType::Enum {
-                enum_id: deserialized_id,
-            }
-        }
-        _ => ArgumentType::default(),
-    };
-
-    Ok(arg_type)
+    // Every argument is free text; unknown types (such as Warp Drive enums) fall back to text.
+    let _: Value = Deserialize::deserialize(deserializer)?;
+    Ok(ArgumentType::Text)
 }
 
 #[cfg(test)]

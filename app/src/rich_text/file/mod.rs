@@ -35,7 +35,7 @@ use warpui::{
 use super::context_menu::{ContextMenuAction, ContextMenuState, show_rich_editor_context_menu};
 use super::editor::view::{EditorViewEvent, RichTextEditorConfig, RichTextEditorView};
 use super::link::{NotebookLinks, SessionSource};
-use super::{NotebookLocation, styles};
+use super::styles;
 use crate::appearance::Appearance;
 #[cfg(feature = "local_fs")]
 use crate::code::editor_management::CodeSource;
@@ -759,11 +759,7 @@ impl FileNotebookView {
                         .as_ref()
                         .map(|location| format!("Command from {}", location.name))
                 });
-                let source = workflow.source.unwrap_or(WorkflowSource::Notebook {
-                    notebook_id: None,
-                    team_uid: None,
-                    location: NotebookLocation::LocalFile,
-                });
+                let source = workflow.source.unwrap_or(WorkflowSource::Notebook);
                 ctx.emit(FileNotebookEvent::RunWorkflow {
                     workflow: workflow_type,
                     source,
@@ -1300,3 +1296,7 @@ impl FileLocation {
 #[cfg(test)]
 #[path = "mod_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "context_menu_tests.rs"]
+mod context_menu_tests;

@@ -6,9 +6,8 @@ use warpui::elements::{
 use warpui::platform::Cursor;
 use warpui::{Element, EventContext};
 
+use crate::workflows::workflow_icon_color;
 use crate::appearance::Appearance;
-use crate::drive::DriveObjectType;
-use crate::drive::cloud_object_styling::warp_drive_icon_color;
 use crate::search::{FilterChipRenderer as CommonFilterChipRenderer, QueryFilter};
 use crate::util::color::{ContrastingColor, MinimumAllowedContrast};
 
@@ -101,7 +100,6 @@ impl FilterChipRenderer for QueryFilter {
             | QueryFilter::Actions
             | QueryFilter::Sessions
             | QueryFilter::Tabs
-            | QueryFilter::Drive
             | QueryFilter::LaunchConfigurations
             | QueryFilter::PromptHistory
             | QueryFilter::Files
@@ -122,11 +120,7 @@ impl FilterChipRenderer for QueryFilter {
                 .theme()
                 .main_text_color(appearance.theme().surface_2())
                 .into_solid(),
-            QueryFilter::Workflows => warp_drive_icon_color(appearance, DriveObjectType::Workflow),
-            QueryFilter::Notebooks => warp_drive_icon_color(appearance, DriveObjectType::Notebook),
-            QueryFilter::EnvironmentVariables => {
-                warp_drive_icon_color(appearance, DriveObjectType::EnvVarCollection)
-            }
+            QueryFilter::Workflows => workflow_icon_color(appearance),
         }
     }
 }

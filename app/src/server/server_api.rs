@@ -1,5 +1,4 @@
 pub mod auth;
-pub mod object;
 pub mod team;
 pub mod workspace;
 
@@ -14,7 +13,6 @@ use auth::AuthClient;
 use channel_versions::ChannelVersions;
 use chrono::{DateTime, FixedOffset};
 use instant::Instant;
-use object::ObjectClient;
 use parking_lot::Mutex;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -489,10 +487,6 @@ impl ServerApiProvider {
     }
 
     pub fn get_team_client(&self) -> Arc<dyn TeamClient> {
-        self.server_api.clone()
-    }
-
-    pub fn get_cloud_objects_client(&self) -> Arc<dyn ObjectClient> {
         self.server_api.clone()
     }
 

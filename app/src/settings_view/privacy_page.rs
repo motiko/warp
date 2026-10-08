@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -32,7 +32,7 @@ use warpui::{
 
 use super::privacy::{AddRegexModal, AddRegexModalEvent};
 use super::settings_page::{
-    HEADER_PADDING, LocalOnlyIconState, MatchData, PageTitle, PageType, SettingsPageMeta,
+    HEADER_PADDING, MatchData, PageTitle, PageType, SettingsPageMeta,
     SettingsPageViewHandle, SettingsWidget, TOGGLE_BUTTON_RIGHT_PADDING, ToggleState,
     render_body_item, render_sub_header,
 };
@@ -48,7 +48,7 @@ use crate::settings_view::privacy::AddRegexModalViewState;
 use crate::settings_view::render_body_item_label;
 use crate::settings_view::settings_page::CONTENT_FONT_SIZE;
 use crate::terminal::safe_mode_settings::{
-    SafeModeEnabled, SafeModeSettings, SecretDisplayMode, SecretDisplayModeSetting,
+    SafeModeSettings, SecretDisplayMode,
     get_effective_secret_display_mode,
 };
 use crate::ui_components::buttons::icon_button;
@@ -101,7 +101,6 @@ pub fn data_management_url(custom_token: Option<&str>) -> String {
 
 pub struct PrivacyPageView {
     page: PageType<Self>,
-    local_only_icon_tooltip_states: RefCell<HashMap<String, MouseStateHandle>>,
     /// This needs to mirror the length of PrivacySettings::user_secret_regex_list.
     added_user_secret_regex_list_button_handles: Vec<MouseStateHandle>,
     /// Set of indices for regex items that are pending removal
@@ -202,7 +201,6 @@ impl PrivacyPageView {
 
         let mut privacy_page_view = Self {
             page: Self::build_page(),
-            local_only_icon_tooltip_states: Default::default(),
             added_user_secret_regex_list_button_handles: Default::default(),
             pending_regex_removals: Default::default(),
             pending_timer: None,
@@ -1167,19 +1165,12 @@ impl SettingsWidget for SecretRedactionWidget {
         let ui_builder = appearance.ui_builder();
         let is_enterprise_enabled = privacy_settings.is_enterprise_secret_redaction_enabled();
 
-        let local_only_icon_state = LocalOnlyIconState::for_setting(
-            SafeModeEnabled::storage_key(),
-            SafeModeEnabled::sync_to_cloud(),
-            &mut view.local_only_icon_tooltip_states.borrow_mut(),
-            app,
-        );
-
         let secret_redaction_title_row = Container::new(
             Flex::row()
                 .with_child(
                     Shrinkable::new(
                         1.0,
-                        render_sub_header(appearance, SAFE_MODE_TITLE, Some(local_only_icon_state)),
+                        render_sub_header(appearance, SAFE_MODE_TITLE),
                     )
                     .finish(),
                 )
@@ -1231,18 +1222,9 @@ impl SettingsWidget for SecretRedactionWidget {
 
         if *safe_mode_settings.safe_mode_enabled {
             // Add the secret display mode dropdown
-            let local_only_icon_state = LocalOnlyIconState::for_setting(
-                SecretDisplayModeSetting::storage_key(),
-                SecretDisplayModeSetting::sync_to_cloud(),
-                &mut view.local_only_icon_tooltip_states.borrow_mut(),
-                app,
-            );
-
-            // Create the label with local-only icon if needed
             let label_with_icon = super::settings_page::render_dropdown_item_label(
                 "Secret visual redaction mode".to_string(),
                 None,
-                local_only_icon_state,
                 None,
                 appearance,
             );
@@ -1482,7 +1464,6 @@ impl SettingsWidget for AppAnalyticsWidget {
                     TELEMETRY_TITLE.into(),
                     None,
                     None,
-                    LocalOnlyIconState::Hidden,
                     is_toggleable.into(),
                     appearance,
                 ))
@@ -1493,7 +1474,6 @@ impl SettingsWidget for AppAnalyticsWidget {
                 TELEMETRY_TITLE.into(),
                 None,
                 None,
-                LocalOnlyIconState::Hidden,
                 is_toggleable.into(),
                 appearance,
             )
@@ -1599,8 +1579,6 @@ impl SettingsWidget for CrashReportsWidget {
             .with_child(render_body_item::<PrivacyPageAction>(
                 "Send crash reports".into(),
                 None,
-                // Crash report state is always synced to cloud, so no need to show local only icon.
-                LocalOnlyIconState::Hidden,
                 ToggleState::Enabled,
                 appearance,
                 ui_builder
@@ -1713,7 +1691,6 @@ impl SettingsWidget for CloudConversationStorageWidget {
             .with_child(render_body_item::<PrivacyPageAction>(
                 "Store AI conversations in the cloud".into(),
                 None,
-                LocalOnlyIconState::Hidden,
                 toggle_state,
                 appearance,
                 switch,
@@ -1777,8 +1754,6 @@ impl SettingsWidget for NetworkLogWidget {
             .with_child(render_body_item::<PrivacyPageAction>(
                 "Network log console".into(),
                 None,
-                // Not rendering a setting, so no need to show local only icon state.
-                LocalOnlyIconState::Hidden,
                 ToggleState::Enabled,
                 appearance,
                 Empty::new().finish(),
@@ -1855,8 +1830,6 @@ impl SettingsWidget for DataManagementWidget {
             .with_child(render_body_item::<PrivacyPageAction>(
                 DATA_MANAGEMENT_TITLE.into(),
                 None,
-                // Not rendering a setting, so no need to show local only icon state.
-                LocalOnlyIconState::Hidden,
                 ToggleState::Enabled,
                 appearance,
                 Empty::new().finish(),
@@ -1930,8 +1903,6 @@ impl SettingsWidget for PrivacyPolicyWidget {
             .with_child(render_body_item::<PrivacyPageAction>(
                 PRIVACY_POLICY_TITLE.into(),
                 None,
-                // Not rendering a setting, so no need to show local only icon state.
-                LocalOnlyIconState::Hidden,
                 ToggleState::Enabled,
                 appearance,
                 Empty::new().finish(),

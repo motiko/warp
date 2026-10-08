@@ -38,9 +38,8 @@ use warpui::{
 #[cfg(feature = "local_fs")]
 use crate::app_state::CodePaneSnapShot;
 use crate::app_state::{
-    self, BranchSnapshot, EnvVarCollectionPaneSnapshot, LeafContents, LeafSnapshot,
-    NotebookPaneSnapshot, PaneNodeSnapshot, PaneUuid, SettingsPaneSnapshot, TerminalPaneSnapshot,
-    WorkflowPaneSnapshot,
+    self, BranchSnapshot, LeafContents, LeafSnapshot, NotebookPaneSnapshot, PaneNodeSnapshot,
+    PaneUuid, SettingsPaneSnapshot, TerminalPaneSnapshot,
 };
 use crate::appearance::Appearance;
 use crate::banner::{Banner, BannerEvent, BannerState, BannerTextContent, DismissalType};
@@ -50,7 +49,6 @@ use crate::code::buffer_location::LocalOrRemotePath;
 #[cfg(feature = "local_fs")]
 use crate::code::editor_management::CodeSource;
 use crate::code::view::{CodeView, CodeViewAction};
-use crate::env_vars::EnvVarCollectionType;
 use crate::features::FeatureFlag;
 use crate::launch_configs::launch_config::{self, PaneMode, PaneTemplateType};
 use crate::palette::PaletteMode;
@@ -61,8 +59,7 @@ use crate::persistence::ModelEvent;
 use crate::quit_warning::UnsavedStateSummary;
 use crate::rich_text::file::FileNotebookView;
 #[cfg(target_family = "wasm")]
-use crate::server::cloud_objects::update_manager::UpdateManager;
-use crate::server::ids::{ObjectUid, SyncId};
+use crate::server::ids::SyncId;
 use crate::server::server_api::ServerApi;
 use crate::server::telemetry::{PaletteSource, TelemetryEvent};
 use crate::session_management::SessionNavigationData;
@@ -95,7 +92,6 @@ use crate::util::bindings::{CustomAction, is_binding_pty_compliant};
 #[cfg(feature = "local_fs")]
 use crate::util::openable_file_type::FileTarget;
 use crate::view_components::ToastFlavor;
-use crate::workflows::workflow::Workflow;
 use crate::workflows::{WorkflowSelectionSource, WorkflowSource, WorkflowType};
 use crate::workspace::tab_group::TabGroupId;
 use crate::workspace::{self, CommandSearchOptions, PaneViewLocator, TabBarLocation};
@@ -112,13 +108,10 @@ use focus_state::PaneGroupFocusState;
 mod tests;
 
 pub use pane::code_pane::CodePane;
-pub use pane::env_var_collection_pane::EnvVarCollectionPane;
 pub use pane::file_pane::FilePane;
 pub use pane::network_log_pane::NetworkLogPane;
-pub use pane::notebook_pane::NotebookPane;
 pub use pane::settings_pane::SettingsPane;
 pub use pane::terminal_pane::TerminalPane;
-pub use pane::workflow_pane::WorkflowPane;
 pub use pane::{
     AnyPaneContent, BackingView, PaneConfiguration, PaneConfigurationEvent, PaneContent, PaneEvent,
     PaneHeaderAction, PaneHeaderCustomAction, PaneId, PaneView, TerminalPaneId,
@@ -422,14 +415,6 @@ pub enum Event {
     /// Event used to propagate a state change for one of the terminal views
     /// inside this pane group.
     TerminalViewStateChanged,
-    // Tell the workspace to open the workflow modal.
-    OpenWorkflowModalWithCommand(String),
-    // Tell the workspace to open the workflow for edit.
-    OpenCloudWorkflowForEdit(SyncId),
-    // Tell the workspace to open the share dialog for the given drive object. The share dialog will
-    // open in the index. If the invitee email is provided, it will be added to the share dialog.
-    // Tell the workspace to open the workflow modal with an unsaved workflow.
-    OpenWorkflowModalWithTemporary(Box<Workflow>),
     OpenPromptEditor,
     /// tell the workspace to open a file within Warp.
     OpenFileInWarp {
@@ -456,11 +441,6 @@ pub enum Event {
         workflow_source: WorkflowSource,
         workflow_selection_source: WorkflowSelectionSource,
         argument_override: Option<HashMap<String, String>>,
-    },
-    /// Invoke env var from pane
-    InvokeEnvVarCollection {
-        env_var_collection: Arc<EnvVarCollectionType>,
-        in_subshell: bool,
     },
     /// Dirty the workspace so the tab indicator shows.
     MaximizePaneToggled,
@@ -502,7 +482,6 @@ pub enum Event {
     },
     /// Clears the hovered tab index so it no longer appears as highlighted drop target
     ClearHoveredTabIndex,
-    OpenWarpDriveObjectInPane(ObjectUid),
     /// Request that the workspace open the command palette.
     OpenPalette {
         mode: PaletteMode,
@@ -1315,19 +1294,14 @@ impl PaneGroup {
                 Ok((PaneData::new(pane_id), focus))
             }
             LeafContents::Notebook(snapshot) => {
-                let pane: Box<dyn AnyPaneContent + 'static> = match snapshot {
-                    NotebookPaneSnapshot::CloudNotebook {
-                        notebook_id,
-                        settings,
-                    } => Box::new(NotebookPane::restore(notebook_id, &settings, ctx)?),
-                    NotebookPaneSnapshot::LocalFileNotebook { path } => Box::new(FilePane::new(
-                        path.map(LocalOrRemotePath::Local),
-                        None,
-                        #[cfg(feature = "local_fs")]
-                        None,
-                        ctx,
-                    )),
-                };
+                let NotebookPaneSnapshot::LocalFileNotebook { path } = snapshot;
+                let pane: Box<dyn AnyPaneContent + 'static> = Box::new(FilePane::new(
+                    path.map(LocalOrRemotePath::Local),
+                    None,
+                    #[cfg(feature = "local_fs")]
+                    None,
+                    ctx,
+                ));
 
                 let pane_id = pane.as_pane().id();
                 pane_contents.insert(pane_id, pane);
@@ -1368,39 +1342,6 @@ impl PaneGroup {
             LeafContents::Code(_) => Err(anyhow::anyhow!(
                 "Code pane restoration not supported on this platform"
             )),
-            LeafContents::EnvVarCollection(snapshot) => {
-                let pane: Box<dyn AnyPaneContent + 'static> = match snapshot {
-                    EnvVarCollectionPaneSnapshot::CloudEnvVarCollection {
-                        env_var_collection_id,
-                    } => Box::new(EnvVarCollectionPane::restore(env_var_collection_id, ctx)?),
-                };
-
-                let pane_id = pane.as_pane().id();
-                pane_contents.insert(pane_id, pane);
-                let focus = InitialFocus {
-                    focused_pane: leaf.is_focused.then_some(pane_id),
-                    active_session: None,
-                };
-
-                Ok((PaneData::new(pane_id), focus))
-            }
-            LeafContents::Workflow(snapshot) => {
-                let pane: Box<dyn AnyPaneContent + 'static> = match snapshot {
-                    WorkflowPaneSnapshot::CloudWorkflow {
-                        workflow_id,
-                        settings,
-                    } => Box::new(WorkflowPane::restore(workflow_id, settings, ctx)?),
-                };
-
-                let pane_id = pane.as_pane().id();
-                pane_contents.insert(pane_id, pane);
-                let focus = InitialFocus {
-                    focused_pane: leaf.is_focused.then_some(pane_id),
-                    active_session: None,
-                };
-
-                Ok((PaneData::new(pane_id), focus))
-            }
             LeafContents::Settings(snapshot) => {
                 let pane: Box<dyn AnyPaneContent + 'static> = match snapshot {
                     SettingsPaneSnapshot::Local {
@@ -1665,9 +1606,7 @@ impl PaneGroup {
             }
         }
 
-        let text = if let Some(pane) = self.downcast_pane_by_id::<NotebookPane>(focused_pane_id) {
-            pane.notebook_view(ctx).as_ref(ctx).selected_text(ctx)
-        } else {
+        let text = {
             match self.terminal_view_from_pane_id(focused_pane_id, ctx) {
                 Some(terminal_view) => {
                     // NOTE: We currently don't have a way to track recency of selection events.
@@ -2176,30 +2115,6 @@ impl PaneGroup {
         self.pane_contents.contains_key(&pane_id)
     }
 
-    /// Get the notebook view within the pane at `pane_index`.
-    #[cfg(any(test, feature = "integration_tests"))]
-    pub fn notebook_view_at_pane_index(
-        &self,
-        pane_index: usize,
-        ctx: &AppContext,
-    ) -> Option<ViewHandle<crate::notebooks::notebook::NotebookView>> {
-        self.content_by_pane_index(pane_index)
-            .and_then(|pane| pane.as_any().downcast_ref::<NotebookPane>())
-            .map(|pane| pane.notebook_view(ctx))
-    }
-
-    /// Get the notebook view within the pane at `pane_index`.
-    #[cfg(any(test, feature = "integration_tests"))]
-    pub fn workflow_view_at_pane_index(
-        &self,
-        pane_index: usize,
-        ctx: &AppContext,
-    ) -> Option<ViewHandle<crate::workflows::workflow_view::WorkflowView>> {
-        self.content_by_pane_index(pane_index)
-            .and_then(|pane| pane.as_any().downcast_ref::<WorkflowPane>())
-            .map(|pane| pane.get_view(ctx))
-    }
-
     /// Find the ID of the pane at an index (going left to right, top to bottom).
     /// Only considers visible panes (excludes panes hidden for close, move, job, etc.).
     pub fn pane_id_by_index(&self, pane_index: usize) -> Option<PaneId> {
@@ -2320,21 +2235,6 @@ impl PaneGroup {
         ctx.emit(Event::TerminalViewStateChanged);
         ctx.emit(Event::AppStateChanged);
         pane_content
-    }
-
-    pub fn notebook_pane_by_pane_id(&self, pane_id: Option<PaneId>) -> Option<&NotebookPane> {
-        self.downcast_pane_by_id(pane_id?)
-    }
-
-    pub fn env_var_collection_pane_by_pane_id(
-        &self,
-        pane_id: Option<PaneId>,
-    ) -> Option<&EnvVarCollectionPane> {
-        self.downcast_pane_by_id(pane_id?)
-    }
-
-    pub fn workflow_pane_by_pane_id(&self, pane_id: Option<PaneId>) -> Option<&WorkflowPane> {
-        self.downcast_pane_by_id(pane_id?)
     }
 
     pub fn code_pane_by_id(&self, pane_id: PaneId) -> Option<&CodePane> {
@@ -3935,12 +3835,8 @@ impl PaneGroup {
 
     #[cfg(target_family = "wasm")]
     fn update_browser_url(&self, ctx: &mut ViewContext<Self>) {
-        // We need to wait for the app to be loaded before we attempt to get the
-        // shareable links. This is because the links come from CloudModel objects
-
-        let initial_load_complete = UpdateManager::as_ref(ctx).initial_load_complete();
-        ctx.spawn(initial_load_complete, move |me, _, ctx| {
-            if let Some(pane) = me.focused_pane_content(ctx) {
+        {
+            if let Some(pane) = self.focused_pane_content(ctx) {
                 match pane.shareable_link(ctx) {
                     Ok(crate::pane_group::pane::ShareableLink::Base) => {
                         update_browser_url(None, false)
@@ -3954,7 +3850,7 @@ impl PaneGroup {
                     }
                 }
             }
-        });
+        }
     }
 
     /// Focus the active terminal session, if there is one.

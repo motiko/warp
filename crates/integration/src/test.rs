@@ -14,7 +14,6 @@ mod input;
 mod keyboard_protocol;
 mod launch_configs;
 mod native_shell_completions;
-mod notebooks;
 mod osc8_hyperlinks;
 mod pane_restoration;
 #[cfg(target_os = "macos")]
@@ -32,7 +31,6 @@ mod subshell;
 mod sync_inputs;
 mod typeahead;
 mod video_recording;
-mod websockets;
 mod workflows;
 mod workspace;
 
@@ -56,7 +54,6 @@ pub use input::*;
 pub use keyboard_protocol::*;
 pub use launch_configs::*;
 pub use native_shell_completions::*;
-pub use notebooks::*;
 pub use osc8_hyperlinks::*;
 pub use pane_restoration::*;
 use parking_lot::Mutex;
@@ -136,12 +133,11 @@ use warp::integration_testing::view_getters::{
     single_input_suggestions_view_for_tab, single_input_view_for_tab,
     single_terminal_pane_view_for_tab, single_terminal_view, single_terminal_view_for_tab,
 };
-use warp::integration_testing::warp_drive::assert_is_left_panel_open;
 use warp::integration_testing::window::{
     add_and_save_window, add_window, add_window_and_check_bounds, close_window,
     save_active_window_id,
 };
-use warp::integration_testing::workspace::assert_tab_count;
+use warp::integration_testing::workspace::{assert_is_left_panel_open, assert_tab_count};
 use warp::integration_testing::{self, view_of_type};
 use warp::settings::{
     CompletionsOpenWhileTyping, CtrlTabBehavior, INPUT_MODE, MonospaceFontSize,
@@ -179,7 +175,6 @@ use warpui_core::windowing::WindowManager;
 use warpui_core::{
     AssetProvider, Event, SingletonEntity, UpdateView, ViewHandle, async_assert, async_assert_eq,
 };
-pub use websockets::*;
 pub use workflows::*;
 pub use workspace::*;
 
@@ -216,7 +211,7 @@ pub fn test_add_workflows_to_warp_config() -> Builder {
         .with_setup(move |utils| {
             utils.set_env("WARP_CONFIG_WATCHER_DELAY_MS", Some((10).to_string()));
 
-            std::fs::create_dir_all(integration_testing::workflow::workflows_dir())
+            std::fs::create_dir_all(integration_testing::workflows_dir())
                 .expect("Should be able to create workflows dir");
         })
         .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
@@ -245,7 +240,7 @@ pub fn test_add_workflows_to_warp_config() -> Builder {
                     integration_testing::create_file_from_assets(
                         TEST_ONLY_ASSETS,
                         "test_workflow.yaml",
-                        &integration_testing::workflow::workflows_dir().join("test_workflow.yaml"),
+                        &integration_testing::workflows_dir().join("test_workflow.yaml"),
                     );
                 })
                 .add_named_assertion(

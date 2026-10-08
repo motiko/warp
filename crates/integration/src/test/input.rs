@@ -3,7 +3,7 @@ use std::time::Duration;
 use warp::features::FeatureFlag;
 use warp::integration_testing::clipboard::write_to_clipboard;
 use warp::integration_testing::input::{
-    AutosuggestionState, assert_autosuggestion_state, input_contains_string, input_is_empty,
+    AutosuggestionState, assert_autosuggestion_state, input_contains_string,
     tab_completions_menu_is_open,
 };
 use warp::integration_testing::step::new_step_with_default_assertions;

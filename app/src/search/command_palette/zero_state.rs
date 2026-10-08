@@ -10,7 +10,6 @@ use warpui::{
 };
 
 use crate::appearance::Appearance;
-use crate::drive::settings::WarpDriveSettings;
 use crate::search::QueryFilter;
 use crate::search::command_palette::FilterChipRenderer;
 
@@ -71,23 +70,10 @@ impl ZeroState {
     }
 
     /// Returns the set of valid query filters for this zero state view.
-    fn valid_query_filters(app: &AppContext) -> impl Iterator<Item = QueryFilter> + use<> {
-        let show_warp_drive = WarpDriveSettings::is_warp_drive_enabled(app);
-
+    fn valid_query_filters() -> impl Iterator<Item = QueryFilter> + use<> {
         let mut valid_filters = vec![];
-        if show_warp_drive {
-            valid_filters.push(QueryFilter::Workflows);
-            valid_filters.push(QueryFilter::Notebooks);
-
-            valid_filters.push(QueryFilter::EnvironmentVariables);
-        }
-
         if FeatureFlag::CommandPaletteFileSearch.is_enabled() {
             valid_filters.push(QueryFilter::Files);
-        }
-
-        if show_warp_drive {
-            valid_filters.push(QueryFilter::Drive);
         }
         valid_filters.extend([QueryFilter::Actions, QueryFilter::Sessions]);
 
@@ -111,7 +97,7 @@ impl View for ZeroState {
     fn render(&self, app: &AppContext) -> Box<dyn Element> {
         let appearance = Appearance::as_ref(app);
         let mut flex = Flex::column().with_child(
-            self.render_filter_chips(appearance, Self::valid_query_filters(app)),
+            self.render_filter_chips(appearance, Self::valid_query_filters()),
         );
 
         let zero_state_items = self.items.as_ref(app).render(app);

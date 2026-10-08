@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::{Context as _, Result};
-use cloud_objects::ids::ServerId;
+use crate::ids::ServerId;
 use serde::de::DeserializeOwned;
 use warp_core::channel::ChannelState;
 use warp_errors::{ErrorExt, register_error};

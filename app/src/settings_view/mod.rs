@@ -79,7 +79,7 @@ pub use features_page::FeaturesPageAction;
 pub use language_servers_page::language_servers_widget_id;
 pub use privacy_page::PrivacyPageAction;
 pub use settings_page::{
-    AdditionalInfo, InputListItem, LocalOnlyIconState, ToggleState, render_body_item_label,
+    AdditionalInfo, InputListItem, ToggleState, render_body_item_label,
     render_info_icon, render_input_list, render_separator,
 };
 
@@ -376,7 +376,6 @@ pub mod flags {
     pub const SYNTAX_HIGHLIGHTING_FLAG: &str = "syntax_highlighting";
     pub const SAME_LINE_PROMPT: &str = "Same_Line_Prompt_Enabled";
     pub const TELEMETRY_FLAG: &str = "telemetry";
-    pub const SETTINGS_SYNC_FLAG: &str = "settings_sync";
     pub const SAFE_MODE_FLAG: &str = "safe_mode";
     pub const CRASH_REPORTING_FLAG: &str = "crash_reporting";
     pub const CLOUD_CONVERSATION_STORAGE_FLAG: &str = "Cloud_Conversation_Storage_Enabled";
@@ -456,7 +455,6 @@ pub mod flags {
         "Auto_Approve_Bypasses_Command_Denylist";
     pub const AI_RULES_FLAG: &str = "AI_Rules";
     pub const SUGGESTED_RULES_FLAG: &str = "Suggested_Rules";
-    pub const WARP_DRIVE_CONTEXT_FLAG: &str = "Warp_Drive_Context";
     pub const FILE_BASED_MCP_FLAG: &str = "File_Based_MCP";
     pub const WARP_CREDIT_FALLBACK_FLAG: &str = "Warp_Credit_Fallback";
     pub const SHOW_BASE_MODEL_PICKER_IN_PROMPT_FLAG: &str = "Show_Base_Model_Picker_In_Prompt";
@@ -493,7 +491,6 @@ pub mod flags {
     pub const LOCKED_INPUT: &str = "LockedInput";
     pub const OPEN_INLINE_CONVERSATION_MENU: &str = "OpenInlineConversationMenu";
     pub const EMPTY_INPUT_BUFFER: &str = "EmptyInputBuffer";
-    pub const ENABLE_WARP_DRIVE: &str = "EnableWarpDrive";
     // Tools panel settings
     pub const SHOW_CONVERSATION_HISTORY: &str = "ShowConversationHistory";
     pub const SHOW_PROJECT_EXPLORER: &str = "ShowProjectExplorer";

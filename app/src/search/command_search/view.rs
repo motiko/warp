@@ -23,15 +23,13 @@ use warpui::{
     ViewContext, ViewHandle, WeakViewHandle,
 };
 
-use super::env_var_collections::EnvVarCollectionDataSource;
 use super::history::history_data_source_for_session;
 use super::natural_language::{NaturalLanguageCommandContext, NaturalLanguageCommandRegistry};
 use super::natural_language_data_source::NaturalLanguageDataSource;
-use super::workflows::{WorkflowsDataSource, cloud_workflows_data_source};
+use super::workflows::WorkflowsDataSource;
 use super::zero_state::{CommandSearchZeroStateEvent, CommandSearchZeroStateView};
 use crate::appearance::Appearance;
 use crate::completer::SessionContext;
-use crate::drive::settings::WarpDriveSettings;
 use crate::search::QueryFilter;
 use crate::search::command_search::searcher::{CommandSearchItemAction, CommandSearchMixer};
 use crate::search::mixer::AddAsyncSourceOptions;
@@ -155,7 +153,7 @@ impl CommandSearchView {
             me.handle_search_bar_event(event, ctx);
         });
 
-        let zero_state_handle = ctx.add_typed_action_view(CommandSearchZeroStateView::new);
+        let zero_state_handle = ctx.add_typed_action_view(|_| CommandSearchZeroStateView::new());
         ctx.subscribe_to_view(&zero_state_handle, |me, _handle, event, ctx| {
             me.handle_zero_state_event(event, ctx);
         });
@@ -202,7 +200,6 @@ impl CommandSearchView {
         natural_language_context: Option<NaturalLanguageCommandContext>,
         ctx: &mut ViewContext<Self>,
     ) {
-        let window_id = ctx.window_id();
         self.mixer.update(ctx, |mixer, ctx| {
             mixer.reset(ctx);
 
@@ -229,32 +226,10 @@ impl CommandSearchView {
                 );
             }
 
-            if WarpDriveSettings::is_warp_drive_enabled(ctx) {
-                mixer.add_sync_source(
-                    WorkflowsDataSource::new(session_context.as_ref(), ctx),
-                    HashSet::from([QueryFilter::Workflows]),
-                );
-
-                mixer.add_async_source(
-                    cloud_workflows_data_source(window_id),
-                    HashSet::from([QueryFilter::Workflows]),
-                    AddAsyncSourceOptions {
-                        debounce_interval: Some(Duration::from_millis(50)),
-                        run_in_zero_state: true,
-                        run_when_unfiltered: true,
-                    },
-                    ctx,
-                );
-
-                // EnvVarCollectionDataSource stays synchronous because each match target is
-                // structurally short (title, variable name, description). The per-item fuzzy
-                // match cost is negligible, so offloading to an async task would add complexity
-                // without meaningful performance benefit.
-                mixer.add_sync_source(
-                    EnvVarCollectionDataSource::new(),
-                    HashSet::from([QueryFilter::EnvironmentVariables]),
-                );
-            }
+            mixer.add_sync_source(
+                WorkflowsDataSource::new(session_context.as_ref(), ctx),
+                HashSet::from([QueryFilter::Workflows]),
+            );
 
             if History::as_ref(ctx).is_queryable(&session_id) {
                 let source = history_data_source_for_session(session_id);
@@ -447,7 +422,6 @@ impl CommandSearchView {
 
                 AcceptHistory(_)
                 | AcceptWorkflow(_)
-                | AcceptEnvVarCollection(_)
                 | TranslateNaturalLanguage => false,
             };
 
